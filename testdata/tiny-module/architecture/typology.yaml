@@ -1,0 +1,58 @@
+id: tiny
+slices:
+  - id: billing
+    route: /billing/
+    objective: Billing bounded context for fixture tests.
+    owns:
+      - id: billing-store
+        path: internal/billing/store
+        layer: domain
+      - id: billing-http
+        path: internal/billing/httpapi
+        layer: interaction
+        kind: api
+    docs:
+      pages:
+        - kind: overview
+          path: docs/develop/billing/overview.md
+        - kind: components
+          path: docs/develop/billing/components.md
+        - kind: contracts
+          path: docs/develop/billing/contracts.md
+        - kind: cli
+          path: docs/develop/billing/cli.md
+        - kind: presentation
+          path: docs/develop/billing/presentation.md
+        - kind: pipelines
+          path: docs/develop/billing/pipelines.md
+  - id: ledger
+    objective: Ledger bounded context for fixture tests.
+    owns:
+      - id: ledger-core
+        path: internal/ledger
+        layer: domain
+    docs:
+      pages:
+        - kind: overview
+          path: docs/develop/ledger/overview.md
+        - kind: components
+          path: docs/develop/ledger/components.md
+        - kind: contracts
+          path: docs/develop/ledger/contracts.md
+        - kind: cli
+          path: docs/develop/ledger/cli.md
+        - kind: presentation
+          path: docs/develop/ledger/presentation.md
+        - kind: pipelines
+          path: docs/develop/ledger/pipelines.md
+sliceBindings:
+  - from: billing
+    to: ledger
+    kind: reads
+componentBindings:
+  - from: billing-http
+    to: billing-store
+    rule: must
+  - from: billing-store
+    to: ledger-core
+    rule: reads

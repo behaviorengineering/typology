@@ -1,0 +1,5 @@
+# cli
+
+<!-- typology:generated -->
+
+fixture

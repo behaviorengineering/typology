@@ -1,0 +1,5 @@
+# components
+
+<!-- typology:generated -->
+
+fixture
