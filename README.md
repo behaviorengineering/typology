@@ -58,3 +58,22 @@ testdata/tiny-module/ Fixture Go module
 | `DocCluster` / `DocPage` | Doc set per slice |
 
 JSON/CALM export is future work; humans edit YAML/Go.
+
+## Releases (for agents)
+
+Typology ships a CLI binary plus a Go library. Releases are `v*` tags plus a GitHub Release from GoReleaser.
+
+**Auto patch on `main`:** every push to `main` that is not docs/chore/ci-only creates `vX.Y.(Z+1)` and publishes a release (workflow `auto-patch-release.yml`). Put `[skip release]` in the commit subject to opt out once.
+
+**Skip (no tag):** when every commit subject since the last `v*` tag is only `docs:`, `chore:`, or `ci:` (conventional prefixes).
+
+**Manual minor/major:** run workflow **Auto patch release** with `bump=minor` or `bump=major` (or push a `v*` tag yourself). Use major only for breaking public API changes.
+
+**After a new tag, consumer agents MUST pin:**
+
+```bash
+git -C providers/typology fetch --tags origin
+git -C providers/typology checkout "vX.Y.Z"
+go get github.com/behaviorengineering/typology@vX.Y.Z
+go mod tidy
+```
