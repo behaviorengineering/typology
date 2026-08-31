@@ -40,7 +40,7 @@ func (t Typology) SliceForComponent(componentID string) string {
 	return ""
 }
 
-// DefaultDocCluster builds the six-page develop pack for a slice.
+// DefaultDocCluster builds the six-page doc pack for a slice.
 func DefaultDocCluster(sliceID, docsRoot string) DocCluster {
 	prefix := docsRoot
 	if prefix != "" && prefix[len(prefix)-1] != '/' {

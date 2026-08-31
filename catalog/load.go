@@ -11,7 +11,7 @@ import (
 // DefaultCatalogRel is the usual catalog path under a repo root.
 const DefaultCatalogRel = "architecture/typology.yaml"
 
-// DefaultDocsRoot is the Consilium develop docs prefix.
+// DefaultDocsRoot is the usual per-slice docs prefix under a repo root.
 const DefaultDocsRoot = "docs/develop"
 
 // LoadYAML reads a typology from a YAML file.

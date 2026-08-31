@@ -56,7 +56,7 @@ const (
 	DocPipelines    DocPageKind = "pipelines"
 )
 
-// DefaultDocPageKinds is the Consilium develop pack order.
+// DefaultDocPageKinds is the default DocPage order for a slice cluster.
 var DefaultDocPageKinds = []DocPageKind{
 	DocOverview,
 	DocComponents,
