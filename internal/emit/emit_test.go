@@ -32,4 +32,16 @@ func TestEmit_docs(t *testing.T) {
 	if !strings.Contains(string(data), "typology:generated") {
 		t.Fatalf("missing generated marker: %s", data)
 	}
+	components := filepath.Join(repo, "docs/develop/billing/components.md")
+	compData, err := os.ReadFile(components)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := string(compData)
+	if !strings.Contains(body, "## Subprograms") || !strings.Contains(body, "invoice") {
+		t.Fatalf("missing subprograms table: %s", body)
+	}
+	if !strings.Contains(body, "## Actuators") || !strings.Contains(body, "invoice-webhook") {
+		t.Fatalf("missing actuators table: %s", body)
+	}
 }

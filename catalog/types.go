@@ -76,15 +76,17 @@ type Typology struct {
 
 // Slice is one bounded context.
 type Slice struct {
-	ID        string      `json:"id" yaml:"id"`
-	Route     string      `json:"route,omitempty" yaml:"route,omitempty"`
-	Objective string      `json:"objective,omitempty" yaml:"objective,omitempty"`
-	Must      []string    `json:"must,omitempty" yaml:"must,omitempty"`
-	MustNot   []string    `json:"mustNot,omitempty" yaml:"mustNot,omitempty"`
-	Success   string      `json:"success,omitempty" yaml:"success,omitempty"`
-	Owns      []Component `json:"owns,omitempty" yaml:"owns,omitempty"`
-	Jobs      []Job       `json:"jobs,omitempty" yaml:"jobs,omitempty"`
-	Docs      DocCluster  `json:"docs,omitempty" yaml:"docs,omitempty"`
+	ID          string       `json:"id" yaml:"id"`
+	Route       string       `json:"route,omitempty" yaml:"route,omitempty"`
+	Objective   string       `json:"objective,omitempty" yaml:"objective,omitempty"`
+	Must        []string     `json:"must,omitempty" yaml:"must,omitempty"`
+	MustNot     []string     `json:"mustNot,omitempty" yaml:"mustNot,omitempty"`
+	Success     string       `json:"success,omitempty" yaml:"success,omitempty"`
+	Owns        []Component  `json:"owns,omitempty" yaml:"owns,omitempty"`
+	OpRuns      []OpRun      `json:"opRuns,omitempty" yaml:"opRuns,omitempty"`
+	Subprograms []Subprogram `json:"subprograms,omitempty" yaml:"subprograms,omitempty"`
+	Actuators   []Actuator   `json:"actuators,omitempty" yaml:"actuators,omitempty"`
+	Docs        DocCluster   `json:"docs,omitempty" yaml:"docs,omitempty"`
 }
 
 // Component is a package (or equivalent) inside a slice.
@@ -96,12 +98,43 @@ type Component struct {
 	Ops   bool            `json:"ops,omitempty" yaml:"ops,omitempty"`
 }
 
-// Job is background work the slice depends on.
-type Job struct {
+// OpRun is one gated operator invocation, owned by a component. It may be
+// a CLI, HTTP action, human gate, signal, or a later scheduled trigger.
+// Optional Runs names the subprogram this invocation executes. Optional
+// Actuates names the actuator this run may fire. At most one of Runs or
+// Actuates.
+type OpRun struct {
 	ID             string `json:"id" yaml:"id"`
 	OwnerComponent string `json:"ownerComponent" yaml:"ownerComponent"`
 	Gate           Gate   `json:"gate,omitempty" yaml:"gate,omitempty"`
 	CLI            string `json:"cli,omitempty" yaml:"cli,omitempty"`
+	Runs           string `json:"runs,omitempty" yaml:"runs,omitempty"`
+	Actuates       string `json:"actuates,omitempty" yaml:"actuates,omitempty"`
+}
+
+// Subprogram is a standing capability inside a slice (Input, Output, Store,
+// Gate). An OpRun is one invocation of it. A Component is only the package
+// it lives in. Consilium Contract().Subprograms map here. When Store is
+// set, this subprogram is the origin for those paths or id kinds.
+type Subprogram struct {
+	ID             string   `json:"id" yaml:"id"`
+	OwnerComponent string   `json:"ownerComponent" yaml:"ownerComponent"`
+	Input          string   `json:"input,omitempty" yaml:"input,omitempty"`
+	Output         string   `json:"output,omitempty" yaml:"output,omitempty"`
+	Store          []string `json:"store,omitempty" yaml:"store,omitempty"`
+	Gate           Gate     `json:"gate,omitempty" yaml:"gate,omitempty"`
+}
+
+// Actuator is a named, gated capability that fires when Signals arrive
+// and emits an effect, usually past the instance edge (chatbot, email,
+// counsel pack, public post). An OpRun is one invocation of it. A Component
+// is only the package it lives in. Consilium Contract().Actuators map here.
+type Actuator struct {
+	ID             string   `json:"id" yaml:"id"`
+	OwnerComponent string   `json:"ownerComponent" yaml:"ownerComponent"`
+	Signals        []string `json:"signals,omitempty" yaml:"signals,omitempty"`
+	Emits          []string `json:"emits,omitempty" yaml:"emits,omitempty"`
+	Gate           Gate     `json:"gate,omitempty" yaml:"gate,omitempty"`
 }
 
 // SliceBinding couples two slices.
