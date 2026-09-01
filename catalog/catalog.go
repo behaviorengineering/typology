@@ -90,25 +90,9 @@ func (t Typology) ValidateStructure() []Issue {
 				})
 			}
 		}
-		for _, j := range s.Jobs {
-			if j.ID == "" {
-				issues = append(issues, Issue{Slice: s.ID, Message: "job with empty id"})
-				continue
-			}
-			if j.OwnerComponent == "" {
-				issues = append(issues, Issue{
-					Slice:   s.ID,
-					Message: fmt.Sprintf("job %q: missing ownerComponent", j.ID),
-				})
-				continue
-			}
-			if !s.hasComponent(j.OwnerComponent) {
-				issues = append(issues, Issue{
-					Slice:   s.ID,
-					Message: fmt.Sprintf("job %q: ownerComponent %q not in slice owns", j.ID, j.OwnerComponent),
-				})
-			}
-		}
+		issues = append(issues, s.validateSubprograms()...)
+		issues = append(issues, s.validateActuators()...)
+		issues = append(issues, s.validateOpRuns()...)
 	}
 	for _, b := range t.SliceBindings {
 		if _, ok := seenSlice[b.From]; !ok {
@@ -148,9 +132,149 @@ func (t Typology) ValidateStructure() []Issue {
 	return issues
 }
 
+func (s Slice) validateSubprograms() []Issue {
+	var issues []Issue
+	seen := map[string]struct{}{}
+	for _, sp := range s.Subprograms {
+		if sp.ID == "" {
+			issues = append(issues, Issue{Slice: s.ID, Message: "subprogram with empty id"})
+			continue
+		}
+		if _, ok := seen[sp.ID]; ok {
+			issues = append(issues, Issue{
+				Slice:   s.ID,
+				Message: fmt.Sprintf("duplicate subprogram id %q", sp.ID),
+			})
+		}
+		seen[sp.ID] = struct{}{}
+		if sp.OwnerComponent == "" {
+			issues = append(issues, Issue{
+				Slice:   s.ID,
+				Message: fmt.Sprintf("subprogram %q: missing ownerComponent", sp.ID),
+			})
+			continue
+		}
+		if !s.hasComponent(sp.OwnerComponent) {
+			issues = append(issues, Issue{
+				Slice:   s.ID,
+				Message: fmt.Sprintf("subprogram %q: ownerComponent %q not in slice owns", sp.ID, sp.OwnerComponent),
+			})
+		}
+	}
+	return issues
+}
+
+func (s Slice) validateActuators() []Issue {
+	var issues []Issue
+	seen := map[string]struct{}{}
+	for _, a := range s.Actuators {
+		if a.ID == "" {
+			issues = append(issues, Issue{Slice: s.ID, Message: "actuator with empty id"})
+			continue
+		}
+		if _, ok := seen[a.ID]; ok {
+			issues = append(issues, Issue{
+				Slice:   s.ID,
+				Message: fmt.Sprintf("duplicate actuator id %q", a.ID),
+			})
+		}
+		seen[a.ID] = struct{}{}
+		if s.hasSubprogram(a.ID) {
+			issues = append(issues, Issue{
+				Slice:   s.ID,
+				Message: fmt.Sprintf("actuator %q: id already used by a subprogram", a.ID),
+			})
+		}
+		if a.OwnerComponent == "" {
+			issues = append(issues, Issue{
+				Slice:   s.ID,
+				Message: fmt.Sprintf("actuator %q: missing ownerComponent", a.ID),
+			})
+		} else if !s.hasComponent(a.OwnerComponent) {
+			issues = append(issues, Issue{
+				Slice:   s.ID,
+				Message: fmt.Sprintf("actuator %q: ownerComponent %q not in slice owns", a.ID, a.OwnerComponent),
+			})
+		}
+		if len(a.Signals) == 0 {
+			issues = append(issues, Issue{
+				Slice:   s.ID,
+				Message: fmt.Sprintf("actuator %q: missing signals", a.ID),
+			})
+		}
+		if len(a.Emits) == 0 {
+			issues = append(issues, Issue{
+				Slice:   s.ID,
+				Message: fmt.Sprintf("actuator %q: missing emits", a.ID),
+			})
+		}
+	}
+	return issues
+}
+
+func (s Slice) validateOpRuns() []Issue {
+	var issues []Issue
+	for _, r := range s.OpRuns {
+		if r.ID == "" {
+			issues = append(issues, Issue{Slice: s.ID, Message: "opRun with empty id"})
+			continue
+		}
+		if r.OwnerComponent == "" {
+			issues = append(issues, Issue{
+				Slice:   s.ID,
+				Message: fmt.Sprintf("opRun %q: missing ownerComponent", r.ID),
+			})
+			continue
+		}
+		if !s.hasComponent(r.OwnerComponent) {
+			issues = append(issues, Issue{
+				Slice:   s.ID,
+				Message: fmt.Sprintf("opRun %q: ownerComponent %q not in slice owns", r.ID, r.OwnerComponent),
+			})
+		}
+		if r.Runs != "" && r.Actuates != "" {
+			issues = append(issues, Issue{
+				Slice:   s.ID,
+				Message: fmt.Sprintf("opRun %q: runs and actuates are mutually exclusive", r.ID),
+			})
+		}
+		if r.Runs != "" && !s.hasSubprogram(r.Runs) {
+			issues = append(issues, Issue{
+				Slice:   s.ID,
+				Message: fmt.Sprintf("opRun %q: runs %q is not a subprogram on this slice", r.ID, r.Runs),
+			})
+		}
+		if r.Actuates != "" && !s.hasActuator(r.Actuates) {
+			issues = append(issues, Issue{
+				Slice:   s.ID,
+				Message: fmt.Sprintf("opRun %q: actuates %q is not an actuator on this slice", r.ID, r.Actuates),
+			})
+		}
+	}
+	return issues
+}
+
 func (s Slice) hasComponent(id string) bool {
 	for _, c := range s.Owns {
 		if c.ID == id {
+			return true
+		}
+	}
+	return false
+}
+
+func (s Slice) hasSubprogram(id string) bool {
+	for _, sp := range s.Subprograms {
+		if sp.ID == id {
+			return true
+		}
+	}
+	return false
+}
+
+func (s Slice) hasActuator(id string) bool {
+	for _, a := range s.Actuators {
+		if a.ID == id {
 			return true
 		}
 	}

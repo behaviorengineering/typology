@@ -11,6 +11,31 @@ slices:
         path: internal/billing/httpapi
         layer: interaction
         kind: api
+    subprograms:
+      - id: invoice
+        ownerComponent: billing-store
+        input: invoice request
+        output: invoice record
+        store:
+          - internal/billing/store
+        gate: auto
+    actuators:
+      - id: invoice-webhook
+        ownerComponent: billing-http
+        signals:
+          - invoice.minted
+        emits:
+          - webhook
+        gate: auto
+    opRuns:
+      - id: mint-invoice
+        ownerComponent: billing-store
+        gate: auto
+        runs: invoice
+      - id: push-invoice
+        ownerComponent: billing-http
+        gate: auto
+        actuates: invoice-webhook
     docs:
       pages:
         - kind: overview

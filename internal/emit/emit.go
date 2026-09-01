@@ -13,6 +13,7 @@ import (
 var tmplFuncs = template.FuncMap{
 	"sliceBindings": sliceBindingsFor,
 	"compBindings":  compBindingsFor,
+	"join":          strings.Join,
 	"apiComponents": func(owns []catalog.Component) []catalog.Component {
 		return filterKind(owns, catalog.InteractionAPI)
 	},
@@ -167,7 +168,20 @@ const componentsTmpl = `# Components
 {{range compBindings .T .S.ID}}| {{.From}} | {{.To}} | {{.Rule}} |
 {{else}}| _(none)_ | | |
 {{end}}
-`
+
+{{if .S.Subprograms}}## Subprograms
+
+| ID | Owner | Input | Output | Store | Gate |
+|----|-------|-------|--------|-------|------|
+{{range .S.Subprograms}}| {{.ID}} | {{.OwnerComponent}} | {{.Input}} | {{.Output}} | {{join .Store ", "}} | {{.Gate}} |
+{{end}}
+{{end}}{{if .S.Actuators}}## Actuators
+
+| ID | Owner | Signals | Emits | Gate |
+|----|-------|---------|-------|------|
+{{range .S.Actuators}}| {{.ID}} | {{.OwnerComponent}} | {{join .Signals ", "}} | {{join .Emits ", "}} | {{.Gate}} |
+{{end}}
+{{end}}`
 
 const contractsTmpl = `# Contracts
 
@@ -212,12 +226,12 @@ const pipelinesTmpl = `# AI pipelines
 
 <!-- typology:generated -->
 
-Background jobs for slice {{.S.ID}}.
+Operator runs for slice {{.S.ID}} (CLI, HTTP, human gate, signal, or later schedule).
 
-| Job | Owner | Gate | CLI |
-|-----|-------|------|-----|
-{{range .S.Jobs}}| {{.ID}} | {{.OwnerComponent}} | {{.Gate}} | {{.CLI}} |
-{{else}}| _(none)_ | | | |
+| OpRun | Owner | Gate | CLI | Runs | Actuates |
+|-------|-------|------|-----|------|----------|
+{{range .S.OpRuns}}| {{.ID}} | {{.OwnerComponent}} | {{.Gate}} | {{.CLI}} | {{.Runs}} | {{.Actuates}} |
+{{else}}| _(none)_ | | | | | |
 {{end}}
 `
 

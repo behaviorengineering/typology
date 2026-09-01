@@ -4,6 +4,8 @@ Portable Go library and CLI to **discover** bounded contexts, **write** the map 
 
 **Module:** [`github.com/behaviorengineering/typology`](https://github.com/behaviorengineering/typology)
 
+Agents: start at [AGENTS.md](AGENTS.md). Skills live in [skills/](skills/) (any agent; optional symlink into your host skill folder).
+
 ## Install
 
 Download a release binary for your OS from [GitHub Releases](https://github.com/behaviorengineering/typology/releases), or build from source:
@@ -11,6 +13,13 @@ Download a release binary for your OS from [GitHub Releases](https://github.com/
 ```bash
 make build
 ./bin/typology version
+```
+
+Pin the module in a consumer:
+
+```bash
+go get github.com/behaviorengineering/typology@vX.Y.Z
+go mod tidy
 ```
 
 ## Commands
@@ -35,9 +44,11 @@ typology version
 ## Layout
 
 ```text
-cmd/typology/         CLI entry
+AGENTS.md             Pointer for coding agents
+skills/               Portable agent skills (catalog, CLI)
 catalog/              Typology model + YAML I/O
 validate/             Path + import + DocPage checks
+cmd/typology/         CLI entry
 internal/discover/    Go import graph → draft catalog
 internal/emit/        YAML + DocPage markdown
 internal/remediate/   Agent protocol for one slice
@@ -51,15 +62,21 @@ testdata/tiny-module/ Fixture Go module
 |------|------|
 | `Typology` | Whole map |
 | `Slice` | Bounded context |
-| `Component` | Package (`domain` or `interaction` ui/cli/api) |
-| `Job` | Background work surfaced on a pipelines page |
+| `Component` | Package (`domain` or `interaction` ui/cli/api). Does not run programs or actuators. |
+| `OpRun` | One gated operator invocation (CLI, HTTP, human, signal, or schedule). Optional `runs` / `actuates`. |
+| `Subprogram` | Standing program: `input`, `output`, optional `store`, `gate` |
+| `Actuator` | Signal-triggered capability that emits an effect, usually past the edge |
 | `SliceBinding` | Coupling between slices |
 | `ComponentBinding` | Coupling between components |
 | `DocCluster` / `DocPage` | Doc set per slice |
 
 JSON/CALM export is future work; humans edit YAML/Go.
 
-## Releases (for agents)
+## CI
+
+Pull requests and pushes to `main` run `go vet ./...` and `go test ./...` (workflow `ci.yml`).
+
+## Releases
 
 Typology ships a CLI binary plus a Go library. Releases are `v*` tags plus a GitHub Release from GoReleaser.
 
@@ -68,12 +85,3 @@ Typology ships a CLI binary plus a Go library. Releases are `v*` tags plus a Git
 **Skip (no tag):** when every commit subject since the last `v*` tag is only `docs:`, `chore:`, or `ci:` (conventional prefixes).
 
 **Manual minor/major:** run workflow **Auto patch release** with `bump=minor` or `bump=major` (or push a `v*` tag yourself). Use major only for breaking public API changes.
-
-**After a new tag, consumer agents MUST pin:**
-
-```bash
-git -C providers/typology fetch --tags origin
-git -C providers/typology checkout "vX.Y.Z"
-go get github.com/behaviorengineering/typology@vX.Y.Z
-go mod tidy
-```
