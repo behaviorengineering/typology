@@ -38,7 +38,7 @@ Default catalog: `REPO/architecture/typology.yaml`. `show` with no `--catalog` l
 
 1. **Discover**: on a first map, follow [journey/SKILL.md](../journey/SKILL.md) (`--out architecture/typology.draft.yaml`). Otherwise `typology discover REPO` writes a draft catalog from the Go import graph. MUST NOT treat the draft as final slice names.
 2. **Confirm**: a human accepts or renames slices and bindings (journey slice walk on a first map). MUST NOT emit or validate-as-done on unconfirmed names when this is a first map.
-3. **Emit**: `typology emit REPO` writes catalog YAML (unless `--docs-only`) and DocPage skeletons (unless `--go-only`). MUST NOT overwrite a doc page that exists and lacks `<!-- typology:generated -->`. On a first map, load [docs/SKILL.md](../docs/SKILL.md) after emit (journey phase `docs`).
+3. **Emit**: `typology emit REPO` writes catalog YAML (unless `--docs-only`), a slice README hub, DocPage skeletons (unless `--go-only`), and program leaves. MUST NOT overwrite a doc page that exists and lacks `<!-- typology:generated -->`. On a first map, load [docs/SKILL.md](../docs/SKILL.md) after emit (journey phase `docs`). Default `docs.pages` follows surfaces and opRuns; MUST NOT treat six missing files per slice as architecture failure.
 4. **Fill catalog** — add subprograms, actuators, opRuns, bindings per [catalog/SKILL.md](../catalog/SKILL.md). Owned paths MUST exist as directories.
 5. **Validate** — `typology validate REPO` (optional slice id). MUST fix every issue. MUST NOT ignore import or missing-path findings.
 6. **Remediate** — `typology remediate REPO SLICE` when the job is one slice. MUST follow the returned `protocol`. MUST NOT refactor other slices in that pass.
@@ -114,8 +114,8 @@ rep, err := remediate.Run(remediate.Options{RepoRoot: repo, Catalog: t, SliceID:
       Method: CLI output empty of issue lines; exit 0
       Pass: exit 0
       Fail: STOP, fix each issue
-- [ ] **Docs:** every `docs.pages[].path` exists after emit or hand authoring
-      Method: validate DocPage path findings
+- [ ] **Docs:** every `docs.pages[].path` exists after emit or hand authoring; every subprogram and actuator has its leaf page
+      Method: validate DocPage and program-page findings
       Pass: none
       Fail: STOP, emit or create the file
 - [ ] **Remediate scope:** if `remediate` ran, diff is limited to that slice's owned paths

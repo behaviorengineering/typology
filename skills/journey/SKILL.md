@@ -145,7 +145,7 @@ MUST NOT apply rename / merge / split until the operator names the target ids. M
 4. **Slice walk**: one pending row per turn (tutor gate). Keep: no YAML edit. Rename/Merge/Split: edit the draft only after the operator names the target ids. When no `pending` rows remain (Later rows allowed), set phase `situation-freeze`.
 5. **Situation freeze**: tutor the operator on the as-is map (slice ids, main bindings). Wait for an explicit freeze. Tick freeze checkboxes. Set phase `desired`.
 6. **Desired**: reshape the draft toward the architecture they want (names, bindings, programs per catalog skill). Record each open decision in the journey file. When they say the draft is the catalog they want, set phase `commit`.
-7. **Commit**: copy draft to `architecture/typology.yaml`. `typology emit REPO`. `typology validate REPO`. Fix every issue (cli skill). Tick commit checkboxes. Set phase `docs`. Build the Docs table from `docs.pages[]` (all `pending`).
+7. **Commit**: copy draft to `architecture/typology.yaml`. `typology emit REPO`. `typology validate REPO`. Fix every issue (cli skill). Tick commit checkboxes. Set phase `docs`. Build the Docs table from `docs.pages[]` plus `subprograms/` and `actuators/` leaves (all `pending`).
 8. **Docs**: load [docs/SKILL.md](../docs/SKILL.md). One pending DocPage per turn. `done` only when every Docs row is `done` or `skip-none` (`later` allowed).
 9. **Stop**: after each turn that asked a gate, update Resume and wait. MUST NOT chain the next slice or next DocPage in the same message. Land and situation-draft MAY run in the same turn as the first slice-walk gate. Commit MAY run emit and validate in the same turn as the first docs-page gate.
 

@@ -74,12 +74,13 @@ func Run(opts Options) (Result, error) {
 			}
 			sliceForPath[p] = clusterID
 		}
-		slices = append(slices, catalog.Slice{
+		slice := catalog.Slice{
 			ID:       clusterID,
 			Owns:     owns,
 			Surfaces: catalog.BuildSurfaces(clusterID, surfaceByKind),
-			Docs:     catalog.DefaultDocCluster(clusterID, docsRoot),
-		})
+		}
+		slice.Docs = catalog.DefaultDocCluster(slice, docsRoot)
+		slices = append(slices, slice)
 	}
 
 	var sliceBindings []catalog.SliceBinding

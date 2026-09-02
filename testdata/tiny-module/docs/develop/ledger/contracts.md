@@ -1,5 +1,0 @@
-# contracts
-
-<!-- typology:generated -->
-
-fixture

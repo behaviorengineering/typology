@@ -46,10 +46,6 @@ slices:
           path: docs/develop/billing/components.md
         - kind: contracts
           path: docs/develop/billing/contracts.md
-        - kind: cli
-          path: docs/develop/billing/cli.md
-        - kind: presentation
-          path: docs/develop/billing/presentation.md
         - kind: pipelines
           path: docs/develop/billing/pipelines.md
   - id: ledger
@@ -64,14 +60,6 @@ slices:
           path: docs/develop/ledger/overview.md
         - kind: components
           path: docs/develop/ledger/components.md
-        - kind: contracts
-          path: docs/develop/ledger/contracts.md
-        - kind: cli
-          path: docs/develop/ledger/cli.md
-        - kind: presentation
-          path: docs/develop/ledger/presentation.md
-        - kind: pipelines
-          path: docs/develop/ledger/pipelines.md
 sliceBindings:
   - from: billing
     to: ledger

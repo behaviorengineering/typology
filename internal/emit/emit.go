@@ -14,6 +14,15 @@ var tmplFuncs = template.FuncMap{
 	"sliceBindings": sliceBindingsFor,
 	"compBindings":  compBindingsFor,
 	"join":          strings.Join,
+	"compPaths": func(comps []catalog.Component) string {
+		parts := make([]string, 0, len(comps))
+		for _, c := range comps {
+			if c.Path != "" {
+				parts = append(parts, c.Path)
+			}
+		}
+		return strings.Join(parts, ", ")
+	},
 	"apiComponents": func(s catalog.Slice) []catalog.Component {
 		if surf, ok := s.SurfaceByKind(catalog.InteractionAPI); ok {
 			return surf.Components
@@ -69,30 +78,60 @@ func Run(opts Options) error {
 func emitSliceDocs(repoRoot string, s catalog.Slice, t catalog.Typology) error {
 	pages := s.Docs.Pages
 	if len(pages) == 0 {
-		pages = catalog.DefaultDocCluster(s.ID, catalog.DefaultDocsRoot).Pages
+		pages = catalog.DefaultDocCluster(s, catalog.DefaultDocsRoot).Pages
 	}
 	for _, page := range pages {
 		body, err := renderPage(s, page, t)
 		if err != nil {
 			return err
 		}
-		abs := filepath.Join(repoRoot, filepath.FromSlash(page.Path))
-		if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
-			return terrors.Wrap(err, terrors.CodeUnavailable, "emit.emitSliceDocs", "mkdir docs").
-				With("path", page.Path)
+		if err := writeGenerated(repoRoot, page.Path, body); err != nil {
+			return err
 		}
-		existing, err := os.ReadFile(abs)
-		if err != nil && !os.IsNotExist(err) {
-			return terrors.Wrap(err, terrors.CodeUnavailable, "emit.emitSliceDocs", "read existing page").
-				With("path", page.Path)
+	}
+	if err := writeGenerated(repoRoot, catalog.SliceReadmePath(s.ID, catalog.DefaultDocsRoot), renderReadme(s, pages)); err != nil {
+		return err
+	}
+	for _, sp := range s.Subprograms {
+		path := catalog.SubprogramPagePath(s.ID, sp.ID, catalog.DefaultDocsRoot)
+		body, err := renderGenerated("subprogram", subprogramTmpl, subprogramData{Slice: s, Subprogram: sp})
+		if err != nil {
+			return err
 		}
-		if len(existing) > 0 && !strings.Contains(string(existing), "<!-- typology:generated -->") {
-			continue
+		if err := writeGenerated(repoRoot, path, body); err != nil {
+			return err
 		}
-		if err := os.WriteFile(abs, []byte(body), 0o644); err != nil {
-			return terrors.Wrap(err, terrors.CodeUnavailable, "emit.emitSliceDocs", "write page").
-				With("path", page.Path)
+	}
+	for _, a := range s.Actuators {
+		path := catalog.ActuatorPagePath(s.ID, a.ID, catalog.DefaultDocsRoot)
+		body, err := renderGenerated("actuator", actuatorTmpl, actuatorData{Slice: s, Actuator: a})
+		if err != nil {
+			return err
 		}
+		if err := writeGenerated(repoRoot, path, body); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func writeGenerated(repoRoot, rel, body string) error {
+	abs := filepath.Join(repoRoot, filepath.FromSlash(rel))
+	if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
+		return terrors.Wrap(err, terrors.CodeUnavailable, "emit.writeGenerated", "mkdir docs").
+			With("path", rel)
+	}
+	existing, err := os.ReadFile(abs)
+	if err != nil && !os.IsNotExist(err) {
+		return terrors.Wrap(err, terrors.CodeUnavailable, "emit.writeGenerated", "read existing page").
+			With("path", rel)
+	}
+	if len(existing) > 0 && !strings.Contains(string(existing), "<!-- typology:generated -->") {
+		return nil
+	}
+	if err := os.WriteFile(abs, []byte(body), 0o644); err != nil {
+		return terrors.Wrap(err, terrors.CodeUnavailable, "emit.writeGenerated", "write page").
+			With("path", rel)
 	}
 	return nil
 }
@@ -100,6 +139,30 @@ func emitSliceDocs(repoRoot string, s catalog.Slice, t catalog.Typology) error {
 type pageData struct {
 	S catalog.Slice
 	T catalog.Typology
+}
+
+type subprogramData struct {
+	Slice      catalog.Slice
+	Subprogram catalog.Subprogram
+}
+
+type actuatorData struct {
+	Slice    catalog.Slice
+	Actuator catalog.Actuator
+}
+
+func renderGenerated(name, tmpl string, data any) (string, error) {
+	parsed, err := template.New(name).Funcs(tmplFuncs).Parse(tmpl)
+	if err != nil {
+		return "", terrors.Wrap(err, terrors.CodeInternal, "emit.renderGenerated", "parse template").
+			With("name", name)
+	}
+	var b strings.Builder
+	if err := parsed.Execute(&b, data); err != nil {
+		return "", terrors.Wrap(err, terrors.CodeInternal, "emit.renderGenerated", "execute template").
+			With("name", name)
+	}
+	return b.String(), nil
 }
 
 func renderPage(s catalog.Slice, page catalog.DocPage, t catalog.Typology) (string, error) {
@@ -122,17 +185,96 @@ func renderPage(s catalog.Slice, page catalog.DocPage, t catalog.Typology) (stri
 		return "", terrors.New(terrors.CodeInvalid, "emit.renderPage", "unknown doc kind").
 			With("kind", string(page.Kind))
 	}
-	parsed, err := template.New(string(page.Kind)).Funcs(tmplFuncs).Parse(tmpl)
-	if err != nil {
-		return "", terrors.Wrap(err, terrors.CodeInternal, "emit.renderPage", "parse template").
-			With("kind", string(page.Kind))
+	return renderGenerated(string(page.Kind), tmpl, data)
+}
+
+func hasPageKind(pages []catalog.DocPage, kind catalog.DocPageKind) bool {
+	for _, p := range pages {
+		if p.Kind == kind {
+			return true
+		}
 	}
+	return false
+}
+
+func pageRel(pages []catalog.DocPage, kind catalog.DocPageKind) string {
+	for _, p := range pages {
+		if p.Kind == kind {
+			base := filepath.Base(filepath.FromSlash(p.Path))
+			return base
+		}
+	}
+	return string(kind) + ".md"
+}
+
+func writeTreeChildren(b *strings.Builder, items []string, indent string) {
+	for i, item := range items {
+		prefix := indent + "├── "
+		if i == len(items)-1 {
+			prefix = indent + "└── "
+		}
+		b.WriteString(prefix)
+		b.WriteString(item)
+		b.WriteString("\n")
+	}
+}
+
+func renderReadme(s catalog.Slice, pages []catalog.DocPage) string {
 	var b strings.Builder
-	if err := parsed.Execute(&b, data); err != nil {
-		return "", terrors.Wrap(err, terrors.CodeInternal, "emit.renderPage", "execute template").
-			With("kind", string(page.Kind))
+	b.WriteString("# ")
+	b.WriteString(s.ID)
+	b.WriteString(" (develop)\n\n")
+	b.WriteString("<!-- typology:generated -->\n\n")
+	if strings.TrimSpace(s.Objective) != "" {
+		b.WriteString(strings.TrimSpace(s.Objective))
+		b.WriteString("\n\n")
 	}
-	return b.String(), nil
+	b.WriteString("Human map follows Typology (slice → owns → subprograms → surfaces). DocPageKind files are leaves.\n\n")
+	b.WriteString("```text\nSlice\n")
+	overview := pageRel(pages, catalog.DocOverview)
+	owns := pageRel(pages, catalog.DocComponents)
+	b.WriteString("├── Overview          [" + overview + "](" + overview + ")\n")
+	b.WriteString("├── Owns              [" + owns + "](" + owns + ")\n")
+	if len(s.Subprograms) > 0 {
+		b.WriteString("├── Subprograms\n")
+		items := make([]string, 0, len(s.Subprograms))
+		for _, sp := range s.Subprograms {
+			rel := "subprograms/" + sp.ID + ".md"
+			items = append(items, "["+sp.ID+"]("+rel+")")
+		}
+		writeTreeChildren(&b, items, "│   ")
+	}
+	if len(s.Actuators) > 0 {
+		b.WriteString("├── Actuators\n")
+		items := make([]string, 0, len(s.Actuators))
+		for _, a := range s.Actuators {
+			rel := "actuators/" + a.ID + ".md"
+			items = append(items, "["+a.ID+"]("+rel+")")
+		}
+		writeTreeChildren(&b, items, "│   ")
+	}
+	surfaceSlots := []struct {
+		kind  catalog.DocPageKind
+		label string
+	}{
+		{catalog.DocCLI, "CLI"},
+		{catalog.DocPresentation, "UI"},
+		{catalog.DocContracts, "API"},
+		{catalog.DocPipelines, "Jobs"},
+	}
+	var present []string
+	for _, slot := range surfaceSlots {
+		if hasPageKind(pages, slot.kind) {
+			rel := pageRel(pages, slot.kind)
+			present = append(present, slot.label+"           ["+rel+"]("+rel+")")
+		}
+	}
+	if len(present) > 0 {
+		b.WriteString("└── Surfaces\n")
+		writeTreeChildren(&b, present, "    ")
+	}
+	b.WriteString("```\n")
+	return b.String()
 }
 
 const overviewTmpl = `# Overview
@@ -143,26 +285,50 @@ const overviewTmpl = `# Overview
 
 {{if .S.Route}}Route: {{.S.Route}}{{end}}
 
-## Owned components
-
-| Component | Path | Layer |
-|-----------|------|-------|
-{{range .S.Owns}}| {{.ID}} | {{.Path}} | {{.Layer}}{{if .Kind}}/{{.Kind}}{{end}} |
-{{end}}
+Human map: slice → Overview → Owns → Subprograms → Surfaces (CLI, UI, API, Jobs). See [README.md](README.md). Domain packages and program indexes live on [components.md](components.md).
 `
 
 const componentsTmpl = `# Components
 
 <!-- typology:generated -->
 
-## Composition
+## Owns
+
+Typology ` + "`owns[]`" + `: domain packages on this slice.
 
 | Component | Path | Layer |
 |-----------|------|-------|
-{{range .S.Owns}}| {{.ID}} | {{.Path}} | {{.Layer}}{{if .Kind}}/{{.Kind}}{{end}} |
+{{range .S.Owns}}| {{.ID}} | {{.Path}} | {{.Layer}} |
+{{else}}| _(none)_ | | |
 {{end}}
 
-## SliceBindings
+## Surfaces
+
+Typology ` + "`surfaces[]`" + `: interaction packages grouped by kind. Domain packages stay under Owns.
+
+| Surface | Kind | Components |
+|---------|------|------------|
+{{range .S.Surfaces}}| {{.ID}} | {{.Kind}} | {{compPaths .Components}} |
+{{else}}| _(none)_ | | |
+{{end}}
+
+{{if .S.Subprograms}}## Subprograms
+
+Standing programs. Input, output, store, and gate live on the subpage.
+
+| Id | Owner | Gate | Page |
+|----|-------|------|------|
+{{range .S.Subprograms}}| {{.ID}} | {{.OwnerComponent}} | {{.Gate}} | [subprograms/{{.ID}}.md](subprograms/{{.ID}}.md) |
+{{end}}
+{{end}}{{if .S.Actuators}}## Actuators
+
+Signal in, emit out. Detail lives on the subpage.
+
+| Id | Owner | Gate | Page |
+|----|-------|------|------|
+{{range .S.Actuators}}| {{.ID}} | {{.OwnerComponent}} | {{.Gate}} | [actuators/{{.ID}}.md](actuators/{{.ID}}.md) |
+{{end}}
+{{end}}## Cross-slice
 
 | From | To | Kind |
 |------|----|------|
@@ -170,27 +336,39 @@ const componentsTmpl = `# Components
 {{else}}| _(none)_ | | |
 {{end}}
 
-## ComponentBindings
-
 | From | To | Rule |
 |------|----|------|
 {{range compBindings .T .S.ID}}| {{.From}} | {{.To}} | {{.Rule}} |
 {{else}}| _(none)_ | | |
 {{end}}
+`
 
-{{if .S.Subprograms}}## Subprograms
+const subprogramTmpl = `# {{.Subprogram.ID}}
 
-| ID | Owner | Input | Output | Store | Gate |
-|----|-------|-------|--------|-------|------|
-{{range .S.Subprograms}}| {{.ID}} | {{.OwnerComponent}} | {{.Input}} | {{.Output}} | {{join .Store ", "}} | {{.Gate}} |
-{{end}}
-{{end}}{{if .S.Actuators}}## Actuators
+<!-- typology:generated -->
 
-| ID | Owner | Signals | Emits | Gate |
-|----|-------|---------|-------|------|
-{{range .S.Actuators}}| {{.ID}} | {{.OwnerComponent}} | {{join .Signals ", "}} | {{join .Emits ", "}} | {{.Gate}} |
-{{end}}
-{{end}}`
+Slice ` + "`{{.Slice.ID}}`" + ` subprogram. Owner component: ` + "`{{.Subprogram.OwnerComponent}}`" + `.
+
+| Field | Value |
+|-------|-------|
+| Input | {{.Subprogram.Input}} |
+| Output | {{.Subprogram.Output}} |
+| Store | {{join .Subprogram.Store ", "}} |
+| Gate | {{.Subprogram.Gate}} |
+`
+
+const actuatorTmpl = `# {{.Actuator.ID}}
+
+<!-- typology:generated -->
+
+Slice ` + "`{{.Slice.ID}}`" + ` actuator. Owner component: ` + "`{{.Actuator.OwnerComponent}}`" + `.
+
+| Field | Value |
+|-------|-------|
+| Signals | {{join .Actuator.Signals ", "}} |
+| Emits | {{join .Actuator.Emits ", "}} |
+| Gate | {{.Actuator.Gate}} |
+`
 
 const contractsTmpl = `# Contracts
 

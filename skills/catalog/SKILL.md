@@ -157,6 +157,17 @@ componentBindings:
     rule: reads
 ```
 
+**CONSTRAINT:** Docs are a tree, not a flat six-pack. `DocPageKind` files are leaves. Extra program pages are not a seventh kind.
+
+- MUST: human nav is slice → Overview → Owns → Subprograms → Surfaces (CLI, UI, API, Jobs)
+- MUST: `docs.pages[]` lists only pages that exist; discover/emit default to overview+components, plus contracts/cli/presentation when those surface kinds exist, plus pipelines when `opRuns` is non-empty
+- MUST: each `subprograms[].id` has `docs/develop/<slice>/subprograms/<id>.md`; each `actuators[].id` has `docs/develop/<slice>/actuators/<id>.md`
+- MUST NOT: treat Jobs as a `surfaces[].kind`; Jobs is the pipelines DocPage under Surfaces
+- MUST NOT: require all six `DefaultDocPageKinds` when the slice has no CLI, UI, API, or opRuns
+
+Enforcement: `catalog.DefaultDocCluster`; `validate` program-page paths; emit README hub
+Violation: STOP, trim `docs.pages` or add the missing leaf, re-validate
+
 **CONSTRAINT:** Slice `owns[]` is domain-only. Interaction packages MUST live under `surfaces[]`.
 
 - MUST: `owns[].layer` is `domain`

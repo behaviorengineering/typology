@@ -1,5 +1,0 @@
-# pipelines
-
-<!-- typology:generated -->
-
-fixture

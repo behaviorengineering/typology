@@ -38,10 +38,29 @@ func TestEmit_docs(t *testing.T) {
 		t.Fatal(err)
 	}
 	body := string(compData)
+	if !strings.Contains(body, "## Owns") || !strings.Contains(body, "## Surfaces") {
+		t.Fatalf("missing Owns/Surfaces: %s", body)
+	}
 	if !strings.Contains(body, "## Subprograms") || !strings.Contains(body, "invoice") {
 		t.Fatalf("missing subprograms table: %s", body)
 	}
 	if !strings.Contains(body, "## Actuators") || !strings.Contains(body, "invoice-webhook") {
 		t.Fatalf("missing actuators table: %s", body)
+	}
+	readme := filepath.Join(repo, "docs/develop/billing/README.md")
+	hub, err := os.ReadFile(readme)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(hub), "Surfaces") || !strings.Contains(string(hub), "subprograms/invoice.md") {
+		t.Fatalf("missing tree hub: %s", hub)
+	}
+	invoice := filepath.Join(repo, "docs/develop/billing/subprograms/invoice.md")
+	if _, err := os.Stat(invoice); err != nil {
+		t.Fatalf("missing subprogram page: %v", err)
+	}
+	actuator := filepath.Join(repo, "docs/develop/billing/actuators/invoice-webhook.md")
+	if _, err := os.Stat(actuator); err != nil {
+		t.Fatalf("missing actuator page: %v", err)
 	}
 }

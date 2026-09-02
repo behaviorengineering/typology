@@ -148,11 +148,32 @@ func hasIssue(issues []catalog.Issue, want string) bool {
 
 func TestDefaultDocCluster(t *testing.T) {
 	t.Parallel()
-	c := catalog.DefaultDocCluster("billing", catalog.DefaultDocsRoot)
-	if len(c.Pages) != 6 {
-		t.Fatalf("want 6 pages, got %d", len(c.Pages))
+	s := billingFixtureSlice()
+	c := catalog.DefaultDocCluster(s, catalog.DefaultDocsRoot)
+	want := []catalog.DocPageKind{
+		catalog.DocOverview,
+		catalog.DocComponents,
+		catalog.DocContracts,
+		catalog.DocPipelines,
 	}
-	if c.Pages[0].Kind != catalog.DocOverview {
-		t.Fatalf("first kind = %q", c.Pages[0].Kind)
+	if len(c.Pages) != len(want) {
+		t.Fatalf("want %d pages, got %d: %+v", len(want), len(c.Pages), c.Pages)
+	}
+	for i, kind := range want {
+		if c.Pages[i].Kind != kind {
+			t.Fatalf("page %d kind = %q, want %q", i, c.Pages[i].Kind, kind)
+		}
+	}
+	if c.Pages[0].Path != "docs/develop/billing/overview.md" {
+		t.Fatalf("overview path = %q", c.Pages[0].Path)
+	}
+}
+
+func TestDefaultDocCluster_domainOnly(t *testing.T) {
+	t.Parallel()
+	s := catalog.Slice{ID: "ledger", Owns: []catalog.Component{{ID: "ledger-core", Path: "internal/ledger", Layer: catalog.LayerDomain}}}
+	c := catalog.DefaultDocCluster(s, catalog.DefaultDocsRoot)
+	if len(c.Pages) != 2 {
+		t.Fatalf("want overview+components, got %d: %+v", len(c.Pages), c.Pages)
 	}
 }

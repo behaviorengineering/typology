@@ -39,8 +39,8 @@ First map in a new repo: load [skills/journey/SKILL.md](skills/journey/SKILL.md)
 
 1. `typology discover` on a Go repo (draft; first map uses `--out architecture/typology.draft.yaml`).
 2. Human confirms slice names and bindings.
-3. `typology emit` writes catalog YAML and DocPage skeletons under the docs root (default `docs/develop`).
-4. `typology validate` fails closed on missing paths, bindings, or docs.
+3. `typology emit` writes catalog YAML, a slice README hub (tree nav), DocPage skeletons, and `subprograms/` / `actuators/` leaves under the docs root (default `docs/develop`). Empty CLI/UI/API/Jobs pages are omitted unless listed in YAML.
+4. `typology validate` fails closed on missing paths, bindings, DocPages, or program leaves.
 5. `typology remediate REPO SLICE` returns agent-scoped violations for one slice.
 
 ## Layout
@@ -71,7 +71,7 @@ testdata/tiny-module/ Fixture Go module
 | `Actuator` | Signal-triggered capability that emits an effect, usually past the edge |
 | `SliceBinding` | Coupling between slices |
 | `ComponentBinding` | Coupling between components |
-| `DocCluster` / `DocPage` | Doc set per slice |
+| `DocCluster` / `DocPage` | Doc set per slice. Kinds are leaves. Nav is Overview → Owns → Subprograms → Surfaces (CLI, UI, API, Jobs). |
 
 JSON/CALM export is future work; humans edit YAML/Go.
 
