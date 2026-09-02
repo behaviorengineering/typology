@@ -347,10 +347,13 @@ const subprogramTmpl = `# {{.Subprogram.ID}}
 
 <!-- typology:generated -->
 
-Slice ` + "`{{.Slice.ID}}`" + ` subprogram. Owner component: ` + "`{{.Subprogram.OwnerComponent}}`" + `.
+{{if .Subprogram.Objective}}{{.Subprogram.Objective}}{{else}}Slice ` + "`{{.Slice.ID}}`" + ` subprogram (set catalog objective before fill).{{end}}
+
+Owner component: ` + "`{{.Subprogram.OwnerComponent}}`" + `.
 
 | Field | Value |
 |-------|-------|
+| Objective | {{.Subprogram.Objective}} |
 | Input | {{.Subprogram.Input}} |
 | Output | {{.Subprogram.Output}} |
 | Store | {{join .Subprogram.Store ", "}} |
@@ -361,10 +364,13 @@ const actuatorTmpl = `# {{.Actuator.ID}}
 
 <!-- typology:generated -->
 
-Slice ` + "`{{.Slice.ID}}`" + ` actuator. Owner component: ` + "`{{.Actuator.OwnerComponent}}`" + `.
+{{if .Actuator.Objective}}{{.Actuator.Objective}}{{else}}Slice ` + "`{{.Slice.ID}}`" + ` actuator (set catalog objective before fill).{{end}}
+
+Owner component: ` + "`{{.Actuator.OwnerComponent}}`" + `.
 
 | Field | Value |
 |-------|-------|
+| Objective | {{.Actuator.Objective}} |
 | Signals | {{join .Actuator.Signals ", "}} |
 | Emits | {{join .Actuator.Emits ", "}} |
 | Gate | {{.Actuator.Gate}} |

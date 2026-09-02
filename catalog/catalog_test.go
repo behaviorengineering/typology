@@ -23,6 +23,7 @@ func billingFixtureSlice() catalog.Slice {
 		Subprograms: []catalog.Subprogram{{
 			ID:             "invoice",
 			OwnerComponent: "billing-store",
+			Objective:      "Mint an invoice record from a store request.",
 			Input:          "invoice request",
 			Output:         "invoice record",
 			Store:          []string{"internal/billing/store"},
@@ -31,6 +32,7 @@ func billingFixtureSlice() catalog.Slice {
 		Actuators: []catalog.Actuator{{
 			ID:             "invoice-webhook",
 			OwnerComponent: "billing-http",
+			Objective:      "Notify external systems when an invoice is minted.",
 			Signals:        []string{"invoice.minted"},
 			Emits:          []string{"webhook"},
 			Gate:           catalog.GateAuto,
@@ -112,6 +114,28 @@ func TestValidateStructure_subprogramAndActuator(t *testing.T) {
 	}}
 	if !hasIssue(collision.ValidateStructure(), `actuator "invoice": id already used by a subprogram`) {
 		t.Fatalf("expected id collision issue, got %v", collision.ValidateStructure())
+	}
+
+	noObjective := ok
+	noObjective.Slices[0].Subprograms = []catalog.Subprogram{{
+		ID:             "invoice",
+		OwnerComponent: "billing-store",
+		Input:          "invoice request",
+		Output:         "invoice record",
+	}}
+	if !hasIssue(noObjective.ValidateStructure(), `subprogram "invoice": missing objective`) {
+		t.Fatalf("expected missing subprogram objective, got %v", noObjective.ValidateStructure())
+	}
+
+	noActObjective := ok
+	noActObjective.Slices[0].Actuators = []catalog.Actuator{{
+		ID:             "invoice-webhook",
+		OwnerComponent: "billing-http",
+		Signals:        []string{"invoice.minted"},
+		Emits:          []string{"webhook"},
+	}}
+	if !hasIssue(noActObjective.ValidateStructure(), `actuator "invoice-webhook": missing objective`) {
+		t.Fatalf("expected missing actuator objective, got %v", noActObjective.ValidateStructure())
 	}
 }
 

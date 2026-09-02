@@ -29,8 +29,8 @@ description: >-
 | `Component` | Package path. Domain packages live on `owns[]`. Interaction packages live under a `Surface`. |
 | `Surface` | Built interaction artefact (`kind`: `ui`, `cli`, or `api`) with nested `components[]` (id + path only). |
 | `OpRun` | One gated invocation (CLI, HTTP, human, signal, or later schedule). Optional `runs` or `actuates`, not both. |
-| `Subprogram` | Standing program: `input`, `output`, optional `store`, `gate`. Origin for `store` paths when first written. |
-| `Actuator` | Signal in, emit out (usually past the instance edge). Requires `signals` and `emits`. |
+| `Subprogram` | Standing program: required `objective` (business why), `input`, `output`, optional `store`, `gate`. Origin for `store` paths when first written. |
+| `Actuator` | Signal in, emit out (usually past the instance edge). Requires `objective`, `signals`, and `emits`. |
 | `SliceBinding` | Slice to slice: `consumes` or `reads` |
 | `ComponentBinding` | Component to component: `must`, `must_not`, or `reads` |
 
@@ -57,6 +57,7 @@ owns:
 subprograms:
   - id: invoice
     ownerComponent: billing-store
+    objective: Mint an invoice record from a store request.
     input: invoice request
     output: invoice record
     gate: auto
@@ -67,6 +68,35 @@ PROHIBITED:
 subprograms:
   - id: invoice
     ownerComponent: billing-engine   # not in owns
+```
+
+**CONSTRAINT:** Every subprogram and actuator MUST set a non-empty `objective` (the business why). Docs FILL quotes this field; do not leave it blank for the docs agent to invent.
+
+- MUST: one plain-English objective clause per subprogram and actuator
+- MUST NOT: omit `objective`; MUST NOT paste Input/Output into `objective`
+
+Enforcement: `ValidateStructure` (`subprogram … missing objective`; `actuator … missing objective`)
+Violation: STOP, write the why from product Must / operator job, re-validate
+
+CORRECT:
+```yaml
+subprograms:
+  - id: concept
+    ownerComponent: review-core
+    objective: Mint stable cn_ ids only after human Accept so proposals never enter Neo4j.
+    input: human Accept on concept proposal
+    output: cn_ from seed.yaml after Accept
+    gate: human
+```
+
+PROHIBITED:
+```yaml
+subprograms:
+  - id: concept
+    ownerComponent: review-core
+    input: human Accept
+    output: cn_
+    # missing objective
 ```
 
 **CONSTRAINT:** OpRun `runs` and `actuates` are mutually exclusive. `runs` MUST name a subprogram on this slice. `actuates` MUST name an actuator on this slice. Empty both is allowed (invocation with no named program).
@@ -99,12 +129,12 @@ opRuns:
     actuates: invoice-webhook
 ```
 
-**CONSTRAINT:** Actuator id MUST NOT collide with a subprogram id on the same slice. Actuator MUST set non-empty `signals` and `emits`.
+**CONSTRAINT:** Actuator id MUST NOT collide with a subprogram id on the same slice. Actuator MUST set non-empty `objective`, `signals`, and `emits`.
 
-- MUST: unique id vs subprograms; at least one signal; at least one emit
-- MUST NOT: reuse a subprogram id; MUST NOT leave signals or emits empty
+- MUST: unique id vs subprograms; non-empty objective; at least one signal; at least one emit
+- MUST NOT: reuse a subprogram id; MUST NOT leave objective, signals, or emits empty
 
-Enforcement: `ValidateStructure` (`id already used by a subprogram`; `missing signals`; `missing emits`)
+Enforcement: `ValidateStructure` (`id already used by a subprogram`; `missing objective`; `missing signals`; `missing emits`)
 Violation: STOP, rename or fill fields, re-validate
 
 CORRECT:
@@ -112,6 +142,7 @@ CORRECT:
 actuators:
   - id: invoice-webhook
     ownerComponent: billing-http
+    objective: Notify external systems when an invoice is minted.
     signals: [invoice.minted]
     emits: [webhook]
     gate: auto
@@ -119,12 +150,22 @@ actuators:
 
 PROHIBITED:
 ```yaml
+actuators:
+  - id: invoice-webhook
+    ownerComponent: billing-http
+    signals: [invoice.minted]
+    emits: [webhook]
+    # missing objective
+```
+
+```yaml
 subprograms:
   - id: notify
 actuators:
   - id: notify          # collision
-    signals: []
-    emits: []
+    objective: send notify
+    signals: [done]
+    emits: [webhook]
 ```
 
 **CONSTRAINT:** Cross-slice coupling MUST be a `SliceBinding`. A `ComponentBinding` that crosses slices MUST have a matching `SliceBinding` (either direction).
@@ -204,6 +245,15 @@ owns:
 
 - MUST NOT: put `input` / `output` / `store` on a component; MUST NOT name a package a subprogram
 
+**CONSTRAINT:** Slices MUST be true bounded contexts, not temporal pipeline stages, capabilities, or horizontal technical tiers.
+
+- MUST: group packages by shared domain lifecycle and aggregates (e.g. `review`, `context`, `operations`)
+- MUST NOT: create separate slices for sequential workflow steps (e.g. `staging` → `orchestrate` → `judge` → `publish` belong in one `review` bounded context)
+- MUST NOT: elevate internal capabilities (DSPy eval, LLM gateway, workspace inspection) into standalone domain pillars
+- MUST NOT: create horizontal technical slices (e.g. `cli` or `platform`); place CLI packages on `surfaces[kind: cli]` of the domain slice they invoke
+- MUST NOT: merge packages based on stem similarity alone (e.g. `agent` dispatch vs `agenting` grounding) without verifying shared importers and domain purpose
+- MUST: keep platform utility leaves (`config`, telemetry, auth) small and shared rather than swallowed into an arbitrary domain hub
+
 **CONSTRAINT:** Catalog field names are `input`, `output`, `store` on subprograms; `runs` / `actuates` on opRuns. MUST NOT invent mint, writes-as-subprogram-fields, job-as-opRun-type, or aggregate-as-subprogram.
 
 - MUST: use the field names in `catalog/types.go`
@@ -253,10 +303,15 @@ JSON/CALM export is not implemented. MUST NOT emit a second catalog format.
       Method: structure issues for `runs` / `actuates`
       Pass: none
       Fail: STOP, split or add the program
-- [ ] **Actuators complete:** signals and emits non-empty; ids distinct from subprograms
+- [ ] **Actuators complete:** objective, signals, and emits non-empty; ids distinct from subprograms
+- [ ] **Subprogram/actuator why:** every listed program has `objective` (business why for docs FILL)
       Method: structure issues for actuators
       Pass: none
       Fail: STOP, fill or rename
+- [ ] **No papered-over boundary debt:** unowned packages or false aggregate claims are logged in journey technical debt table rather than artificially assigned
+      Method: compare subprogram package implementations against slice owns/surfaces
+      Pass: clean boundaries, or debt explicitly logged in journey file
+      Fail: STOP, log debt row or fix ownership
 - [ ] **Bindings:** cross-slice component edges have a SliceBinding
       Method: structure issues for bindings
       Pass: none

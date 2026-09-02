@@ -42,3 +42,26 @@ func TestDiscover_tinyModule(t *testing.T) {
 	}
 	t.Fatal("expected billing slice")
 }
+
+func TestDiscover_graphSummary(t *testing.T) {
+	t.Parallel()
+	repo := filepath.Join("..", "..", "testdata", "tiny-module")
+	summary, err := discover.AnalyzeGraph(repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(summary.Nodes) == 0 {
+		t.Fatal("expected graph nodes")
+	}
+	// tiny-module internal/ledger is a leaf (imported by billing/store, imports nothing)
+	foundLedger := false
+	for _, leaf := range summary.Leaves {
+		if leaf == "./internal/ledger" {
+			foundLedger = true
+			break
+		}
+	}
+	if !foundLedger {
+		t.Fatalf("expected ./internal/ledger in leaves: %+v", summary.Leaves)
+	}
+}

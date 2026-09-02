@@ -75,7 +75,7 @@ PROHIBITED: adding `/v1/invoice` because "billing probably has HTTP"
 Enforcement: outgoing message contains the four cold-read blocks and the gate before any page write
 Violation: STOP, revert the page write, present cold-read and gate, wait
 
-CORRECT: stub classifies EXPAND; gate Decision FILL with a quote of `objective:` from the catalog; then write overview body
+CORRECT: stub classifies EXPAND; gate Decision FILL with a quote of subprogram `objective:` from the catalog; then write leaf body
 
 PROHIBITED: replacing the stub in the same turn as opening the file, with no gate
 

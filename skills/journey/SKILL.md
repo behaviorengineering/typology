@@ -63,6 +63,38 @@ CORRECT: `typology discover . --out architecture/typology.draft.yaml`
 
 PROHIBITED: `typology discover .` onto a confirmed `architecture/typology.yaml`
 
+**CONSTRAINT:** Cluster pass consolidates mechanical 1:1 package clusters before slice walk.
+
+- MUST: run `typology show graph REPO` (or `--suggest-merges`) to inspect coupling degrees, leaves, hubs, and sole importers before walking individual slices
+- MUST: apply merge heuristics:
+  1. **Sole importer:** package imported by only one caller (e.g. `cluster` only imported by `staging`) → propose merge into caller
+  2. **Same job family:** companion packages around one domain concern (e.g. `contextstore` + `contextdigest` + `contextgate`) → propose merge into family slice (`context`)
+  3. **Split companion packages:** `sa` + `satools` → `sa`
+  4. **Manifest/CLI companions:** `diff` used only for staging manifests → `staging`
+  5. **Forge side-effects:** `outbound` + `status` next to `publish` → `publish` or `forge`
+- MUST: enforce DDD anti-pattern checks:
+  - **Anti-pattern 1: Temporal pipeline stages as slices.** Sequential execution phases (prep → wave → judge → publish) share the same aggregate lifecycle and belong in ONE bounded context (e.g. `review`), not separate peer slices.
+  - **Anti-pattern 2: Capabilities as domain pillars.** Internal facilities (DSPy eval, LLM gateways, workspace inspection) are capabilities invoked by workflows, not autonomous domain pillars.
+  - **Anti-pattern 3: Horizontal technical tiers as slices.** Having a standalone `cli` or `platform` slice fragments the domain. CLI commands belong on `surfaces[]` of the domain slice they invoke; root entry binary belongs under host/operations boundary.
+  - **Platform leaves:** keep platform utility leaves (`config`, telemetry, auth) small and separate rather than swallowing them into the first domain hub.
+- MUST NOT: trust name similarity alone without checking importers (`agent` dispatch vs `agenting` grounding have different callers and represent different contexts)
+- MUST: present candidate merge clusters with one-line rationale to the operator and obtain approval before seeding the slice-walk table
+
+Enforcement: candidate clusters approved in `architecture/typology-journey.md`; walk table seeded with consolidated slices
+Violation: STOP, run cluster pass, tutor merge candidates, wait for operator gate
+
+**CONSTRAINT:** Boundary violations and technical debt MUST be recorded in the journey file rather than papered over.
+
+- MUST: during `cluster-pass` and `desired`, audit declared subprograms and actions against actual package import dependencies
+- MUST: identify false aggregate ownership (e.g. a slice claiming an autonomous mining or evaluation subprogram whose underlying engine packages it does not own)
+- MUST: identify UI/domain conflations (e.g. treating an entity mining engine as part of a review UI slice merely because its triage card mounts on that page)
+- MUST: check for unmapped orphan packages across the module
+- MUST: record every detected violation in the `## Technical debt & boundary violations` table in `architecture/typology-journey.md` with a clear target refactoring
+- MUST NOT: paper over boundary violations by artificially attributing unowned packages or subprograms to unrelated slices without logging the debt
+
+Enforcement: `Technical debt & boundary violations` table in `architecture/typology-journey.md` populated when violations exist
+Violation: STOP, audit boundary tensions, record debt rows, tutor operator on refactoring targets
+
 **CONSTRAINT:** Slice walk is one proposed slice per turn. The assistant reads; the operator gates.
 
 - MUST: during Status.phase `slice-walk`, present exactly one pending slice from the journey table
@@ -141,13 +173,14 @@ MUST NOT apply rename / merge / split until the operator names the target ids. M
 
 1. **Resume or create**: if `architecture/typology-journey.md` exists, Read it and obey Resume. If missing, copy [plan-template.md](plan-template.md) there, fill Status (repo, date, phase `land`), then continue.
 2. **Land**: confirm `typology version` (or `make build` in this module) works. Tick Land checkboxes. Set phase `situation-draft`.
-3. **Situation draft**: discover or copy per the discover constraint. List each proposed slice id in the walk table with Status `pending`. Tick Situation-draft checkboxes. Set phase `slice-walk`.
-4. **Slice walk**: one pending row per turn (tutor gate). Keep: no YAML edit. Rename/Merge/Split: edit the draft only after the operator names the target ids. When no `pending` rows remain (Later rows allowed), set phase `situation-freeze`.
-5. **Situation freeze**: tutor the operator on the as-is map (slice ids, main bindings). Wait for an explicit freeze. Tick freeze checkboxes. Set phase `desired`.
-6. **Desired**: reshape the draft toward the architecture they want (names, bindings, programs per catalog skill). Record each open decision in the journey file. When they say the draft is the catalog they want, set phase `commit`.
-7. **Commit**: copy draft to `architecture/typology.yaml`. `typology emit REPO`. `typology validate REPO`. Fix every issue (cli skill). Tick commit checkboxes. Set phase `docs`. Build the Docs table from `docs.pages[]` plus `subprograms/` and `actuators/` leaves (all `pending`).
-8. **Docs**: load [docs/SKILL.md](../docs/SKILL.md). One pending DocPage per turn. `done` only when every Docs row is `done` or `skip-none` (`later` allowed).
-9. **Stop**: after each turn that asked a gate, update Resume and wait. MUST NOT chain the next slice or next DocPage in the same message. Land and situation-draft MAY run in the same turn as the first slice-walk gate. Commit MAY run emit and validate in the same turn as the first docs-page gate.
+3. **Situation draft**: discover or copy per the discover constraint (`typology discover REPO --out architecture/typology.draft.yaml`). Tick Situation-draft checkboxes. Set phase `cluster-pass`.
+4. **Cluster pass**: run `typology show graph REPO` (or `--suggest-merges`). Identify hubs, leaves, sole importers, and companion packages. Apply DDD anti-pattern checks (merge sequential pipeline stages, internal capabilities, and technical CLI tiers into bounded contexts). Present candidate clusters to operator with merge rationale. Upon approval, update the draft catalog and seed the walk table with consolidated slices. Set phase `slice-walk`.
+5. **Slice walk**: one pending row per turn (tutor gate). Keep: no YAML edit. Rename/Merge/Split: edit the draft only after the operator names the target ids. When no `pending` rows remain (Later rows allowed), set phase `situation-freeze`.
+6. **Situation freeze**: tutor the operator on the as-is map (slice ids, main bindings). Wait for an explicit freeze. Tick freeze checkboxes. Set phase `desired`.
+7. **Desired**: reshape the draft toward the architecture they want (names, bindings, programs per catalog skill). Record each open decision in the journey file. When they say the draft is the catalog they want, set phase `commit`.
+8. **Commit**: copy draft to `architecture/typology.yaml`. `typology emit REPO`. `typology validate REPO`. Fix every issue (cli skill). Tick commit checkboxes. Set phase `docs`. Build the Docs table from `docs.pages[]` plus `subprograms/` and `actuators/` leaves (all `pending`).
+9. **Docs**: load [docs/SKILL.md](../docs/SKILL.md). One pending DocPage per turn. `done` only when every Docs row is `done` or `skip-none` (`later` allowed).
+10. **Stop**: after each turn that asked a gate, update Resume and wait. MUST NOT chain the next slice or next DocPage in the same message. Land, situation-draft, and cluster-pass proposal MAY chain to the cluster gate. Commit MAY run emit and validate in the same turn as the first docs-page gate.
 
 ## Pre-completion checklist
 

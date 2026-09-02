@@ -20,7 +20,7 @@ Copy this template to `architecture/typology-journey.md` in the consumer repo. D
 | Draft catalog | `architecture/typology.draft.yaml` |
 | Confirmed catalog | `architecture/typology.yaml` (absent until commit) |
 
-Phase order: `land` → `situation-draft` → `slice-walk` → `situation-freeze` → `desired` → `commit` → `docs` → `done`.
+Phase order: `land` → `situation-draft` → `cluster-pass` → `slice-walk` → `situation-freeze` → `desired` → `commit` → `docs` → `done`.
 
 ## Land
 
@@ -39,10 +39,37 @@ Phase order: `land` → `situation-draft` → `slice-walk` → `situation-freeze
       Method: file present
       Pass: file exists
       Fail: STOP, `typology discover REPO --out architecture/typology.draft.yaml` (or copy confirmed yaml to the draft path)
-- [ ] **Walk table filled:** every draft slice id has a row below
-      Method: slice ids in the draft vs table
-      Pass: one row per draft slice
-      Fail: STOP, add missing rows as `pending`
+- [ ] **Inventory seeded:** raw packages and import graph captured
+      Method: discover output or `typology show graph`
+      Pass: package count and draft catalog available
+      Fail: STOP, discover to draft path
+
+## Cluster pass
+
+Consolidate mechanical 1:1 package clusters into candidate bounded contexts before walking slices. Inspect coupling via `typology show graph`.
+
+- [ ] **Coupling graph inspected:** in/out degrees, leaves, hubs, and sole importers identified
+      Method: `typology show graph REPO`
+      Pass: coupling summary reviewed
+      Fail: STOP, run `typology show graph`
+- [ ] **Anti-patterns checked:** no temporal pipeline stages (prep/orchestrate/judge/publish), internal capabilities (LLM gateway, eval), or horizontal CLI tiers treated as standalone slices
+      Method: verify candidate clusters against DDD bounded context rules
+      Pass: sequential lifecycle steps consolidated; CLI placed on interaction surfaces
+      Fail: STOP, merge stages into the lifecycle context; place CLI on surfaces
+- [ ] **Boundary debt recorded:** unmapped packages, false aggregate owners (e.g. review slice claiming unowned concept mining engine), or UI/domain conflations logged in the technical debt table
+      Method: check package import graph and subprogram ownerComponent vs slice owns
+      Pass: violations logged in Technical debt & boundary violations table
+      Fail: STOP, audit subprogram ownership and unmapped packages
+- [ ] **Candidate clusters approved:** operator confirmed merge clusters; draft updated with consolidated slices
+      Method: operator confirmation recorded below
+      Pass: merged draft written; walk table seeded with consolidated slices
+      Fail: STOP, tutor merge candidates and wait for gate
+
+Candidate clusters:
+
+| Source package(s) | Target slice | Merge rationale | Approved? |
+|-------------------|--------------|-----------------|-----------|
+| | | | pending |
 
 ## Slice walk
 
@@ -129,6 +156,16 @@ Load `typology-docs`. One `pending` or `filled` row per turn. Status: `pending` 
       Fail: STOP, remove the marker on accepted pages
 
 Phase `done` only after Pages scored passes.
+
+## Technical debt & boundary violations
+
+Architectural boundary violations and domain conflations identified during mapping. Track here as technical debt marked for refactoring rather than papering over them in the catalog.
+
+| ID | Slice / Package | Violation Kind | Summary & Target Refactoring | Status |
+|----|-----------------|----------------|------------------------------|--------|
+| | | | | open |
+
+Violation kinds: `false-aggregate-owner` | `ui-domain-conflation` | `unmapped-orphan` | `cross-slice-bypass` | `temporal-pipeline-slice`
 
 ## Notes
 

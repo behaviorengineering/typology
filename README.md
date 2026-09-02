@@ -67,7 +67,7 @@ testdata/tiny-module/ Fixture Go module
 | `Component` | Package. Domain on `owns[]`; interaction nested under a `Surface`. |
 | `Surface` | Built UI, CLI, or API artefact (`kind` + `components[]`). |
 | `OpRun` | One gated operator invocation (CLI, HTTP, human, signal, or schedule). Optional `runs` / `actuates`. |
-| `Subprogram` | Standing program: `input`, `output`, optional `store`, `gate` |
+| `Subprogram` | Standing program: required `objective`, plus `input`, `output`, optional `store`, `gate` |
 | `Actuator` | Signal-triggered capability that emits an effect, usually past the edge |
 | `SliceBinding` | Coupling between slices |
 | `ComponentBinding` | Coupling between components |

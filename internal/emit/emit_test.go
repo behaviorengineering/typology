@@ -56,11 +56,19 @@ func TestEmit_docs(t *testing.T) {
 		t.Fatalf("missing tree hub: %s", hub)
 	}
 	invoice := filepath.Join(repo, "docs/develop/billing/subprograms/invoice.md")
-	if _, err := os.Stat(invoice); err != nil {
+	invBody, err := os.ReadFile(invoice)
+	if err != nil {
 		t.Fatalf("missing subprogram page: %v", err)
 	}
+	if !strings.Contains(string(invBody), "Mint an invoice record from a store request.") {
+		t.Fatalf("subprogram stub missing objective: %s", invBody)
+	}
 	actuator := filepath.Join(repo, "docs/develop/billing/actuators/invoice-webhook.md")
-	if _, err := os.Stat(actuator); err != nil {
+	actBody, err := os.ReadFile(actuator)
+	if err != nil {
 		t.Fatalf("missing actuator page: %v", err)
+	}
+	if !strings.Contains(string(actBody), "Notify external systems when an invoice is minted.") {
+		t.Fatalf("actuator stub missing objective: %s", actBody)
 	}
 }
