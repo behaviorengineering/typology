@@ -2,14 +2,14 @@
 name: typology-catalog
 description: >-
   Author Typology catalogs (YAML or catalog.Typology in Go): slices, components,
-  subprograms, actuators, opRuns, sliceBindings, componentBindings. Load when
+  surfaces, subprograms, actuators, opRuns, sliceBindings, componentBindings. Load when
   writing architecture/typology.yaml, calling catalog.LoadYAML or SaveYAML, or
   mapping a product contract onto the Typology model.
 ---
 
 # Typology catalog
 
-**Moral:** A slice is a bounded context. A component is a package. A subprogram is a standing program. An opRun is one gated invocation. An actuator is a signal-triggered emit. Do not collapse those four.
+**Moral:** A slice is a bounded context. A component is a package. A surface is a built interaction artefact (UI, CLI, or API) that owns packages. A subprogram is a standing program. An opRun is one gated invocation. An actuator is a signal-triggered emit. Do not collapse those five.
 
 **Types:** `catalog/types.go` · **Fixture:** `testdata/tiny-module/architecture/typology.yaml` · **I/O:** `catalog.LoadYAML`, `catalog.SaveYAML`, `catalog.ValidateStructure`
 
@@ -25,8 +25,9 @@ description: >-
 | Type | Role |
 |------|------|
 | `Typology` | Whole map (`id`, `slices`, optional bindings) |
-| `Slice` | Bounded context (`owns`, `opRuns`, `subprograms`, `actuators`, `docs`) |
-| `Component` | Package path. Layer `domain` or `interaction` (`ui` / `cli` / `api`). Does not run programs. |
+| `Slice` | Bounded context (`owns`, `surfaces`, `opRuns`, `subprograms`, `actuators`, `docs`) |
+| `Component` | Package path. Domain packages live on `owns[]`. Interaction packages live under a `Surface`. |
+| `Surface` | Built interaction artefact (`kind`: `ui`, `cli`, or `api`) with nested `components[]` (id + path only). |
 | `OpRun` | One gated invocation (CLI, HTTP, human, signal, or later schedule). Optional `runs` or `actuates`, not both. |
 | `Subprogram` | Standing program: `input`, `output`, optional `store`, `gate`. Origin for `store` paths when first written. |
 | `Actuator` | Signal in, emit out (usually past the instance edge). Requires `signals` and `emits`. |
@@ -39,10 +40,10 @@ Default catalog path: `architecture/typology.yaml`. Default docs root: `docs/dev
 
 ## Core constraints
 
-**CONSTRAINT:** Subprogram, actuator, and opRun MUST set `ownerComponent` to a component id on the same slice `owns`.
+**CONSTRAINT:** Subprogram, actuator, and opRun MUST set `ownerComponent` to a component id on the same slice (`owns[]` or a surface's `components[]`).
 
-- MUST: `ownerComponent` matches an `owns[].id` on that slice
-- MUST NOT: invent an owner that is not in `owns`
+- MUST: `ownerComponent` matches a component from `Slice.AllComponents()` on that slice
+- MUST NOT: invent an owner that is not in `owns` or `surfaces`
 
 Enforcement: `catalog.ValidateStructure` (`ownerComponent … not in slice owns`)
 Violation: STOP, add the component or fix the id, re-validate
@@ -156,29 +157,41 @@ componentBindings:
     rule: reads
 ```
 
-**CONSTRAINT:** Interaction-layer components MUST set `kind` to `ui`, `cli`, or `api`. A component is a package. MUST NOT treat a component as a subprogram or actuator.
+**CONSTRAINT:** Slice `owns[]` is domain-only. Interaction packages MUST live under `surfaces[]`.
 
-- MUST: `layer: interaction` has `kind`
-- MUST NOT: put `input` / `output` / `store` on a component; MUST NOT name a package a subprogram
+- MUST: `owns[].layer` is `domain`
+- MUST: each surface sets `kind` (`ui`, `cli`, or `api`) and lists nested components (id + path)
+- MUST NOT: put `layer: interaction` on `owns[]`; MUST NOT put `layer` or `kind` on nested surface components
 
-Enforcement: `ValidateStructure` (`interaction layer requires kind ui|cli|api`); review `owns` vs `subprograms`
-Violation: STOP, set `kind` or move the program onto `subprograms`, re-validate
+Enforcement: `ValidateStructure` (`interaction packages belong on surfaces, not owns`; `surface … missing kind`)
+Violation: STOP, move packages onto `surfaces[]`, re-validate
 
 CORRECT:
 ```yaml
-- id: billing-http
-  path: internal/billing/httpapi
-  layer: interaction
-  kind: api
+owns:
+  - id: billing-store
+    path: internal/billing/store
+    layer: domain
+surfaces:
+  - id: billing-api
+    kind: api
+    components:
+      - id: billing-http
+        path: internal/billing/httpapi
 ```
 
 PROHIBITED:
 ```yaml
-- id: billing-http
-  path: internal/billing/httpapi
-  layer: interaction
-  # missing kind
+owns:
+  - id: billing-http
+    path: internal/billing/httpapi
+    layer: interaction
+    kind: api
 ```
+
+**CONSTRAINT:** A component is a package. MUST NOT treat a component or surface as a subprogram or actuator.
+
+- MUST NOT: put `input` / `output` / `store` on a component; MUST NOT name a package a subprogram
 
 **CONSTRAINT:** Catalog field names are `input`, `output`, `store` on subprograms; `runs` / `actuates` on opRuns. MUST NOT invent mint, writes-as-subprogram-fields, job-as-opRun-type, or aggregate-as-subprogram.
 

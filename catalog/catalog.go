@@ -15,11 +15,11 @@ func (t Typology) LookupSlice(id string) (Slice, bool) {
 	return Slice{}, false
 }
 
-// ComponentByID maps component id across all slices.
+// ComponentByID maps component id across all slices (owns + surface components).
 func (t Typology) ComponentByID() map[string]Component {
 	out := make(map[string]Component)
 	for _, s := range t.Slices {
-		for _, c := range s.Owns {
+		for _, c := range s.AllComponents() {
 			if c.ID != "" {
 				out[c.ID] = c
 			}
@@ -31,13 +31,41 @@ func (t Typology) ComponentByID() map[string]Component {
 // SliceForComponent returns the slice id owning a component id.
 func (t Typology) SliceForComponent(componentID string) string {
 	for _, s := range t.Slices {
-		for _, c := range s.Owns {
+		for _, c := range s.AllComponents() {
 			if c.ID == componentID {
 				return s.ID
 			}
 		}
 	}
 	return ""
+}
+
+// AllComponents returns domain owns plus every surface component.
+func (s Slice) AllComponents() []Component {
+	out := make([]Component, 0, len(s.Owns)+surfaceComponentCount(s.Surfaces))
+	out = append(out, s.Owns...)
+	for _, surf := range s.Surfaces {
+		out = append(out, surf.Components...)
+	}
+	return out
+}
+
+func surfaceComponentCount(surfaces []Surface) int {
+	n := 0
+	for _, surf := range surfaces {
+		n += len(surf.Components)
+	}
+	return n
+}
+
+// SurfaceByKind returns the first surface with the given kind, if any.
+func (s Slice) SurfaceByKind(kind InteractionKind) (Surface, bool) {
+	for _, surf := range s.Surfaces {
+		if surf.Kind == kind {
+			return surf, true
+		}
+	}
+	return Surface{}, false
 }
 
 // DefaultDocCluster builds the six-page doc pack for a slice.
@@ -83,13 +111,20 @@ func (t Typology) ValidateStructure() []Issue {
 				})
 			}
 			seenComp[c.ID] = s.ID
-			if c.Layer == LayerInteraction && c.Kind == "" {
+			if c.Layer == LayerInteraction {
 				issues = append(issues, Issue{
 					Slice:   s.ID,
-					Message: fmt.Sprintf("component %q: interaction layer requires kind ui|cli|api", c.ID),
+					Message: fmt.Sprintf("component %q: interaction packages belong on surfaces, not owns", c.ID),
+				})
+			}
+			if c.Layer != LayerDomain {
+				issues = append(issues, Issue{
+					Slice:   s.ID,
+					Message: fmt.Sprintf("component %q: owns[] requires layer domain", c.ID),
 				})
 			}
 		}
+		issues = append(issues, s.validateSurfaces(seenComp)...)
 		issues = append(issues, s.validateSubprograms()...)
 		issues = append(issues, s.validateActuators()...)
 		issues = append(issues, s.validateOpRuns()...)
@@ -132,6 +167,79 @@ func (t Typology) ValidateStructure() []Issue {
 	return issues
 }
 
+func (s Slice) validateSurfaces(seenComp map[string]string) []Issue {
+	var issues []Issue
+	seenSurface := map[string]struct{}{}
+	seenKind := map[InteractionKind]struct{}{}
+	for _, surf := range s.Surfaces {
+		if surf.ID == "" {
+			issues = append(issues, Issue{Slice: s.ID, Message: "surface with empty id"})
+			continue
+		}
+		if _, ok := seenSurface[surf.ID]; ok {
+			issues = append(issues, Issue{
+				Slice:   s.ID,
+				Message: fmt.Sprintf("duplicate surface id %q", surf.ID),
+			})
+		}
+		seenSurface[surf.ID] = struct{}{}
+		if s.hasSubprogram(surf.ID) {
+			issues = append(issues, Issue{
+				Slice:   s.ID,
+				Message: fmt.Sprintf("surface %q: id already used by a subprogram", surf.ID),
+			})
+		}
+		if s.hasActuator(surf.ID) {
+			issues = append(issues, Issue{
+				Slice:   s.ID,
+				Message: fmt.Sprintf("surface %q: id already used by an actuator", surf.ID),
+			})
+		}
+		if surf.Kind == "" {
+			issues = append(issues, Issue{
+				Slice:   s.ID,
+				Message: fmt.Sprintf("surface %q: missing kind ui|cli|api", surf.ID),
+			})
+		} else {
+			switch surf.Kind {
+			case InteractionUI, InteractionCLI, InteractionAPI:
+				if _, ok := seenKind[surf.Kind]; ok {
+					issues = append(issues, Issue{
+						Slice:   s.ID,
+						Message: fmt.Sprintf("surface %q: duplicate kind %q on slice", surf.ID, surf.Kind),
+					})
+				}
+				seenKind[surf.Kind] = struct{}{}
+			default:
+				issues = append(issues, Issue{
+					Slice:   s.ID,
+					Message: fmt.Sprintf("surface %q: kind must be ui|cli|api", surf.ID),
+				})
+			}
+		}
+		for _, c := range surf.Components {
+			if c.ID == "" {
+				issues = append(issues, Issue{Slice: s.ID, Message: fmt.Sprintf("surface %q: component with empty id", surf.ID)})
+				continue
+			}
+			if owner, ok := seenComp[c.ID]; ok {
+				issues = append(issues, Issue{
+					Slice:   s.ID,
+					Message: fmt.Sprintf("duplicate component id %q (also on slice %q)", c.ID, owner),
+				})
+			}
+			seenComp[c.ID] = s.ID
+			if c.Layer == LayerInteraction || c.Kind != "" {
+				issues = append(issues, Issue{
+					Slice:   s.ID,
+					Message: fmt.Sprintf("surface component %q: layer/kind belong on the surface, not nested components", c.ID),
+				})
+			}
+		}
+	}
+	return issues
+}
+
 func (s Slice) validateSubprograms() []Issue {
 	var issues []Issue
 	seen := map[string]struct{}{}
@@ -157,7 +265,7 @@ func (s Slice) validateSubprograms() []Issue {
 		if !s.hasComponent(sp.OwnerComponent) {
 			issues = append(issues, Issue{
 				Slice:   s.ID,
-				Message: fmt.Sprintf("subprogram %q: ownerComponent %q not in slice owns", sp.ID, sp.OwnerComponent),
+				Message: fmt.Sprintf("subprogram %q: ownerComponent %q not in slice owns or surfaces", sp.ID, sp.OwnerComponent),
 			})
 		}
 	}
@@ -193,7 +301,7 @@ func (s Slice) validateActuators() []Issue {
 		} else if !s.hasComponent(a.OwnerComponent) {
 			issues = append(issues, Issue{
 				Slice:   s.ID,
-				Message: fmt.Sprintf("actuator %q: ownerComponent %q not in slice owns", a.ID, a.OwnerComponent),
+				Message: fmt.Sprintf("actuator %q: ownerComponent %q not in slice owns or surfaces", a.ID, a.OwnerComponent),
 			})
 		}
 		if len(a.Signals) == 0 {
@@ -229,7 +337,7 @@ func (s Slice) validateOpRuns() []Issue {
 		if !s.hasComponent(r.OwnerComponent) {
 			issues = append(issues, Issue{
 				Slice:   s.ID,
-				Message: fmt.Sprintf("opRun %q: ownerComponent %q not in slice owns", r.ID, r.OwnerComponent),
+				Message: fmt.Sprintf("opRun %q: ownerComponent %q not in slice owns or surfaces", r.ID, r.OwnerComponent),
 			})
 		}
 		if r.Runs != "" && r.Actuates != "" {
@@ -255,7 +363,7 @@ func (s Slice) validateOpRuns() []Issue {
 }
 
 func (s Slice) hasComponent(id string) bool {
-	for _, c := range s.Owns {
+	for _, c := range s.AllComponents() {
 		if c.ID == id {
 			return true
 		}
@@ -285,6 +393,24 @@ func (s Slice) hasActuator(id string) bool {
 type Issue struct {
 	Slice   string `json:"slice,omitempty"`
 	Message string `json:"message"`
+}
+
+// BuildSurfaces groups interaction components into one surface per kind (ui, cli, api).
+func BuildSurfaces(sliceID string, byKind map[InteractionKind][]Component) []Surface {
+	order := []InteractionKind{InteractionUI, InteractionCLI, InteractionAPI}
+	out := make([]Surface, 0, len(byKind))
+	for _, kind := range order {
+		comps := byKind[kind]
+		if len(comps) == 0 {
+			continue
+		}
+		out = append(out, Surface{
+			ID:         sliceID + "-" + string(kind),
+			Kind:       kind,
+			Components: comps,
+		})
+	}
+	return out
 }
 
 // SortIssues orders findings for stable output.

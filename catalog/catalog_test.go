@@ -6,25 +6,53 @@ import (
 	"github.com/behaviorengineering/typology/catalog"
 )
 
+func billingFixtureSlice() catalog.Slice {
+	return catalog.Slice{
+		ID: "billing",
+		Owns: []catalog.Component{
+			{ID: "billing-store", Path: "internal/billing/store", Layer: catalog.LayerDomain},
+		},
+		Surfaces: []catalog.Surface{{
+			ID:   "billing-api",
+			Kind: catalog.InteractionAPI,
+			Components: []catalog.Component{{
+				ID:   "billing-http",
+				Path: "internal/billing/httpapi",
+			}},
+		}},
+		Subprograms: []catalog.Subprogram{{
+			ID:             "invoice",
+			OwnerComponent: "billing-store",
+			Input:          "invoice request",
+			Output:         "invoice record",
+			Store:          []string{"internal/billing/store"},
+			Gate:           catalog.GateAuto,
+		}},
+		Actuators: []catalog.Actuator{{
+			ID:             "invoice-webhook",
+			OwnerComponent: "billing-http",
+			Signals:        []string{"invoice.minted"},
+			Emits:          []string{"webhook"},
+			Gate:           catalog.GateAuto,
+		}},
+		OpRuns: []catalog.OpRun{
+			{ID: "mint-invoice", OwnerComponent: "billing-store", Gate: catalog.GateAuto, Runs: "invoice"},
+			{ID: "push-invoice", OwnerComponent: "billing-http", Gate: catalog.GateAuto, Actuates: "invoice-webhook"},
+		},
+	}
+}
+
 func TestValidateStructure_ok(t *testing.T) {
 	t.Parallel()
 	typ := catalog.Typology{
 		ID: "tiny",
 		Slices: []catalog.Slice{
-			{
-				ID: "billing",
-				Owns: []catalog.Component{
-					{ID: "billing-store", Path: "internal/billing/store", Layer: catalog.LayerDomain},
-					{ID: "billing-http", Path: "internal/billing/httpapi", Layer: catalog.LayerInteraction, Kind: catalog.InteractionAPI},
-				},
-				OpRuns: []catalog.OpRun{{ID: "sync", OwnerComponent: "billing-store", Gate: catalog.GateAuto}},
-			},
+			billingFixtureSlice(),
 		},
 		SliceBindings: []catalog.SliceBinding{
 			{From: "billing", To: "ledger", Kind: catalog.SliceReads},
 		},
 	}
-	// missing ledger slice should fail
 	if len(typ.ValidateStructure()) == 0 {
 		t.Fatal("expected structure issues")
 	}
@@ -42,35 +70,8 @@ func TestValidateStructure_ok(t *testing.T) {
 func TestValidateStructure_subprogramAndActuator(t *testing.T) {
 	t.Parallel()
 	ok := catalog.Typology{
-		ID: "tiny",
-		Slices: []catalog.Slice{
-			{
-				ID: "billing",
-				Owns: []catalog.Component{
-					{ID: "billing-store", Path: "internal/billing/store", Layer: catalog.LayerDomain},
-					{ID: "billing-http", Path: "internal/billing/httpapi", Layer: catalog.LayerInteraction, Kind: catalog.InteractionAPI},
-				},
-				Subprograms: []catalog.Subprogram{{
-					ID:             "invoice",
-					OwnerComponent: "billing-store",
-					Input:          "invoice request",
-					Output:         "invoice record",
-					Store:          []string{"internal/billing/store"},
-					Gate:           catalog.GateAuto,
-				}},
-				Actuators: []catalog.Actuator{{
-					ID:             "invoice-webhook",
-					OwnerComponent: "billing-http",
-					Signals:        []string{"invoice.minted"},
-					Emits:          []string{"webhook"},
-					Gate:           catalog.GateAuto,
-				}},
-				OpRuns: []catalog.OpRun{
-					{ID: "mint-invoice", OwnerComponent: "billing-store", Gate: catalog.GateAuto, Runs: "invoice"},
-					{ID: "push-invoice", OwnerComponent: "billing-http", Gate: catalog.GateAuto, Actuates: "invoice-webhook"},
-				},
-			},
-		},
+		ID:     "tiny",
+		Slices: []catalog.Slice{billingFixtureSlice()},
 	}
 	if issues := ok.ValidateStructure(); len(issues) != 0 {
 		t.Fatalf("unexpected issues: %v", issues)
@@ -111,6 +112,28 @@ func TestValidateStructure_subprogramAndActuator(t *testing.T) {
 	}}
 	if !hasIssue(collision.ValidateStructure(), `actuator "invoice": id already used by a subprogram`) {
 		t.Fatalf("expected id collision issue, got %v", collision.ValidateStructure())
+	}
+}
+
+func TestValidateStructure_rejectsInteractionInOwns(t *testing.T) {
+	t.Parallel()
+	s := billingFixtureSlice()
+	s.Owns = append(s.Owns, catalog.Component{
+		ID: "billing-http", Path: "internal/billing/httpapi", Layer: catalog.LayerInteraction, Kind: catalog.InteractionAPI,
+	})
+	s.Surfaces = nil
+	typ := catalog.Typology{ID: "tiny", Slices: []catalog.Slice{s}}
+	if !hasIssue(typ.ValidateStructure(), `component "billing-http": interaction packages belong on surfaces, not owns`) {
+		t.Fatalf("expected interaction-in-owns issue, got %v", typ.ValidateStructure())
+	}
+}
+
+func TestSliceAllComponents(t *testing.T) {
+	t.Parallel()
+	s := billingFixtureSlice()
+	comps := s.AllComponents()
+	if len(comps) != 2 {
+		t.Fatalf("want 2 components, got %d", len(comps))
 	}
 }
 

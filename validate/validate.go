@@ -43,7 +43,7 @@ func Run(opts Options) []catalog.Issue {
 
 func checkSlice(repoRoot string, s catalog.Slice) []catalog.Issue {
 	var issues []catalog.Issue
-	for _, c := range s.Owns {
+	for _, c := range s.AllComponents() {
 		if strings.TrimSpace(c.Path) == "" {
 			issues = append(issues, catalog.Issue{
 				Slice:   s.ID,
@@ -86,7 +86,7 @@ func checkImports(repoRoot string, topo catalog.Typology) []catalog.Issue {
 	pathToComp := map[string]string{}
 	compToSlice := map[string]string{}
 	for _, s := range topo.Slices {
-		for _, c := range s.Owns {
+		for _, c := range s.AllComponents() {
 			if c.Path != "" {
 				key := normalizePkgPath(c.Path)
 				pathToComp[key] = c.ID
@@ -162,10 +162,8 @@ func checkImports(repoRoot string, topo catalog.Typology) []catalog.Issue {
 }
 
 func compPath(t catalog.Typology, id string) string {
-	for _, c := range t.ComponentByID() {
-		if c.ID == id {
-			return c.Path
-		}
+	if c, ok := t.ComponentByID()[id]; ok {
+		return c.Path
 	}
 	return ""
 }
