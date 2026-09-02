@@ -83,17 +83,26 @@ type Slice struct {
 	MustNot     []string     `json:"mustNot,omitempty" yaml:"mustNot,omitempty"`
 	Success     string       `json:"success,omitempty" yaml:"success,omitempty"`
 	Owns        []Component  `json:"owns,omitempty" yaml:"owns,omitempty"`
+	Surfaces    []Surface    `json:"surfaces,omitempty" yaml:"surfaces,omitempty"`
 	OpRuns      []OpRun      `json:"opRuns,omitempty" yaml:"opRuns,omitempty"`
 	Subprograms []Subprogram `json:"subprograms,omitempty" yaml:"subprograms,omitempty"`
 	Actuators   []Actuator   `json:"actuators,omitempty" yaml:"actuators,omitempty"`
 	Docs        DocCluster   `json:"docs,omitempty" yaml:"docs,omitempty"`
 }
 
+// Surface is a built interaction artefact (UI, CLI, or API) that owns packages.
+// Nested components carry id and path only; kind lives on the surface.
+type Surface struct {
+	ID         string      `json:"id" yaml:"id"`
+	Kind       InteractionKind `json:"kind" yaml:"kind"`
+	Components []Component `json:"components,omitempty" yaml:"components,omitempty"`
+}
+
 // Component is a package (or equivalent) inside a slice.
 type Component struct {
 	ID    string          `json:"id" yaml:"id"`
 	Path  string          `json:"path" yaml:"path"`
-	Layer Layer           `json:"layer" yaml:"layer"`
+	Layer Layer           `json:"layer,omitempty" yaml:"layer,omitempty"`
 	Kind  InteractionKind `json:"kind,omitempty" yaml:"kind,omitempty"`
 	Ops   bool            `json:"ops,omitempty" yaml:"ops,omitempty"`
 }

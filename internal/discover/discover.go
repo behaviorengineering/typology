@@ -55,22 +55,30 @@ func Run(opts Options) (Result, error) {
 	sliceForPath := map[string]string{}
 	for _, clusterID := range sortedKeys(clusters) {
 		paths := clusters[clusterID]
-		owns := make([]catalog.Component, 0, len(paths))
+		var owns []catalog.Component
+		surfaceByKind := map[catalog.InteractionKind][]catalog.Component{}
 		for _, p := range paths {
 			compID := componentID(modPath, p)
 			layer, kind := inferLayer(p)
-			owns = append(owns, catalog.Component{
-				ID:    compID,
-				Path:  p,
-				Layer: layer,
-				Kind:  kind,
-			})
+			if layer == catalog.LayerDomain {
+				owns = append(owns, catalog.Component{
+					ID:    compID,
+					Path:  p,
+					Layer: layer,
+				})
+			} else {
+				surfaceByKind[kind] = append(surfaceByKind[kind], catalog.Component{
+					ID:   compID,
+					Path: p,
+				})
+			}
 			sliceForPath[p] = clusterID
 		}
 		slices = append(slices, catalog.Slice{
-			ID:   clusterID,
-			Owns: owns,
-			Docs: catalog.DefaultDocCluster(clusterID, docsRoot),
+			ID:       clusterID,
+			Owns:     owns,
+			Surfaces: catalog.BuildSurfaces(clusterID, surfaceByKind),
+			Docs:     catalog.DefaultDocCluster(clusterID, docsRoot),
 		})
 	}
 

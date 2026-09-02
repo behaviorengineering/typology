@@ -14,14 +14,23 @@ var tmplFuncs = template.FuncMap{
 	"sliceBindings": sliceBindingsFor,
 	"compBindings":  compBindingsFor,
 	"join":          strings.Join,
-	"apiComponents": func(owns []catalog.Component) []catalog.Component {
-		return filterKind(owns, catalog.InteractionAPI)
+	"apiComponents": func(s catalog.Slice) []catalog.Component {
+		if surf, ok := s.SurfaceByKind(catalog.InteractionAPI); ok {
+			return surf.Components
+		}
+		return nil
 	},
-	"cliComponents": func(owns []catalog.Component) []catalog.Component {
-		return filterKind(owns, catalog.InteractionCLI)
+	"cliComponents": func(s catalog.Slice) []catalog.Component {
+		if surf, ok := s.SurfaceByKind(catalog.InteractionCLI); ok {
+			return surf.Components
+		}
+		return nil
 	},
-	"uiComponents": func(owns []catalog.Component) []catalog.Component {
-		return filterKind(owns, catalog.InteractionUI)
+	"uiComponents": func(s catalog.Slice) []catalog.Component {
+		if surf, ok := s.SurfaceByKind(catalog.InteractionUI); ok {
+			return surf.Components
+		}
+		return nil
 	},
 }
 
@@ -191,7 +200,7 @@ HTTP/API surface for slice {{.S.ID}}. Endpoint types are not modeled in typology
 
 | Component | Path |
 |-----------|------|
-{{range apiComponents .S.Owns}}| {{.ID}} | {{.Path}} |
+{{range apiComponents .S}}| {{.ID}} | {{.Path}} |
 {{else}}| _(none)_ | |
 {{end}}
 `
@@ -204,7 +213,7 @@ Operator surface for slice {{.S.ID}}.
 
 | Component | Path |
 |-----------|------|
-{{range cliComponents .S.Owns}}| {{.ID}} | {{.Path}} |
+{{range cliComponents .S}}| {{.ID}} | {{.Path}} |
 {{else}}| _(none)_ | |
 {{end}}
 `
@@ -217,7 +226,7 @@ Viewer/UI wiring for slice {{.S.ID}}.
 
 | Component | Path |
 |-----------|------|
-{{range uiComponents .S.Owns}}| {{.ID}} | {{.Path}} |
+{{range uiComponents .S}}| {{.ID}} | {{.Path}} |
 {{else}}| _(none)_ | |
 {{end}}
 `
@@ -251,7 +260,7 @@ func compBindingsFor(t catalog.Typology, sliceID string) []catalog.ComponentBind
 		if s.ID != sliceID {
 			continue
 		}
-		for _, c := range s.Owns {
+		for _, c := range s.AllComponents() {
 			compIDs[c.ID] = struct{}{}
 		}
 	}
@@ -259,16 +268,6 @@ func compBindingsFor(t catalog.Typology, sliceID string) []catalog.ComponentBind
 	for _, b := range t.ComponentBindings {
 		if _, ok := compIDs[b.From]; ok {
 			out = append(out, b)
-		}
-	}
-	return out
-}
-
-func filterKind(owns []catalog.Component, kind catalog.InteractionKind) []catalog.Component {
-	var out []catalog.Component
-	for _, c := range owns {
-		if c.Layer == catalog.LayerInteraction && c.Kind == kind {
-			out = append(out, c)
 		}
 	}
 	return out

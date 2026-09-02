@@ -35,7 +35,9 @@ typology version
 
 ## Workflow
 
-1. `typology discover` on a Go repo (draft `architecture/typology.yaml`).
+First map in a new repo: load [skills/journey/SKILL.md](skills/journey/SKILL.md) (plan file `architecture/typology-journey.md`, discover to a draft, walk slices, emit, then fill DocPages with [skills/docs/SKILL.md](skills/docs/SKILL.md)).
+
+1. `typology discover` on a Go repo (draft; first map uses `--out architecture/typology.draft.yaml`).
 2. Human confirms slice names and bindings.
 3. `typology emit` writes catalog YAML and DocPage skeletons under the docs root (default `docs/develop`).
 4. `typology validate` fails closed on missing paths, bindings, or docs.
@@ -45,7 +47,7 @@ typology version
 
 ```text
 AGENTS.md             Pointer for coding agents
-skills/               Portable agent skills (catalog, CLI)
+skills/               Portable agent skills (journey, docs, catalog, CLI)
 catalog/              Typology model + YAML I/O
 validate/             Path + import + DocPage checks
 cmd/typology/         CLI entry
@@ -62,7 +64,8 @@ testdata/tiny-module/ Fixture Go module
 |------|------|
 | `Typology` | Whole map |
 | `Slice` | Bounded context |
-| `Component` | Package (`domain` or `interaction` ui/cli/api). Does not run programs or actuators. |
+| `Component` | Package. Domain on `owns[]`; interaction nested under a `Surface`. |
+| `Surface` | Built UI, CLI, or API artefact (`kind` + `components[]`). |
 | `OpRun` | One gated operator invocation (CLI, HTTP, human, signal, or schedule). Optional `runs` / `actuates`. |
 | `Subprogram` | Standing program: `input`, `output`, optional `store`, `gate` |
 | `Actuator` | Signal-triggered capability that emits an effect, usually past the edge |

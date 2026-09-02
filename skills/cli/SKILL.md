@@ -12,11 +12,11 @@ description: >-
 
 **Moral:** Discover drafts. A human confirms slice names. Emit writes docs only where the `<!-- typology:generated -->` marker is present. Validate fail-closes. Remediate scopes the agent to one slice.
 
-**Binary:** `make build` → `./bin/typology` · **Catalog skill:** [catalog/SKILL.md](../catalog/SKILL.md) (load first when the YAML shape is in doubt)
+**Binary:** `make build` → `./bin/typology` · **Catalog skill:** [catalog/SKILL.md](../catalog/SKILL.md) (load first when the YAML shape is in doubt) · **First map:** [journey/SKILL.md](../journey/SKILL.md) · **DocPages:** [docs/SKILL.md](../docs/SKILL.md)
 
 ## When to load
 
-- First catalog on a Go module
+- First catalog on a Go module (load [journey/SKILL.md](../journey/SKILL.md) first; this skill is the command layer)
 - Refreshing DocPage skeletons under `docs/develop`
 - `typology validate` failures (missing path, import, or doc page)
 - Scoping a fix to one slice (`remediate`)
@@ -36,9 +36,9 @@ Default catalog: `REPO/architecture/typology.yaml`. `show` with no `--catalog` l
 
 ## Steps
 
-1. **Discover** — `typology discover REPO` writes a draft catalog from the Go import graph. MUST NOT treat the draft as final slice names.
-2. **Confirm** — a human accepts or renames slices and bindings. MUST NOT emit or validate-as-done on unconfirmed names when this is a first map.
-3. **Emit** — `typology emit REPO` writes catalog YAML (unless `--docs-only`) and DocPage skeletons (unless `--go-only`). MUST NOT overwrite a doc page that exists and lacks `<!-- typology:generated -->`.
+1. **Discover**: on a first map, follow [journey/SKILL.md](../journey/SKILL.md) (`--out architecture/typology.draft.yaml`). Otherwise `typology discover REPO` writes a draft catalog from the Go import graph. MUST NOT treat the draft as final slice names.
+2. **Confirm**: a human accepts or renames slices and bindings (journey slice walk on a first map). MUST NOT emit or validate-as-done on unconfirmed names when this is a first map.
+3. **Emit**: `typology emit REPO` writes catalog YAML (unless `--docs-only`) and DocPage skeletons (unless `--go-only`). MUST NOT overwrite a doc page that exists and lacks `<!-- typology:generated -->`. On a first map, load [docs/SKILL.md](../docs/SKILL.md) after emit (journey phase `docs`).
 4. **Fill catalog** — add subprograms, actuators, opRuns, bindings per [catalog/SKILL.md](../catalog/SKILL.md). Owned paths MUST exist as directories.
 5. **Validate** — `typology validate REPO` (optional slice id). MUST fix every issue. MUST NOT ignore import or missing-path findings.
 6. **Remediate** — `typology remediate REPO SLICE` when the job is one slice. MUST follow the returned `protocol`. MUST NOT refactor other slices in that pass.

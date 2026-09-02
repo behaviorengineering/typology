@@ -7,10 +7,12 @@ slices:
       - id: billing-store
         path: internal/billing/store
         layer: domain
-      - id: billing-http
-        path: internal/billing/httpapi
-        layer: interaction
+    surfaces:
+      - id: billing-api
         kind: api
+        components:
+          - id: billing-http
+            path: internal/billing/httpapi
     subprograms:
       - id: invoice
         ownerComponent: billing-store
