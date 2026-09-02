@@ -85,7 +85,6 @@ func TestValidate_tinyModule_missingSubprogramPage(t *testing.T) {
 		t.Fatalf("expected missing subprogram page, got %v", issues)
 	}
 }
-
 func TestValidate_tinyModule_unmappedPackage(t *testing.T) {
 	t.Parallel()
 	repo := filepath.Join("..", "testdata", "tiny-module")
