@@ -20,7 +20,7 @@ Generated emit stubs (marker present, tables only) usually CLASSIFY as EXPAND.
 STRUCTURE:
 - Title: [exact H1]
 - Path: [docs/develop/<slice>/<kind>.md]
-- Kind: overview | components | contracts | cli | presentation | pipelines
+- Kind: overview | components | contracts | cli | presentation | pipelines | subprogram | actuator
 - Marker: generated | human
 - Headings: [H1 > H2 …]
 - Tables: [count and names]
@@ -150,8 +150,9 @@ MUST:
 - Keep Subprograms and Actuators index tables with links to `subprograms/<id>.md` and `actuators/<id>.md` when the catalog lists them
 - State why each slice or component binding exists (rationale, one clause per binding) under Cross-slice
 - Gloss subprogram (standing program), actuator (signal in, emit out), and component (package) on first use
+- When a package in `owns` or a subprogram represents recorded boundary debt (such as a co-located package or false aggregate ownership), MUST document the tension under a `## Boundary notes & technical debt` section explaining why the package is temporarily co-located and naming its target refactoring
 
-MUST NOT: convert the owns table into a 5+ bullet “characteristics” list; drop a binding that is in the catalog
+MUST NOT: convert the owns table into a 5+ bullet “characteristics” list; drop a binding that is in the catalog; paper over co-located packages as native domain logic without calling out the boundary tension
 
 CORRECT: table of `reads` to ledger, then `Billing reads ledger balances so mint does not own the ledger store.`
 
@@ -196,6 +197,44 @@ MUST NOT: invent DSPy job names the catalog does not name. Empty opRuns table: S
 CORRECT: `OpRun mint-invoice runs subprogram invoice with gate auto.`
 
 PROHIBITED: `chronology_select` on a slice whose opRuns list does not name it.
+
+### subprogram
+
+Leaf under `docs/develop/<slice>/subprograms/<id>.md`. Source is `subprograms[]` for that id (not DocPageKind).
+
+MUST:
+
+- MUST: First sentence (or opening paragraph) states the business why; quote `objective:` from the catalog in the evidence gate before FILL
+- MUST: Keep the Reference table (Input, Output, Store, Gate) and OpRuns that `runs` this id when present
+- MUST: Gloss jargon from the objective in the same breath on first use
+
+MUST NOT: open on ownership/store mechanics alone; invent an objective the catalog does not carry; skip the gate quote
+
+CORRECT first sentence (catalog `objective: Mint stable cn_ ids only after human Accept so proposals never enter Neo4j.`):
+
+`Concept mints stable cn_ ids only after human Accept so proposals never enter Neo4j.`
+
+PROHIBITED first sentence: `Review owns concept output under pii/.pipeline/concepts/.`
+
+Gate FILL evidence MUST look like: `YES: "objective: Mint stable cn_ ids only after human Accept…"`
+
+### actuator
+
+Leaf under `docs/develop/<slice>/actuators/<id>.md`. Source is `actuators[]` for that id.
+
+MUST:
+
+- MUST: First sentence states the business why; quote `objective:` from the catalog in the evidence gate before FILL
+- MUST: Keep Signals, Emits, and Gate from the catalog
+- MUST: Name what crosses the instance edge (email, counsel pack, webhook) when the objective implies it
+
+MUST NOT: open on package paths alone; invent signals or emits; skip the gate quote
+
+CORRECT first sentence (catalog `objective: Notify external systems when an invoice is minted.`):
+
+`Invoice webhook notifies external systems when an invoice is minted.`
+
+PROHIBITED first sentence: `Slice billing actuator. Owner component: billing-http.`
 
 ---
 

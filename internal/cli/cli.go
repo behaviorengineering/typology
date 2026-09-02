@@ -56,10 +56,10 @@ func printUsage(w io.Writer) {
 	_, _ = fmt.Fprintln(w, "typology - discover, validate, and emit architecture catalogs")
 	_, _ = fmt.Fprintln(w)
 	_, _ = fmt.Fprintln(w, "Usage:")
-	_, _ = fmt.Fprintln(w, "  typology discover REPO [--out PATH] [--docs-root PATH]")
+	_, _ = fmt.Fprintln(w, "  typology discover REPO [--out PATH] [--docs-root PATH] [--suggest-merges]")
 	_, _ = fmt.Fprintln(w, "  typology emit REPO [--catalog PATH] [--docs-only] [--go-only]")
 	_, _ = fmt.Fprintln(w, "  typology validate REPO [--catalog PATH] [SLICE]")
-	_, _ = fmt.Fprintln(w, "  typology show [SLICE] [--json] [--catalog PATH]")
+	_, _ = fmt.Fprintln(w, "  typology show [SLICE|graph] [--json] [--catalog PATH]")
 	_, _ = fmt.Fprintln(w, "  typology remediate REPO SLICE [--catalog PATH]")
 	_, _ = fmt.Fprintln(w, "  typology version")
 }
@@ -76,6 +76,7 @@ func runDiscover(args []string, stdout, stderr io.Writer) int {
 	}
 	out := defaultCatalogPath(repo)
 	docsRoot := catalog.DefaultDocsRoot
+	suggestMerges := false
 	for i := 0; i < len(rest); i++ {
 		switch rest[i] {
 		case "--out":
@@ -92,6 +93,8 @@ func runDiscover(args []string, stdout, stderr io.Writer) int {
 			}
 			docsRoot = rest[i+1]
 			i++
+		case "--suggest-merges":
+			suggestMerges = true
 		default:
 			_, _ = fmt.Fprintf(stderr, "discover: unknown flag %q\n", rest[i])
 			return 2
@@ -108,6 +111,12 @@ func runDiscover(args []string, stdout, stderr io.Writer) int {
 	}
 	_, _ = fmt.Fprintf(stdout, "discover: wrote draft catalog (%d slices, %d packages) -> %s\n",
 		len(result.Typology.Slices), len(result.Packages), out)
+	if suggestMerges && len(result.Graph.MergeSuggestions) > 0 {
+		_, _ = fmt.Fprintln(stdout, "\nMerge candidates (sole importer / companion heuristics):")
+		for _, m := range result.Graph.MergeSuggestions {
+			_, _ = fmt.Fprintf(stdout, "  - %s -> %s (%s)\n", m.SourcePackage, m.TargetPackage, m.Reason)
+		}
+	}
 	_, _ = fmt.Fprintln(stdout, "discover: review and rename before emit/validate")
 	return 0
 }
@@ -277,6 +286,31 @@ func runShow(args []string, stdout, stderr io.Writer) int {
 		}
 		return 0
 	}
+	if sliceID == "graph" {
+		repo := filepath.Dir(catalogPath)
+		if repo == "" || repo == "." {
+			if wd, err := os.Getwd(); err == nil {
+				repo = wd
+			}
+		}
+		summary, err := discover.AnalyzeGraph(repo)
+		if err != nil {
+			_, _ = fmt.Fprintf(stderr, "show graph: %v\n", err)
+			return 1
+		}
+		if asJSON {
+			enc := json.NewEncoder(stdout)
+			enc.SetIndent("", "  ")
+			if err := enc.Encode(summary); err != nil {
+				_, _ = fmt.Fprintf(stderr, "show graph: %v\n",
+					terrors.Wrap(err, terrors.CodeInternal, "cli.show", "encode graph json"))
+				return 1
+			}
+			return 0
+		}
+		printGraphSummary(stdout, summary)
+		return 0
+	}
 	s, ok := t.LookupSlice(sliceID)
 	if !ok {
 		_, _ = fmt.Fprintf(stderr, "show: unknown slice %q\n", sliceID)
@@ -347,4 +381,45 @@ func firstArg(args []string) (repo string, rest []string, ok bool) {
 		return "", nil, false
 	}
 	return args[0], args[1:], true
+}
+
+func printGraphSummary(w io.Writer, s discover.GraphSummary) {
+	_, _ = fmt.Fprintf(w, "=== Typology Import Graph (%d packages) ===\n\n", len(s.Nodes))
+	if len(s.Hubs) > 0 {
+		_, _ = fmt.Fprintln(w, "Hubs (high coupling):")
+		for _, h := range s.Hubs {
+			node := s.Nodes[h]
+			_, _ = fmt.Fprintf(w, "  - %s (in: %d, out: %d)\n", h, node.InDegree, node.OutDegree)
+		}
+		_, _ = fmt.Fprintln(w)
+	}
+	if len(s.Leaves) > 0 {
+		_, _ = fmt.Fprintln(w, "Leaves (out-degree 0):")
+		for _, l := range s.Leaves {
+			node := s.Nodes[l]
+			_, _ = fmt.Fprintf(w, "  - %s (in: %d)\n", l, node.InDegree)
+		}
+		_, _ = fmt.Fprintln(w)
+	}
+	if len(s.MergeSuggestions) > 0 {
+		_, _ = fmt.Fprintln(w, "Merge suggestions (heuristics):")
+		for _, m := range s.MergeSuggestions {
+			_, _ = fmt.Fprintf(w, "  - %s -> %s (%s)\n", m.SourcePackage, m.TargetPackage, m.Reason)
+		}
+		_, _ = fmt.Fprintln(w)
+	}
+	if len(s.StemCollisions) > 0 {
+		_, _ = fmt.Fprintln(w, "Stem collision warnings:")
+		for _, c := range s.StemCollisions {
+			_, _ = fmt.Fprintf(w, "  - %s: %s\n", strings.Join(c.Packages, ", "), c.Warning)
+		}
+		_, _ = fmt.Fprintln(w)
+	}
+	if len(s.PlatformLeaves) > 0 {
+		_, _ = fmt.Fprintln(w, "Platform utility leaves (keep small):")
+		for _, pl := range s.PlatformLeaves {
+			_, _ = fmt.Fprintf(w, "  - %s\n", pl)
+		}
+		_, _ = fmt.Fprintln(w)
+	}
 }

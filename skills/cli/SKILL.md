@@ -24,24 +24,25 @@ description: >-
 ## Commands
 
 ```text
-typology discover REPO [--out PATH] [--docs-root PATH]
+typology discover REPO [--out PATH] [--docs-root PATH] [--suggest-merges]
 typology emit REPO [--catalog PATH] [--docs-only] [--go-only]
 typology validate REPO [--catalog PATH] [SLICE]
-typology show [SLICE] [--json] [--catalog PATH]
+typology show [SLICE|graph] [--json] [--catalog PATH]
 typology remediate REPO SLICE [--catalog PATH]
 typology version
 ```
 
-Default catalog: `REPO/architecture/typology.yaml`. `show` with no `--catalog` looks for that path or `typology.yaml` via `catalog.FindCatalog`.
+Default catalog: `REPO/architecture/typology.yaml`. `show` with no `--catalog` looks for that path or `typology.yaml` via `catalog.FindCatalog`. `show graph` displays the package import topology (in/out degrees, hubs, leaves, sole-importer merge candidates, stem collision warnings).
 
 ## Steps
 
-1. **Discover**: on a first map, follow [journey/SKILL.md](../journey/SKILL.md) (`--out architecture/typology.draft.yaml`). Otherwise `typology discover REPO` writes a draft catalog from the Go import graph. MUST NOT treat the draft as final slice names.
-2. **Confirm**: a human accepts or renames slices and bindings (journey slice walk on a first map). MUST NOT emit or validate-as-done on unconfirmed names when this is a first map.
-3. **Emit**: `typology emit REPO` writes catalog YAML (unless `--docs-only`), a slice README hub, DocPage skeletons (unless `--go-only`), and program leaves. MUST NOT overwrite a doc page that exists and lacks `<!-- typology:generated -->`. On a first map, load [docs/SKILL.md](../docs/SKILL.md) after emit (journey phase `docs`). Default `docs.pages` follows surfaces and opRuns; MUST NOT treat six missing files per slice as architecture failure.
-4. **Fill catalog** — add subprograms, actuators, opRuns, bindings per [catalog/SKILL.md](../catalog/SKILL.md). Owned paths MUST exist as directories.
-5. **Validate** — `typology validate REPO` (optional slice id). MUST fix every issue. MUST NOT ignore import or missing-path findings.
-6. **Remediate** — `typology remediate REPO SLICE` when the job is one slice. MUST follow the returned `protocol`. MUST NOT refactor other slices in that pass.
+1. **Discover (Inventory)**: on a first map, follow [journey/SKILL.md](../journey/SKILL.md) (`typology discover REPO --out architecture/typology.draft.yaml --suggest-merges`). Raw discover writes a package-level draft; MUST NOT treat 1:1 package clusters as final slice names.
+2. **Cluster Pass (Domain Consolidation)**: run `typology show graph REPO` to inspect coupling metrics, hubs, and merge suggestions. Consolidate companion packages, job families, and sequential pipeline stages into true bounded contexts. Get operator approval on candidate clusters before slice-walk.
+3. **Confirm (Slice Walk)**: operator accepts or renames consolidated slices and bindings (one slice per turn). MUST NOT emit or validate-as-done on unconfirmed names when this is a first map.
+4. **Emit**: `typology emit REPO` writes catalog YAML (unless `--docs-only`), a slice README hub, DocPage skeletons (unless `--go-only`), and program leaves. MUST NOT overwrite a doc page that exists and lacks `<!-- typology:generated -->`. On a first map, load [docs/SKILL.md](../docs/SKILL.md) after emit (journey phase `docs`). Default `docs.pages` follows surfaces and opRuns; MUST NOT treat six missing files per slice as architecture failure.
+5. **Fill catalog** — add subprograms, actuators, opRuns, bindings per [catalog/SKILL.md](../catalog/SKILL.md). Every subprogram and actuator MUST have a non-empty `objective`. Owned paths MUST exist as directories.
+6. **Validate** — `typology validate REPO` (optional slice id). MUST fix every issue. MUST NOT ignore import or missing-path findings.
+7. **Remediate** — `typology remediate REPO SLICE` when the job is one slice. MUST follow the returned `protocol`. MUST NOT refactor other slices in that pass.
 
 ## Core constraints
 

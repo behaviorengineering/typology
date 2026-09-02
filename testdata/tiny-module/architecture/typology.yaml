@@ -16,6 +16,7 @@ slices:
     subprograms:
       - id: invoice
         ownerComponent: billing-store
+        objective: Mint an invoice record from a store request.
         input: invoice request
         output: invoice record
         store:
@@ -24,6 +25,7 @@ slices:
     actuators:
       - id: invoice-webhook
         ownerComponent: billing-http
+        objective: Notify external systems when an invoice is minted.
         signals:
           - invoice.minted
         emits:

@@ -294,6 +294,12 @@ func (s Slice) validateSubprograms() []Issue {
 			})
 		}
 		seen[sp.ID] = struct{}{}
+		if strings.TrimSpace(sp.Objective) == "" {
+			issues = append(issues, Issue{
+				Slice:   s.ID,
+				Message: fmt.Sprintf("subprogram %q: missing objective", sp.ID),
+			})
+		}
 		if sp.OwnerComponent == "" {
 			issues = append(issues, Issue{
 				Slice:   s.ID,
@@ -330,6 +336,12 @@ func (s Slice) validateActuators() []Issue {
 			issues = append(issues, Issue{
 				Slice:   s.ID,
 				Message: fmt.Sprintf("actuator %q: id already used by a subprogram", a.ID),
+			})
+		}
+		if strings.TrimSpace(a.Objective) == "" {
+			issues = append(issues, Issue{
+				Slice:   s.ID,
+				Message: fmt.Sprintf("actuator %q: missing objective", a.ID),
 			})
 		}
 		if a.OwnerComponent == "" {

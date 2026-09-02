@@ -3,6 +3,7 @@ package discover
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -21,9 +22,10 @@ type Options struct {
 
 // Result is a proposed typology draft.
 type Result struct {
-	Typology catalog.Typology
-	Module   string
-	Packages []string
+	Typology catalog.Typology `json:"typology"`
+	Module   string           `json:"module"`
+	Packages []string         `json:"packages"`
+	Graph    GraphSummary     `json:"graph,omitempty"`
 }
 
 // Run scans a Go module and proposes slices plus bindings.
@@ -130,10 +132,12 @@ func Run(opts Options) (Result, error) {
 		SliceBindings:     sliceBindings,
 		ComponentBindings: compBindings,
 	}
+	graphSummary := BuildGraphSummary(graph)
 	return Result{
 		Typology: t,
 		Module:   modPath,
 		Packages: pkgs,
+		Graph:    graphSummary,
 	}, nil
 }
 
@@ -158,6 +162,7 @@ func ImportGraph(repoRoot string) (map[string][]string, error) {
 
 	graph := map[string][]string{}
 	for _, p := range pkgs {
+		graph[p] = nil
 		imports, err := packageImports(modRoot, p)
 		if err != nil {
 			return nil, terrors.Wrap(err, terrors.CodeUnavailable, "discover.ImportGraph", "package imports").
@@ -328,15 +333,186 @@ func componentID(modPath, relPkg string) string {
 func inferLayer(relPkg string) (catalog.Layer, catalog.InteractionKind) {
 	rel := strings.TrimPrefix(relPkg, "./")
 	switch {
-	case strings.Contains(rel, "/http") || strings.HasSuffix(rel, "api"):
+	case strings.Contains(rel, "/http") || strings.HasSuffix(rel, "api") || strings.HasSuffix(rel, "/api") || strings.Contains(rel, "api/") || strings.Contains(rel, "/api/"):
 		return catalog.LayerInteraction, catalog.InteractionAPI
-	case strings.HasPrefix(rel, "cmd/"):
+	case strings.HasPrefix(rel, "cmd/") || strings.Contains(rel, "/cli") || strings.HasSuffix(rel, "/cli") || rel == "cli" || strings.Contains(rel, "cli/"):
 		return catalog.LayerInteraction, catalog.InteractionCLI
-	case strings.Contains(rel, "view") || strings.Contains(rel, "ui/"):
+	case strings.HasPrefix(rel, "ui/") || strings.Contains(rel, "/ui/") || strings.HasPrefix(rel, "viewer/") || strings.Contains(rel, "/viewer") || strings.HasSuffix(rel, "/view") || strings.HasSuffix(rel, "/views") || strings.Contains(rel, "/view/") || strings.Contains(rel, "/views/") || rel == "view" || rel == "views" || rel == "viewer":
 		return catalog.LayerInteraction, catalog.InteractionUI
 	default:
 		return catalog.LayerDomain, ""
 	}
+}
+
+// PackageNode provides degree metrics and caller relationships for a package.
+type PackageNode struct {
+	Path         string   `json:"path"`
+	InDegree     int      `json:"inDegree"`
+	OutDegree    int      `json:"outDegree"`
+	Imports      []string `json:"imports,omitempty"`
+	ImportedBy   []string `json:"importedBy,omitempty"`
+	IsLeaf       bool     `json:"isLeaf"`
+	IsHub        bool     `json:"isHub"`
+	SoleImporter string   `json:"soleImporter,omitempty"`
+}
+
+// MergeSuggestion captures a heuristic merge candidate.
+type MergeSuggestion struct {
+	SourcePackage string `json:"sourcePackage"`
+	TargetPackage string `json:"targetPackage"`
+	Reason        string `json:"reason"`
+}
+
+// StemCollision captures packages sharing a stem but with distinct importers.
+type StemCollision struct {
+	Stem     string   `json:"stem"`
+	Packages []string `json:"packages"`
+	Warning  string   `json:"warning"`
+}
+
+// GraphSummary provides in/out degree metrics, leaves, hubs, merge suggestions, and stem collision warnings.
+type GraphSummary struct {
+	Nodes            map[string]PackageNode `json:"nodes"`
+	Leaves           []string               `json:"leaves"`
+	Hubs             []string               `json:"hubs"`
+	MergeSuggestions []MergeSuggestion      `json:"mergeSuggestions,omitempty"`
+	StemCollisions   []StemCollision        `json:"stemCollisions,omitempty"`
+	PlatformLeaves   []string               `json:"platformLeaves,omitempty"`
+}
+
+// AnalyzeGraph analyzes package import topology from a repo root.
+func AnalyzeGraph(repoRoot string) (GraphSummary, error) {
+	graph, err := ImportGraph(repoRoot)
+	if err != nil {
+		return GraphSummary{}, err
+	}
+	return BuildGraphSummary(graph), nil
+}
+
+// BuildGraphSummary derives node metrics, leaves, hubs, merge suggestions, and stem collision warnings.
+func BuildGraphSummary(graph map[string][]string) GraphSummary {
+	allPkgs := map[string]struct{}{}
+	importedByMap := map[string][]string{}
+
+	for from, toList := range graph {
+		allPkgs[from] = struct{}{}
+		for _, to := range toList {
+			allPkgs[to] = struct{}{}
+			importedByMap[to] = append(importedByMap[to], from)
+		}
+	}
+
+	nodes := make(map[string]PackageNode, len(allPkgs))
+	var leaves []string
+	var hubs []string
+	var platformLeaves []string
+	var suggestions []MergeSuggestion
+
+	sortedPkgs := make([]string, 0, len(allPkgs))
+	for p := range allPkgs {
+		sortedPkgs = append(sortedPkgs, p)
+	}
+	sort.Strings(sortedPkgs)
+
+	for _, p := range sortedPkgs {
+		imports := append([]string(nil), graph[p]...)
+		sort.Strings(imports)
+		callers := append([]string(nil), importedByMap[p]...)
+		sort.Strings(callers)
+
+		inDeg := len(callers)
+		outDeg := len(imports)
+		isLeaf := outDeg == 0 && inDeg > 0
+		isHub := inDeg >= 3 || outDeg >= 4
+
+		var soleImporter string
+		if inDeg == 1 && callers[0] != p {
+			soleImporter = callers[0]
+			suggestions = append(suggestions, MergeSuggestion{
+				SourcePackage: p,
+				TargetPackage: soleImporter,
+				Reason:        fmt.Sprintf("sole importer: only imported by %s", soleImporter),
+			})
+		}
+
+		if isLeaf {
+			leaves = append(leaves, p)
+		}
+		if isHub {
+			hubs = append(hubs, p)
+		}
+
+		clean := strings.ToLower(p)
+		if (strings.Contains(clean, "config") || strings.Contains(clean, "telemetry") ||
+			strings.Contains(clean, "auth") || strings.Contains(clean, "logger") ||
+			strings.Contains(clean, "logging")) && inDeg >= 2 {
+			platformLeaves = append(platformLeaves, p)
+		}
+
+		nodes[p] = PackageNode{
+			Path:         p,
+			InDegree:     inDeg,
+			OutDegree:    outDeg,
+			Imports:      imports,
+			ImportedBy:   callers,
+			IsLeaf:       isLeaf,
+			IsHub:        isHub,
+			SoleImporter: soleImporter,
+		}
+	}
+
+	stemMap := map[string][]string{}
+	for _, p := range sortedPkgs {
+		base := filepath.Base(p)
+		if len(base) >= 4 {
+			stem := base[:4]
+			stemMap[stem] = append(stemMap[stem], p)
+		}
+	}
+	var collisions []StemCollision
+	for stem, group := range stemMap {
+		if len(group) < 2 {
+			continue
+		}
+		firstCallers := nodes[group[0]].ImportedBy
+		disjoint := true
+		for _, other := range group[1:] {
+			otherCallers := nodes[other].ImportedBy
+			if len(firstCallers) > 0 && len(otherCallers) > 0 && hasOverlap(firstCallers, otherCallers) {
+				disjoint = false
+				break
+			}
+		}
+		if disjoint && (len(nodes[group[0]].ImportedBy) > 0 || len(nodes[group[1]].ImportedBy) > 0) {
+			collisions = append(collisions, StemCollision{
+				Stem:     stem,
+				Packages: group,
+				Warning:  fmt.Sprintf("packages share stem %q but have different importers; verify if distinct bounded contexts before merging", stem),
+			})
+		}
+	}
+
+	return GraphSummary{
+		Nodes:            nodes,
+		Leaves:           leaves,
+		Hubs:             hubs,
+		MergeSuggestions: suggestions,
+		StemCollisions:   collisions,
+		PlatformLeaves:   platformLeaves,
+	}
+}
+
+func hasOverlap(a, b []string) bool {
+	set := make(map[string]struct{}, len(a))
+	for _, v := range a {
+		set[v] = struct{}{}
+	}
+	for _, v := range b {
+		if _, ok := set[v]; ok {
+			return true
+		}
+	}
+	return false
 }
 
 func sortedKeys(m map[string][]string) []string {

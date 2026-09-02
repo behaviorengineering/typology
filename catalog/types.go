@@ -121,13 +121,15 @@ type OpRun struct {
 	Actuates       string `json:"actuates,omitempty" yaml:"actuates,omitempty"`
 }
 
-// Subprogram is a standing capability inside a slice (Input, Output, Store,
-// Gate). An OpRun is one invocation of it. A Component is only the package
-// it lives in. Consilium Contract().Subprograms map here. When Store is
-// set, this subprogram is the origin for those paths or id kinds.
+// Subprogram is a standing capability inside a slice (Objective, Input,
+// Output, Store, Gate). An OpRun is one invocation of it. A Component is
+// only the package it lives in. Consilium Contract().Subprograms map here.
+// When Store is set, this subprogram is the origin for those paths or id
+// kinds. Objective is the business why (required); docs FILL must quote it.
 type Subprogram struct {
 	ID             string   `json:"id" yaml:"id"`
 	OwnerComponent string   `json:"ownerComponent" yaml:"ownerComponent"`
+	Objective      string   `json:"objective" yaml:"objective"`
 	Input          string   `json:"input,omitempty" yaml:"input,omitempty"`
 	Output         string   `json:"output,omitempty" yaml:"output,omitempty"`
 	Store          []string `json:"store,omitempty" yaml:"store,omitempty"`
@@ -138,9 +140,11 @@ type Subprogram struct {
 // and emits an effect, usually past the instance edge (chatbot, email,
 // counsel pack, public post). An OpRun is one invocation of it. A Component
 // is only the package it lives in. Consilium Contract().Actuators map here.
+// Objective is the business why (required); docs FILL must quote it.
 type Actuator struct {
 	ID             string   `json:"id" yaml:"id"`
 	OwnerComponent string   `json:"ownerComponent" yaml:"ownerComponent"`
+	Objective      string   `json:"objective" yaml:"objective"`
 	Signals        []string `json:"signals,omitempty" yaml:"signals,omitempty"`
 	Emits          []string `json:"emits,omitempty" yaml:"emits,omitempty"`
 	Gate           Gate     `json:"gate,omitempty" yaml:"gate,omitempty"`

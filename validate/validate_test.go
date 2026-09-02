@@ -62,6 +62,7 @@ func TestValidate_tinyModule_missingSubprogramPage(t *testing.T) {
 			}},
 			Subprograms: []catalog.Subprogram{{
 				ID: "invoice", OwnerComponent: "billing-store",
+				Objective: "Mint an invoice record from a store request.",
 			}},
 			Docs: catalog.DocCluster{Pages: []catalog.DocPage{{
 				Kind: catalog.DocOverview,
@@ -82,5 +83,30 @@ func TestValidate_tinyModule_missingSubprogramPage(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("expected missing subprogram page, got %v", issues)
+	}
+}
+func TestValidate_tinyModule_unmappedPackage(t *testing.T) {
+	t.Parallel()
+	repo := filepath.Join("..", "testdata", "tiny-module")
+	catalogPath := filepath.Join(repo, "architecture", "typology.yaml")
+	typ, err := catalog.LoadYAML(catalogPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Drop the ledger slice so internal/ledger is unmapped.
+	typ.Slices = []catalog.Slice{typ.Slices[0]}
+	typ.SliceBindings = nil
+	typ.ComponentBindings = nil
+
+	issues := validate.Run(validate.Options{RepoRoot: repo, Catalog: typ})
+	found := false
+	for _, issue := range issues {
+		if strings.Contains(issue.Message, "unmapped package") && strings.Contains(issue.Message, "internal/ledger") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected unmapped package issue for internal/ledger, got %v", issues)
 	}
 }

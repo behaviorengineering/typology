@@ -192,6 +192,19 @@ func checkImports(repoRoot string, topo catalog.Typology) []catalog.Issue {
 			}
 		}
 	}
+
+	// Unmapped packages in module (orphan packages not claimed by any slice).
+	for pkg := range graph {
+		norm := normalizePkgPath(pkg)
+		if norm == "." || norm == "" {
+			continue
+		}
+		if _, ok := pathToComp[norm]; !ok {
+			issues = append(issues, catalog.Issue{
+				Message: fmt.Sprintf("unmapped package %q in module; not claimed by any slice in owns[] or surfaces[]", norm),
+			})
+		}
+	}
 	return issues
 }
 
