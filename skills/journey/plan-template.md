@@ -106,9 +106,9 @@ Open decisions (add a row per unresolved reshape). Close a row when the draft YA
       Method: CLI issue list empty
       Pass: exit 0
       Fail: STOP, fix each issue (cli skill)
-- [ ] **Docs table seeded:** every confirmed `docs.pages[]` row is in the Docs table as `pending`
+- [ ] **Docs table seeded:** every confirmed `docs.pages[]` row plus each subprogram and actuator leaf is in the Docs table as `pending`
       Method: catalog pages vs table
-      Pass: one row per DocPage
+      Pass: one row per DocPage and program leaf
       Fail: STOP, copy paths from the catalog
 
 ## Docs

@@ -9,7 +9,7 @@ description: >-
 
 # Typology docs
 
-**Moral:** Emit writes stubs. This skill fills and scores them. Catalog and repo are the source. A human and an agent use the same boxes.
+**Moral:** Emit writes stubs. This skill fills and scores them. Catalog and repo are the source. Nav is a tree (Overview → Owns → Subprograms → Surfaces); the six kinds are leaves.
 
 **Journey:** [journey/SKILL.md](../journey/SKILL.md) · **CLI:** [cli/SKILL.md](../cli/SKILL.md) · **Catalog:** [catalog/SKILL.md](../catalog/SKILL.md) · **Templates:** [reference.md](reference.md)
 
@@ -36,7 +36,7 @@ MUST NOT use this skill as the primary load when the operator only asked to disc
 Enforcement: Docs table rows match catalog `docs.pages[]` (or the one named path); Resume names the pending page
 Violation: STOP, rebuild the table from the catalog, then continue
 
-CORRECT: commit emit writes six billing pages; the Docs table has six `pending` rows before the first overview turn
+CORRECT: emit writes the pages the catalog lists (billing: overview, components, contracts, pipelines); the Docs table has one `pending` row per listed DocPage plus each subprogram/actuator leaf before the first overview turn
 
 PROHIBITED: filling `overview.md` in chat with no table row, then asking "next page?"
 
@@ -51,7 +51,7 @@ Violation: STOP, revert extra page writes, finish the open page gate
 
 CORRECT: this turn cold-reads and gates `docs/develop/billing/overview.md`; `components.md` stays `pending`
 
-PROHIBITED: rewriting all six billing pages, then asking the operator to confirm the cluster
+PROHIBITED: rewriting every billing page and program leaf, then asking the operator to confirm the cluster
 
 **CONSTRAINT:** Catalog and repo are the only sources of surface.
 
@@ -95,7 +95,7 @@ PROHIBITED: filled overview still starts with `<!-- typology:generated -->`, so 
 ## Steps
 
 1. **Resume**: if a journey file exists, Read it. If phase is not `docs` and the operator asked only to fill docs, load this skill anyway for the named pages; do not rediscover.
-2. **Build the table**: one row per `docs.pages[]` on the confirmed catalog. Status `pending`.
+2. **Build the table**: one row per `docs.pages[]` on the confirmed catalog, plus one row per `subprograms/<id>.md` and `actuators/<id>.md`. Status `pending`.
 3. **Pick one pending page**: tutor four beats. Load [reference.md](reference.md) page-kind contract for that kind.
 4. **Cold-read**: four phases, four output blocks. Generated stubs usually CLASSIFY as EXPAND.
 5. **Evidence gate**: Decision FILL, SKIP-NONE, or DEFER. Wait if DEFER (`later` on the row).

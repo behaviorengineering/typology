@@ -3,6 +3,7 @@ package catalog
 import (
 	"fmt"
 	"sort"
+	"strings"
 )
 
 // LookupSlice returns a slice by id.
@@ -68,19 +69,57 @@ func (s Slice) SurfaceByKind(kind InteractionKind) (Surface, bool) {
 	return Surface{}, false
 }
 
-// DefaultDocCluster builds the six-page doc pack for a slice.
-func DefaultDocCluster(sliceID, docsRoot string) DocCluster {
-	prefix := docsRoot
-	if prefix != "" && prefix[len(prefix)-1] != '/' {
+func docsDir(sliceID, docsRoot string) string {
+	prefix := strings.TrimSpace(docsRoot)
+	if prefix == "" {
+		prefix = DefaultDocsRoot
+	}
+	if prefix[len(prefix)-1] != '/' {
 		prefix += "/"
 	}
-	base := prefix + sliceID + "/"
-	pages := make([]DocPage, 0, len(DefaultDocPageKinds))
-	for _, kind := range DefaultDocPageKinds {
-		pages = append(pages, DocPage{
-			Kind: kind,
-			Path: base + string(kind) + ".md",
-		})
+	return prefix + sliceID + "/"
+}
+
+func docPage(sliceID, docsRoot string, kind DocPageKind) DocPage {
+	return DocPage{Kind: kind, Path: docsDir(sliceID, docsRoot) + string(kind) + ".md"}
+}
+
+// SliceReadmePath is the slice hub README under the docs root.
+func SliceReadmePath(sliceID, docsRoot string) string {
+	return docsDir(sliceID, docsRoot) + "README.md"
+}
+
+// SubprogramPagePath is the conventional extra leaf for a subprogram.
+func SubprogramPagePath(sliceID, subprogramID, docsRoot string) string {
+	return docsDir(sliceID, docsRoot) + "subprograms/" + subprogramID + ".md"
+}
+
+// ActuatorPagePath is the conventional extra leaf for an actuator.
+func ActuatorPagePath(sliceID, actuatorID, docsRoot string) string {
+	return docsDir(sliceID, docsRoot) + "actuators/" + actuatorID + ".md"
+}
+
+// DefaultDocCluster builds DocPages for a slice. Overview and components always
+// appear. Surface kinds add contracts (api), cli, and presentation (ui).
+// Pipelines is included when the slice lists opRuns. Callers MAY still list all
+// DefaultDocPageKinds in YAML to opt into empty surface pages.
+func DefaultDocCluster(s Slice, docsRoot string) DocCluster {
+	id := strings.TrimSpace(s.ID)
+	pages := []DocPage{
+		docPage(id, docsRoot, DocOverview),
+		docPage(id, docsRoot, DocComponents),
+	}
+	if _, ok := s.SurfaceByKind(InteractionAPI); ok {
+		pages = append(pages, docPage(id, docsRoot, DocContracts))
+	}
+	if _, ok := s.SurfaceByKind(InteractionCLI); ok {
+		pages = append(pages, docPage(id, docsRoot, DocCLI))
+	}
+	if _, ok := s.SurfaceByKind(InteractionUI); ok {
+		pages = append(pages, docPage(id, docsRoot, DocPresentation))
+	}
+	if len(s.OpRuns) > 0 {
+		pages = append(pages, docPage(id, docsRoot, DocPipelines))
 	}
 	return DocCluster{Pages: pages}
 }

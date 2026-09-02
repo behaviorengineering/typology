@@ -1,5 +1,0 @@
-# presentation
-
-<!-- typology:generated -->
-
-fixture

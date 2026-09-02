@@ -6,7 +6,7 @@ This module is a Go library and CLI. Humans read [README.md](README.md).
 
 1. [skills/README.md](skills/README.md) (index)
 2. [skills/journey/SKILL.md](skills/journey/SKILL.md) (first map, onboard, resume `architecture/typology-journey.md`)
-3. [skills/docs/SKILL.md](skills/docs/SKILL.md) (fill and evaluate develop DocPages)
+3. [skills/docs/SKILL.md](skills/docs/SKILL.md) (fill and evaluate develop DocPages and program leaves)
 4. [skills/catalog/SKILL.md](skills/catalog/SKILL.md) (model and YAML/Go catalog)
 5. [skills/cli/SKILL.md](skills/cli/SKILL.md) (discover, emit, validate, remediate)
 

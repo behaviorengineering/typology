@@ -132,8 +132,8 @@ Evaluator checks the filled page against `architecture/typology.yaml` and `catal
 
 MUST:
 
-- First sentence states the bounded context and who operates it
-- Keep the owned-components table from emit (or the same ids/paths)
+- MUST: First sentence states the bounded context and who operates it
+- MUST: Point at the tree hub (`README.md`) and Owns (`components.md`); do not duplicate the owns inventory
 - Prose explains the slice as a context, not a package dump
 
 MUST NOT: list every file in `owns` as a bullet of “features”; omit the operator
@@ -146,8 +146,9 @@ PROHIBITED first sentence: `This document provides an overview of the billing sl
 
 MUST:
 
-- Keep composition and binding tables (those are reference lists)
-- State why each slice or component binding exists (rationale, one clause per binding)
+- Keep Owns and Surfaces tables (those are reference lists)
+- Keep Subprograms and Actuators index tables with links to `subprograms/<id>.md` and `actuators/<id>.md` when the catalog lists them
+- State why each slice or component binding exists (rationale, one clause per binding) under Cross-slice
 - Gloss subprogram (standing program), actuator (signal in, emit out), and component (package) on first use
 
 MUST NOT: convert the owns table into a 5+ bullet “characteristics” list; drop a binding that is in the catalog

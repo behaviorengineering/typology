@@ -75,6 +75,40 @@ func checkSlice(repoRoot string, s catalog.Slice) []catalog.Issue {
 			})
 		}
 	}
+	issues = append(issues, checkProgramPages(repoRoot, s)...)
+	return issues
+}
+
+func checkProgramPages(repoRoot string, s catalog.Slice) []catalog.Issue {
+	var issues []catalog.Issue
+	for _, sp := range s.Subprograms {
+		id := strings.TrimSpace(sp.ID)
+		if id == "" {
+			continue
+		}
+		rel := catalog.SubprogramPagePath(s.ID, id, catalog.DefaultDocsRoot)
+		abs := filepath.Join(repoRoot, filepath.FromSlash(rel))
+		if _, err := os.Stat(abs); err != nil {
+			issues = append(issues, catalog.Issue{
+				Slice:   s.ID,
+				Message: fmt.Sprintf("subprogram page missing: %s", rel),
+			})
+		}
+	}
+	for _, a := range s.Actuators {
+		id := strings.TrimSpace(a.ID)
+		if id == "" {
+			continue
+		}
+		rel := catalog.ActuatorPagePath(s.ID, id, catalog.DefaultDocsRoot)
+		abs := filepath.Join(repoRoot, filepath.FromSlash(rel))
+		if _, err := os.Stat(abs); err != nil {
+			issues = append(issues, catalog.Issue{
+				Slice:   s.ID,
+				Message: fmt.Sprintf("actuator page missing: %s", rel),
+			})
+		}
+	}
 	return issues
 }
 
