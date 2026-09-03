@@ -1,6 +1,6 @@
 # Typology
 
-Portable Go library and CLI to **discover** bounded contexts, **write** the map as code, **validate** paths and imports, and **scope** AI debt fixes to one slice at a time.
+Portable Go library and CLI to **discover** bounded contexts, **write** the map as code, **explain** the design for human review, **validate** paths and imports, and **scope** AI debt fixes to one slice at a time.
 
 **Module:** [`github.com/behaviorengineering/typology`](https://github.com/behaviorengineering/typology)
 
@@ -15,33 +15,69 @@ make build
 ./bin/typology version
 ```
 
-Pin the module in a consumer:
+In a consuming Go module, register the CLI as a Go tool:
 
-```bash
-go get github.com/behaviorengineering/typology@vX.Y.Z
+```text
+go run github.com/behaviorengineering/typology/cmd/typology@v0.0.5 init .
+go tool typology version
+```
+
+The bootstrap command updates the selected consumer `go.mod` and `go.sum`. It does not add the CLI to application imports or binaries. For a multi-module workspace, pass the module path explicitly:
+
+```text
+go run github.com/behaviorengineering/typology/cmd/typology@v0.0.5 init . --module engine
+```
+
+To use the catalog package in application code, pin the library separately:
+
+```text
+go get github.com/behaviorengineering/typology@v0.0.5
 go mod tidy
 ```
 
 ## Commands
 
 ```text
-typology discover REPO [--out PATH] [--docs-root PATH]
+typology init REPO [--module PATH] [--version VERSION]
+typology discover REPO [--module PATH] [--out PATH] [--docs-root PATH]
 typology emit REPO [--catalog PATH] [--docs-only] [--go-only]
-typology validate REPO [--catalog PATH] [SLICE]
-typology show [SLICE] [--json] [--catalog PATH]
-typology remediate REPO SLICE [--catalog PATH]
+typology architecture REPO [--module PATH] [--catalog PATH] [--out PATH]
+typology validate REPO [--module PATH] [--catalog PATH] [SLICE]
+typology show [SLICE|graph] [--module PATH] [--json] [--catalog PATH]
+typology remediate REPO SLICE [--module PATH] [--catalog PATH]
 typology version
 ```
 
+## Consumer setup
+
+Typology is guidance for agents that design and structure code. Any Go library that adopts it gets the same layout when you run `typology emit` in that repo.
+
+One repository owns one Typology catalog and its architecture documentation. In a multi-module repository, `scope.modules` declares the repository-local modules covered by the catalog; `go.work` does not widen that scope.
+
+| Path | Role |
+|------|------|
+| `.typology/typology.yaml` | Confirmed catalog and module scope (source of truth) |
+| `.typology/README.md` | Agent instructions: skills, commands, catalog-first workflow |
+| `.typology/tools.yaml` | Generated CLI tool index from `opRuns` |
+| `.typology/typology-journey.md` | First-map session file (journey skill) |
+| `tmp/typology/typology.yaml` | Discover draft (not the confirmed catalog) |
+| `AGENTS.md` | Pointer to `.typology/README.md` (created or appended by emit) |
+| `docs/develop/` | Per-slice DocPages (default docs root) |
+| `docs/architecture/typology.md` | Human-readable catalog and Go-topology comparison |
+
+Day-to-day in a consumer: update the catalog first, implement code to match it, then `typology validate`. Agents load the skills listed in `.typology/README.md` before changing architecture or package layout.
+
 ## Workflow
 
-First map in a new repo: load [skills/journey/SKILL.md](skills/journey/SKILL.md) (plan file `architecture/typology-journey.md`, discover to a draft, walk slices, emit, then fill DocPages with [skills/docs/SKILL.md](skills/docs/SKILL.md)).
+First map in a new repo: load [skills/journey/SKILL.md](skills/journey/SKILL.md) (plan file `.typology/typology-journey.md`, discover to a draft, walk slices, emit, then fill DocPages with [skills/docs/SKILL.md](skills/docs/SKILL.md)).
 
-1. `typology discover` on a Go repo (draft; first map uses `--out architecture/typology.draft.yaml`).
+1. `typology discover` on a Go repo (draft; writes to `tmp/typology/typology.yaml` by default). Use `--module` when a multi-module workspace has no catalog scope yet.
 2. Human confirms slice names and bindings.
-3. `typology emit` writes catalog YAML, a slice README hub (tree nav), DocPage skeletons, and `subprograms/` / `actuators/` leaves under the docs root (default `docs/develop`). Empty CLI/UI/API/Jobs pages are omitted unless listed in YAML.
-4. `typology validate` fails closed on missing paths, bindings, DocPages, or program leaves.
-5. `typology remediate REPO SLICE` returns agent-scoped violations for one slice.
+3. `typology emit` writes `.typology/typology.yaml`, `.typology/README.md`, `.typology/tools.yaml`, ensures `AGENTS.md` points at `.typology/README.md`, plus DocPage skeletons under the docs root (default `docs/develop`). Empty CLI/UI/API/Jobs pages are omitted unless listed in YAML.
+4. `typology architecture` writes a deterministic Markdown projection under `docs/architecture/typology.md`. It combines the intended catalog with observed package topology within `scope.modules` and names findings for human review. It does not make narrative design decisions.
+5. An agent or architect fixes each finding or records the boundary debt in the journey file.
+6. `typology validate` fails closed on missing paths, bindings, DocPages, or program leaves.
+7. `typology remediate REPO SLICE` returns agent-scoped violations for one slice.
 
 ## Layout
 
@@ -49,6 +85,7 @@ First map in a new repo: load [skills/journey/SKILL.md](skills/journey/SKILL.md)
 AGENTS.md             Pointer for coding agents
 skills/               Portable agent skills (journey, docs, catalog, CLI)
 catalog/              Typology model + YAML I/O
+architecture/         Human-readable catalog and topology reports
 validate/             Path + import + DocPage checks
 cmd/typology/         CLI entry
 internal/discover/    Go import graph → draft catalog
@@ -63,7 +100,7 @@ testdata/tiny-module/ Fixture Go module
 | Type | Role |
 |------|------|
 | `Typology` | Whole map |
-| `Slice` | Bounded context |
+| `Slice` | Bounded context with a required business `objective` |
 | `Component` | Package. Domain on `owns[]`; interaction nested under a `Surface`. |
 | `Surface` | Built UI, CLI, or API artefact (`kind` + `components[]`). |
 | `OpRun` | One gated operator invocation (CLI, HTTP, human, signal, or schedule). Optional `runs` / `actuates`. |

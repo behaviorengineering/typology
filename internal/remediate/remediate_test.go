@@ -11,7 +11,7 @@ import (
 func TestRemediate_protocol(t *testing.T) {
 	t.Parallel()
 	repo := filepath.Join("..", "..", "testdata", "tiny-module")
-	typ, err := catalog.LoadYAML(filepath.Join(repo, "architecture", "typology.yaml"))
+	typ, err := catalog.LoadYAML(filepath.Join(repo, ".typology", "typology.yaml"))
 	if err != nil {
 		t.Fatal(err)
 	}

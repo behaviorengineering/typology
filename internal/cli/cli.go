@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -8,11 +9,15 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/behaviorengineering/typology/architecture"
 	"github.com/behaviorengineering/typology/catalog"
 	terrors "github.com/behaviorengineering/typology/errors"
+	"github.com/behaviorengineering/typology/internal/bootstrap"
 	"github.com/behaviorengineering/typology/internal/discover"
 	"github.com/behaviorengineering/typology/internal/emit"
+	"github.com/behaviorengineering/typology/internal/gorepo"
 	"github.com/behaviorengineering/typology/internal/remediate"
+	"github.com/behaviorengineering/typology/internal/sourceindex"
 	"github.com/behaviorengineering/typology/validate"
 )
 
@@ -29,10 +34,14 @@ func Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return 2
 	}
 	switch args[0] {
+	case "init":
+		return runInit(args[1:], stdout, stderr)
 	case "discover":
 		return runDiscover(args[1:], stdout, stderr)
 	case "emit":
 		return runEmit(args[1:], stdout, stderr)
+	case "architecture":
+		return runArchitecture(args[1:], stdout, stderr)
 	case "validate":
 		return runValidate(args[1:], stdout, stderr)
 	case "show":
@@ -56,16 +65,66 @@ func printUsage(w io.Writer) {
 	_, _ = fmt.Fprintln(w, "typology - discover, validate, and emit architecture catalogs")
 	_, _ = fmt.Fprintln(w)
 	_, _ = fmt.Fprintln(w, "Usage:")
-	_, _ = fmt.Fprintln(w, "  typology discover REPO [--out PATH] [--docs-root PATH] [--suggest-merges]")
+	_, _ = fmt.Fprintln(w, "  typology init REPO [--module PATH] [--version VERSION]")
+	_, _ = fmt.Fprintln(w, "  typology discover REPO [--module PATH] [--out PATH] [--docs-root PATH] [--suggest-merges]")
 	_, _ = fmt.Fprintln(w, "  typology emit REPO [--catalog PATH] [--docs-only] [--go-only]")
-	_, _ = fmt.Fprintln(w, "  typology validate REPO [--catalog PATH] [SLICE]")
-	_, _ = fmt.Fprintln(w, "  typology show [SLICE|graph] [--json] [--catalog PATH]")
-	_, _ = fmt.Fprintln(w, "  typology remediate REPO SLICE [--catalog PATH]")
+	_, _ = fmt.Fprintln(w, "  typology architecture REPO [--module PATH] [--catalog PATH] [--out PATH]")
+	_, _ = fmt.Fprintln(w, "  typology validate REPO [--module PATH] [--catalog PATH] [SLICE]")
+	_, _ = fmt.Fprintln(w, "  typology show [SLICE|graph] [--module PATH] [--json] [--catalog PATH]")
+	_, _ = fmt.Fprintln(w, "  typology remediate REPO SLICE [--module PATH] [--catalog PATH]")
 	_, _ = fmt.Fprintln(w, "  typology version")
 }
 
 func defaultCatalogPath(repo string) string {
 	return filepath.Join(repo, filepath.FromSlash(catalog.DefaultCatalogRel))
+}
+
+func defaultDraftCatalogPath(repo string) string {
+	return filepath.Join(repo, filepath.FromSlash(catalog.DefaultDraftCatalogRel))
+}
+
+func runInit(args []string, stdout, stderr io.Writer) int {
+	repo, rest, ok := firstArg(args)
+	if !ok {
+		_, _ = fmt.Fprintln(stderr, "usage: typology init REPO [--module PATH] [--version VERSION]")
+		return 2
+	}
+	module := ""
+	version := ""
+	for i := 0; i < len(rest); i++ {
+		switch rest[i] {
+		case "--module":
+			if i+1 >= len(rest) {
+				_, _ = fmt.Fprintln(stderr, "init: --module requires path")
+				return 2
+			}
+			module = rest[i+1]
+			i++
+		case "--version":
+			if i+1 >= len(rest) {
+				_, _ = fmt.Fprintln(stderr, "init: --version requires version")
+				return 2
+			}
+			version = rest[i+1]
+			i++
+		default:
+			_, _ = fmt.Fprintf(stderr, "init: unknown flag %q\n", rest[i])
+			return 2
+		}
+	}
+	result, err := bootstrap.Run(context.Background(), bootstrap.Options{
+		RepoRoot: repo,
+		Module:   module,
+		Version:  version,
+		Stdout:   stdout,
+		Stderr:   stderr,
+	})
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "init: %v\n", err)
+		return 1
+	}
+	_, _ = fmt.Fprintf(stdout, "init: configured %s in %s\n", bootstrap.ToolPackage+"@"+result.Version, result.Module.Dir)
+	return 0
 }
 
 func runDiscover(args []string, stdout, stderr io.Writer) int {
@@ -74,11 +133,19 @@ func runDiscover(args []string, stdout, stderr io.Writer) int {
 		_, _ = fmt.Fprintln(stderr, "usage: typology discover REPO [--out PATH] [--docs-root PATH]")
 		return 2
 	}
-	out := defaultCatalogPath(repo)
+	out := defaultDraftCatalogPath(repo)
 	docsRoot := catalog.DefaultDocsRoot
 	suggestMerges := false
+	module := ""
 	for i := 0; i < len(rest); i++ {
 		switch rest[i] {
+		case "--module":
+			if i+1 >= len(rest) {
+				_, _ = fmt.Fprintln(stderr, "discover: --module requires path")
+				return 2
+			}
+			module = rest[i+1]
+			i++
 		case "--out":
 			if i+1 >= len(rest) {
 				_, _ = fmt.Fprintln(stderr, "discover: --out requires path")
@@ -100,7 +167,7 @@ func runDiscover(args []string, stdout, stderr io.Writer) int {
 			return 2
 		}
 	}
-	result, err := discover.Run(discover.Options{RepoRoot: repo, DocsRoot: docsRoot})
+	result, err := discover.Run(discover.Options{RepoRoot: repo, DocsRoot: docsRoot, Module: module})
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "discover: %v\n", err)
 		return 1
@@ -166,6 +233,79 @@ func runEmit(args []string, stdout, stderr io.Writer) int {
 	return 0
 }
 
+func runArchitecture(args []string, stdout, stderr io.Writer) int {
+	repo, rest, ok := firstArg(args)
+	if !ok {
+		_, _ = fmt.Fprintln(stderr, "usage: typology architecture REPO [--catalog PATH] [--out PATH]")
+		return 2
+	}
+	catalogPath := defaultCatalogPath(repo)
+	outPath := filepath.Join(repo, filepath.FromSlash(architecture.DefaultReportRel))
+	module := ""
+	for i := 0; i < len(rest); i++ {
+		switch rest[i] {
+		case "--module":
+			if i+1 >= len(rest) {
+				_, _ = fmt.Fprintln(stderr, "architecture: --module requires path")
+				return 2
+			}
+			module = rest[i+1]
+			i++
+		case "--catalog":
+			if i+1 >= len(rest) {
+				_, _ = fmt.Fprintln(stderr, "architecture: --catalog requires path")
+				return 2
+			}
+			catalogPath = rest[i+1]
+			i++
+		case "--out":
+			if i+1 >= len(rest) {
+				_, _ = fmt.Fprintln(stderr, "architecture: --out requires path")
+				return 2
+			}
+			outPath = rest[i+1]
+			i++
+		default:
+			_, _ = fmt.Fprintf(stderr, "architecture: unknown flag %q\n", rest[i])
+			return 2
+		}
+	}
+	t, err := catalog.LoadYAML(catalogPath)
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "architecture: %v\n", err)
+		return 1
+	}
+	report, err := architecture.Build(architecture.BuildOptions{
+		RepoRoot: repo,
+		Catalog:  t,
+		Module:   module,
+	})
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "architecture: %v\n", err)
+		return 1
+	}
+	body, err := architecture.RenderMarkdown(report)
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "architecture: %v\n", err)
+		return 1
+	}
+	written, err := architecture.WriteMarkdown(outPath, body)
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "architecture: %v\n", err)
+		return 1
+	}
+	if written {
+		_, _ = fmt.Fprintf(stdout, "architecture: wrote %s\n", outPath)
+	} else {
+		_, _ = fmt.Fprintf(stdout, "architecture: preserved human-owned %s\n", outPath)
+	}
+	if len(report.Findings) > 0 {
+		_, _ = fmt.Fprintf(stderr, "architecture: %d finding(s); review the brief and fix or record each one\n", len(report.Findings))
+		return 1
+	}
+	return 0
+}
+
 func runValidate(args []string, stdout, stderr io.Writer) int {
 	repo, rest, ok := firstArg(args)
 	if !ok {
@@ -174,8 +314,16 @@ func runValidate(args []string, stdout, stderr io.Writer) int {
 	}
 	catalogPath := defaultCatalogPath(repo)
 	var sliceID string
+	module := ""
 	for i := 0; i < len(rest); i++ {
 		switch rest[i] {
+		case "--module":
+			if i+1 >= len(rest) {
+				_, _ = fmt.Fprintln(stderr, "validate: --module requires path")
+				return 2
+			}
+			module = rest[i+1]
+			i++
 		case "--catalog":
 			if i+1 >= len(rest) {
 				_, _ = fmt.Fprintln(stderr, "validate: --catalog requires path")
@@ -204,6 +352,8 @@ func runValidate(args []string, stdout, stderr io.Writer) int {
 		RepoRoot: repo,
 		Catalog:  t,
 		SliceID:  sliceID,
+		Modules:  t.Scope.Modules,
+		Module:   module,
 	})
 	if len(issues) == 0 {
 		if sliceID == "" {
@@ -228,11 +378,19 @@ func runShow(args []string, stdout, stderr io.Writer) int {
 	asJSON := false
 	catalogPath := ""
 	var sliceID string
+	module := ""
 	for i := 0; i < len(args); i++ {
 		a := args[i]
 		switch {
 		case a == "--json":
 			asJSON = true
+		case a == "--module":
+			if i+1 >= len(args) {
+				_, _ = fmt.Fprintln(stderr, "show: --module requires path")
+				return 2
+			}
+			module = args[i+1]
+			i++
 		case a == "--catalog":
 			if i+1 >= len(args) {
 				_, _ = fmt.Fprintln(stderr, "show: --catalog requires path")
@@ -245,7 +403,7 @@ func runShow(args []string, stdout, stderr io.Writer) int {
 			return 2
 		default:
 			if sliceID != "" {
-				_, _ = fmt.Fprintln(stderr, "usage: typology show [SLICE] [--json] [--catalog PATH]")
+				_, _ = fmt.Fprintln(stderr, "usage: typology show [SLICE|graph] [--module PATH] [--json] [--catalog PATH]")
 				return 2
 			}
 			sliceID = a
@@ -287,13 +445,17 @@ func runShow(args []string, stdout, stderr io.Writer) int {
 		return 0
 	}
 	if sliceID == "graph" {
-		repo := filepath.Dir(catalogPath)
-		if repo == "" || repo == "." {
-			if wd, err := os.Getwd(); err == nil {
-				repo = wd
-			}
+		repo, err := repoRootFromCatalogPath(catalogPath)
+		if err != nil {
+			_, _ = fmt.Fprintf(stderr, "show graph: %v\n", err)
+			return 1
 		}
-		summary, err := discover.AnalyzeGraph(repo)
+		modules, err := gorepo.ResolveModules(repo, t.Scope.Modules, module)
+		if err != nil {
+			_, _ = fmt.Fprintf(stderr, "show graph: %v\n", err)
+			return 1
+		}
+		summary, err := discover.AnalyzeGraphInModules(repo, modules)
 		if err != nil {
 			_, _ = fmt.Fprintf(stderr, "show graph: %v\n", err)
 			return 1
@@ -309,6 +471,11 @@ func runShow(args []string, stdout, stderr io.Writer) int {
 			return 0
 		}
 		printGraphSummary(stdout, summary)
+		if idx, err := sourceindex.BuildInModules(repo, modules); err == nil {
+			printSourceSummary(stdout, idx)
+		} else {
+			_, _ = fmt.Fprintf(stderr, "show graph source index: %v\n", err)
+		}
 		return 0
 	}
 	s, ok := t.LookupSlice(sliceID)
@@ -335,7 +502,17 @@ func runRemediate(args []string, stdout, stderr io.Writer) int {
 	}
 	sliceID := rest[0]
 	catalogPath := defaultCatalogPath(repo)
+	module := ""
 	for i := 1; i < len(rest); i++ {
+		if rest[i] == "--module" {
+			if i+1 >= len(rest) {
+				_, _ = fmt.Fprintln(stderr, "remediate: --module requires path")
+				return 2
+			}
+			module = rest[i+1]
+			i++
+			continue
+		}
 		if rest[i] == "--catalog" {
 			if i+1 >= len(rest) {
 				_, _ = fmt.Fprintln(stderr, "remediate: --catalog requires path")
@@ -357,6 +534,8 @@ func runRemediate(args []string, stdout, stderr io.Writer) int {
 		RepoRoot: repo,
 		Catalog:  t,
 		SliceID:  sliceID,
+		Modules:  t.Scope.Modules,
+		Module:   module,
 	})
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "remediate: %v\n", err)
@@ -422,4 +601,23 @@ func printGraphSummary(w io.Writer, s discover.GraphSummary) {
 		}
 		_, _ = fmt.Fprintln(w)
 	}
+}
+
+func printSourceSummary(w io.Writer, idx sourceindex.Index) {
+	_, _ = fmt.Fprintf(w, "Source evidence (AST):\n")
+	_, _ = fmt.Fprintf(w, "  - packages: %d\n", len(idx.Packages))
+	_, _ = fmt.Fprintf(w, "  - anchored packages: %d\n", idx.AnchoredPackages())
+}
+
+func repoRootFromCatalogPath(catalogPath string) (string, error) {
+	dir := filepath.Dir(catalogPath)
+	if dir == "" {
+		dir = "."
+	}
+	root, err := gorepo.FindRoot(dir)
+	if err != nil {
+		return "", terrors.Wrap(err, terrors.CodeNotFound, "cli.repoRootFromCatalogPath", "resolve repo root").
+			With("catalog", catalogPath)
+	}
+	return root, nil
 }

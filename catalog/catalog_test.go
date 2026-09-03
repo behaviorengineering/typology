@@ -8,7 +8,8 @@ import (
 
 func billingFixtureSlice() catalog.Slice {
 	return catalog.Slice{
-		ID: "billing",
+		ID:        "billing",
+		Objective: "Operate billing records for fixture tests.",
 		Owns: []catalog.Component{
 			{ID: "billing-store", Path: "internal/billing/store", Layer: catalog.LayerDomain},
 		},
@@ -59,13 +60,78 @@ func TestValidateStructure_ok(t *testing.T) {
 		t.Fatal("expected structure issues")
 	}
 	typ.Slices = append(typ.Slices, catalog.Slice{
-		ID: "ledger",
+		ID:        "ledger",
+		Objective: "Maintain the ledger for fixture tests.",
 		Owns: []catalog.Component{
 			{ID: "ledger-core", Path: "internal/ledger", Layer: catalog.LayerDomain},
 		},
 	})
 	if issues := typ.ValidateStructure(); len(issues) != 0 {
 		t.Fatalf("unexpected issues: %v", issues)
+	}
+}
+
+func TestValidateStructure_requiresSliceObjective(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name      string
+		objective string
+	}{
+		{name: "empty", objective: ""},
+		{name: "whitespace", objective: " \t"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			typ := catalog.Typology{
+				ID: "tiny",
+				Slices: []catalog.Slice{{
+					ID:        "billing",
+					Objective: tt.objective,
+				}},
+			}
+			if !hasIssue(typ.ValidateStructure(), "missing objective") {
+				t.Fatalf("expected missing slice objective issue, got %v", typ.ValidateStructure())
+			}
+		})
+	}
+}
+
+func TestValidateStructure_scopeModules(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name string
+		typ  catalog.Typology
+		want string
+	}{
+		{
+			name: "empty module",
+			typ:  catalog.Typology{Scope: catalog.Scope{Modules: []string{""}}},
+			want: "scope module path is empty",
+		},
+		{
+			name: "traversal",
+			typ:  catalog.Typology{Scope: catalog.Scope{Modules: []string{"../engine"}}},
+			want: `scope module path "../engine" must stay within the repository`,
+		},
+		{
+			name: "absolute",
+			typ:  catalog.Typology{Scope: catalog.Scope{Modules: []string{"/tmp/engine"}}},
+			want: `scope module path "/tmp/engine" must stay within the repository`,
+		},
+		{
+			name: "duplicate",
+			typ:  catalog.Typology{Scope: catalog.Scope{Modules: []string{"engine", "./engine"}}},
+			want: `duplicate scope module "engine"`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if !hasIssue(catalog.Typology{Scope: tt.typ.Scope}.ValidateStructure(), tt.want) {
+				t.Fatalf("expected scope issue %q, got %v", tt.want, catalog.Typology{Scope: tt.typ.Scope}.ValidateStructure())
+			}
+		})
 	}
 }
 

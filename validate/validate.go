@@ -8,6 +8,8 @@ import (
 
 	"github.com/behaviorengineering/typology/catalog"
 	"github.com/behaviorengineering/typology/internal/discover"
+	"github.com/behaviorengineering/typology/internal/gorepo"
+	"github.com/behaviorengineering/typology/internal/sourceindex"
 )
 
 // Options configures repo validation.
@@ -16,6 +18,8 @@ type Options struct {
 	Catalog     catalog.Typology
 	SliceID     string
 	SkipImports bool
+	Modules     []string
+	Module      string
 }
 
 // Run validates catalog structure and repo paths/imports.
@@ -27,21 +31,33 @@ func Run(opts Options) []catalog.Issue {
 	if repo == "" {
 		return issues
 	}
+	modules, err := gorepo.ResolveModules(repo, opts.Modules, opts.Module)
+	if err != nil {
+		issues = append(issues, catalog.Issue{Message: fmt.Sprintf("module scope: %v", err)})
+		catalog.SortIssues(issues)
+		return issues
+	}
+	index, err := sourceindex.BuildInModules(repo, modules)
+	if err != nil {
+		issues = append(issues, catalog.Issue{Message: fmt.Sprintf("source index: %v", err)})
+		catalog.SortIssues(issues)
+		return issues
+	}
 
 	for _, s := range opts.Catalog.Slices {
 		if opts.SliceID != "" && s.ID != opts.SliceID {
 			continue
 		}
-		issues = append(issues, checkSlice(repo, s)...)
+		issues = append(issues, checkSliceWithIndex(repo, s, index)...)
 	}
 	if opts.SliceID == "" && !opts.SkipImports {
-		issues = append(issues, checkImports(repo, opts.Catalog)...)
+		issues = append(issues, checkImports(repo, opts.Catalog, modules)...)
 	}
 	catalog.SortIssues(issues)
 	return issues
 }
 
-func checkSlice(repoRoot string, s catalog.Slice) []catalog.Issue {
+func checkSliceWithIndex(repoRoot string, s catalog.Slice, index sourceindex.Index) []catalog.Issue {
 	var issues []catalog.Issue
 	for _, c := range s.AllComponents() {
 		if strings.TrimSpace(c.Path) == "" {
@@ -51,12 +67,44 @@ func checkSlice(repoRoot string, s catalog.Slice) []catalog.Issue {
 			})
 			continue
 		}
+		if _, ok := index.Package(c.Path); !ok {
+			issues = append(issues, catalog.Issue{
+				Slice:   s.ID,
+				Message: fmt.Sprintf("source package %q not found for component %q", c.Path, c.ID),
+			})
+			continue
+		}
 		abs := filepath.Join(repoRoot, filepath.FromSlash(c.Path))
 		if fi, err := os.Stat(abs); err != nil || !fi.IsDir() {
 			issues = append(issues, catalog.Issue{
 				Slice:   s.ID,
 				Message: fmt.Sprintf("owned path %q does not exist", c.Path),
 			})
+		}
+	}
+	for _, surf := range s.Surfaces {
+		switch surf.Kind {
+		case catalog.InteractionAPI, catalog.InteractionCLI:
+			if len(surf.Components) == 0 {
+				continue
+			}
+			anchored := false
+			for _, c := range surf.Components {
+				ev, ok := index.Package(c.Path)
+				if !ok {
+					continue
+				}
+				if ev.HasStaticAnchor() {
+					anchored = true
+					break
+				}
+			}
+			if !anchored {
+				issues = append(issues, catalog.Issue{
+					Slice:   s.ID,
+					Message: fmt.Sprintf("surface %q: no static source anchor found in %d component package(s)", surf.ID, len(surf.Components)),
+				})
+			}
 		}
 	}
 	for _, p := range s.Docs.Pages {
@@ -112,8 +160,8 @@ func checkProgramPages(repoRoot string, s catalog.Slice) []catalog.Issue {
 	return issues
 }
 
-func checkImports(repoRoot string, topo catalog.Typology) []catalog.Issue {
-	graph, err := discover.ImportGraph(repoRoot)
+func checkImports(repoRoot string, topo catalog.Typology, modules []gorepo.Module) []catalog.Issue {
+	graph, err := discover.ImportGraphInModules(repoRoot, modules)
 	if err != nil {
 		return []catalog.Issue{{Message: fmt.Sprintf("import graph: %v", err)}}
 	}

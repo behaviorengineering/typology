@@ -15,6 +15,16 @@ description: >-
 
 MUST NOT use this skill for README pitch, story, or counsel prose (Consilium `revise-flow` owns those). MUST NOT invent HTTP, CLI, UI, or pipeline surface the catalog does not name.
 
+The human architecture brief at `docs/architecture/typology.md` is a separate
+reviewed projection owned by the repository. Run `typology architecture REPO`
+after the catalog is confirmed. In a multi-module repository it only inspects
+the modules listed in `scope.modules`, not every module in `go.work`. It compares
+catalog intent with observed Go topology and lists
+findings, but it does not decide whether a design is correct. Read each
+finding, fix the code or catalog when appropriate, and record unresolved
+boundary debt in the journey file. Remove the generated marker only after a
+human accepts the explanation.
+
 ## When to load
 
 - Journey Status.phase is `docs`
@@ -29,7 +39,7 @@ MUST NOT use this skill as the primary load when the operator only asked to disc
 
 **CONSTRAINT:** The docs table is session state for this phase.
 
-- MUST: when `architecture/typology-journey.md` exists, fill the Docs table from the confirmed catalog (`docs.pages[]`) before the first page turn
+- MUST: when `.typology/typology-journey.md` exists, fill the Docs table from the confirmed catalog (`docs.pages[]`) before the first page turn
 - MUST: if there is no journey file and the operator named one existing page, keep a one-off table in chat for that page only
 - MUST NOT: track fill progress only in chat when a journey file exists; MUST NOT start a second docs tracker under another name
 
@@ -55,7 +65,7 @@ PROHIBITED: rewriting every billing page and program leaf, then asking the opera
 
 **CONSTRAINT:** Catalog and repo are the only sources of surface.
 
-- MUST: quote `architecture/typology.yaml` (or the page) in the evidence gate before FILL or SKIP-NONE
+- MUST: quote `.typology/typology.yaml` (or the page) in the evidence gate before FILL or SKIP-NONE
 - MUST: SKIP-NONE when the kind has no matching components or opRuns (see [reference.md](reference.md) page-kind contracts)
 - MUST NOT: invent endpoints, flags, viewer routes, or DSPy jobs the catalog does not name
 

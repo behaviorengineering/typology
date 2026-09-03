@@ -81,7 +81,7 @@ CLASSIFY:
 
 ## Evidence gate
 
-Fill this block in the message BEFORE writing page body. YES MUST quote evidence from `architecture/typology.yaml` or the current page. MUST NOT self-report YES.
+Fill this block in the message BEFORE writing page body. YES MUST quote evidence from `.typology/typology.yaml` or the current page. MUST NOT self-report YES.
 
 Gate Decision has three outcomes only. REVISE is a later turn after FILL.
 
@@ -126,7 +126,7 @@ Opening-states-purpose is checked **after** fill (five-filter step 1), not in th
 
 ## Page-kind contracts
 
-Evaluator checks the filled page against `architecture/typology.yaml` and `catalog.DocPageKind`. MUST NOT use training as the source of endpoints or commands.
+Evaluator checks the filled page against `.typology/typology.yaml` and `catalog.DocPageKind`. MUST NOT use training as the source of endpoints or commands.
 
 ### overview
 

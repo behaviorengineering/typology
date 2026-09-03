@@ -69,16 +69,23 @@ var DefaultDocPageKinds = []DocPageKind{
 // Typology is the whole architecture map.
 type Typology struct {
 	ID                string             `json:"id" yaml:"id"`
+	Scope             Scope              `json:"scope,omitempty" yaml:"scope,omitempty"`
 	Slices            []Slice            `json:"slices" yaml:"slices"`
 	SliceBindings     []SliceBinding     `json:"sliceBindings,omitempty" yaml:"sliceBindings,omitempty"`
 	ComponentBindings []ComponentBinding `json:"componentBindings,omitempty" yaml:"componentBindings,omitempty"`
 }
 
-// Slice is one bounded context.
+// Scope identifies the repository-local Go modules covered by a catalog.
+// Modules are relative paths such as "." or "engine".
+type Scope struct {
+	Modules []string `json:"modules,omitempty" yaml:"modules,omitempty"`
+}
+
+// Slice is one bounded context with a required business objective.
 type Slice struct {
 	ID          string       `json:"id" yaml:"id"`
 	Route       string       `json:"route,omitempty" yaml:"route,omitempty"`
-	Objective   string       `json:"objective,omitempty" yaml:"objective,omitempty"`
+	Objective   string       `json:"objective" yaml:"objective"`
 	Must        []string     `json:"must,omitempty" yaml:"must,omitempty"`
 	MustNot     []string     `json:"mustNot,omitempty" yaml:"mustNot,omitempty"`
 	Success     string       `json:"success,omitempty" yaml:"success,omitempty"`
@@ -93,9 +100,9 @@ type Slice struct {
 // Surface is a built interaction artefact (UI, CLI, or API) that owns packages.
 // Nested components carry id and path only; kind lives on the surface.
 type Surface struct {
-	ID         string      `json:"id" yaml:"id"`
+	ID         string          `json:"id" yaml:"id"`
 	Kind       InteractionKind `json:"kind" yaml:"kind"`
-	Components []Component `json:"components,omitempty" yaml:"components,omitempty"`
+	Components []Component     `json:"components,omitempty" yaml:"components,omitempty"`
 }
 
 // Component is a package (or equivalent) inside a slice.

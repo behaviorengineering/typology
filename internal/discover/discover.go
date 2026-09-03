@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -12,12 +13,15 @@ import (
 
 	"github.com/behaviorengineering/typology/catalog"
 	terrors "github.com/behaviorengineering/typology/errors"
+	"github.com/behaviorengineering/typology/internal/gorepo"
 )
 
 // Options configures discovery.
 type Options struct {
 	RepoRoot string
 	DocsRoot string
+	Modules  []string
+	Module   string
 }
 
 // Result is a proposed typology draft.
@@ -28,21 +32,26 @@ type Result struct {
 	Graph    GraphSummary     `json:"graph,omitempty"`
 }
 
-// Run scans a Go module and proposes slices plus bindings.
+// Run scans a Go module or workspace and proposes slices plus bindings.
 func Run(opts Options) (Result, error) {
 	repo := strings.TrimSpace(opts.RepoRoot)
 	if repo == "" {
 		return Result{}, terrors.New(terrors.CodeInvalid, "discover.Run", "repo root empty")
 	}
-	modRoot, modPath, err := moduleRoot(repo)
+	absRepo, err := filepath.Abs(repo)
 	if err != nil {
-		return Result{}, terrors.Wrap(err, terrors.CodeFailedPrecondition, "discover.Run", "resolve module")
+		return Result{}, terrors.Wrap(err, terrors.CodeInvalid, "discover.Run", "abs repo").
+			With("repo", repo)
 	}
-	pkgs, err := listPackages(modRoot)
+	modules, err := gorepo.ResolveModules(absRepo, opts.Modules, opts.Module)
+	if err != nil {
+		return Result{}, terrors.Wrap(err, terrors.CodeFailedPrecondition, "discover.Run", "resolve modules")
+	}
+	pkgs, err := listPackages(modules)
 	if err != nil {
 		return Result{}, terrors.Wrap(err, terrors.CodeUnavailable, "discover.Run", "list packages")
 	}
-	graph, err := ImportGraph(modRoot)
+	graph, err := ImportGraphInModules(absRepo, modules)
 	if err != nil {
 		return Result{}, terrors.Wrap(err, terrors.CodeUnavailable, "discover.Run", "build import graph")
 	}
@@ -60,7 +69,7 @@ func Run(opts Options) (Result, error) {
 		var owns []catalog.Component
 		surfaceByKind := map[catalog.InteractionKind][]catalog.Component{}
 		for _, p := range paths {
-			compID := componentID(modPath, p)
+			compID := componentID(p)
 			layer, kind := inferLayer(p)
 			if layer == catalog.LayerDomain {
 				owns = append(owns, catalog.Component{
@@ -95,13 +104,13 @@ func Run(opts Options) (Result, error) {
 		if fromSlice == "" {
 			continue
 		}
-		fromComp := componentID(modPath, from)
+		fromComp := componentID(from)
 		for _, imp := range imports {
 			toSlice := sliceForPath[imp]
 			if toSlice == "" {
 				continue
 			}
-			toComp := componentID(modPath, imp)
+			toComp := componentID(imp)
 			if fromSlice != toSlice {
 				key := fromSlice + "->" + toSlice
 				if _, ok := seenSliceBind[key]; !ok {
@@ -127,7 +136,8 @@ func Run(opts Options) (Result, error) {
 	}
 
 	t := catalog.Typology{
-		ID:                filepath.Base(modRoot),
+		ID:                filepath.Base(absRepo),
+		Scope:             catalog.Scope{Modules: moduleRels(modules)},
 		Slices:            slices,
 		SliceBindings:     sliceBindings,
 		ComponentBindings: compBindings,
@@ -135,89 +145,70 @@ func Run(opts Options) (Result, error) {
 	graphSummary := BuildGraphSummary(graph)
 	return Result{
 		Typology: t,
-		Module:   modPath,
+		Module:   moduleLabel(modules),
 		Packages: pkgs,
 		Graph:    graphSummary,
 	}, nil
 }
 
-// ImportGraph returns import edges between local packages (dir paths relative to module root).
+// ImportGraph returns import edges between local packages (dir paths relative to
+// the repo or workspace root, for example "./engine/internal/cli").
 func ImportGraph(repoRoot string) (map[string][]string, error) {
-	modRoot, modPath, err := moduleRoot(repoRoot)
+	absRepo, err := filepath.Abs(repoRoot)
 	if err != nil {
-		return nil, terrors.Wrap(err, terrors.CodeFailedPrecondition, "discover.ImportGraph", "resolve module")
+		return nil, terrors.Wrap(err, terrors.CodeInvalid, "discover.ImportGraph", "abs repo").
+			With("repo", repoRoot)
 	}
-	pkgs, err := listPackages(modRoot)
+	modules, err := gorepo.ResolveModules(absRepo, nil, "")
 	if err != nil {
-		return nil, terrors.Wrap(err, terrors.CodeUnavailable, "discover.ImportGraph", "list packages")
+		return nil, terrors.Wrap(err, terrors.CodeFailedPrecondition, "discover.ImportGraph", "resolve modules")
+	}
+	return ImportGraphInModules(absRepo, modules)
+}
+
+// ImportGraphInModules returns import edges for the selected modules.
+func ImportGraphInModules(repoRoot string, modules []gorepo.Module) (map[string][]string, error) {
+	_, err := filepath.Abs(repoRoot)
+	if err != nil {
+		return nil, terrors.Wrap(err, terrors.CodeInvalid, "discover.ImportGraphInModules", "abs repo").
+			With("repo", repoRoot)
 	}
 	local := map[string]string{}
-	for _, p := range pkgs {
-		importPath := modPath + "/" + strings.TrimPrefix(p, "./")
-		if p == "." {
-			importPath = modPath
+	type pkgRef struct {
+		repo    string
+		imports []string
+	}
+	var refs []pkgRef
+	for _, mod := range modules {
+		modPkgs, err := listPackageInfosInModule(mod.Dir)
+		if err != nil {
+			return nil, terrors.Wrap(err, terrors.CodeUnavailable, "discover.ImportGraph", "list packages").
+				With("module", mod.Path)
 		}
-		local[importPath] = p
+		for _, pkg := range modPkgs {
+			repoRel, err := importToRel(mod.Dir, pkg.ImportPath)
+			if err != nil {
+				return nil, terrors.Wrap(err, terrors.CodeInvalid, "discover.ImportGraph", "resolve package path").
+					With("module", mod.Path).
+					With("package", pkg.ImportPath)
+			}
+			repoRel = workspacePkgPath(mod.Rel, strings.TrimPrefix(repoRel, "./"))
+			local[pkg.ImportPath] = repoRel
+			refs = append(refs, pkgRef{repo: repoRel, imports: pkg.Imports})
+		}
 	}
 
 	graph := map[string][]string{}
-	for _, p := range pkgs {
-		graph[p] = nil
-		imports, err := packageImports(modRoot, p)
-		if err != nil {
-			return nil, terrors.Wrap(err, terrors.CodeUnavailable, "discover.ImportGraph", "package imports").
-				With("pkg", p)
-		}
-		from := p
-		for _, imp := range imports {
-			if rel, ok := local[imp]; ok && rel != from {
-				graph[from] = append(graph[from], rel)
+	for _, ref := range refs {
+		graph[ref.repo] = nil
+		for _, imp := range ref.imports {
+			if rel, ok := local[imp]; ok && rel != ref.repo {
+				graph[ref.repo] = append(graph[ref.repo], rel)
 			}
 		}
-		sort.Strings(graph[from])
+		sort.Strings(graph[ref.repo])
 	}
 	return graph, nil
-}
-
-func moduleRoot(repoRoot string) (string, string, error) {
-	abs, err := filepath.Abs(repoRoot)
-	if err != nil {
-		return "", "", terrors.Wrap(err, terrors.CodeInvalid, "discover.moduleRoot", "abs repo").
-			With("repo", repoRoot)
-	}
-	dir := abs
-	for {
-		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
-			modPath, err := readModulePath(filepath.Join(dir, "go.mod"))
-			if err != nil {
-				return "", "", err
-			}
-			return dir, modPath, nil
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			break
-		}
-		dir = parent
-	}
-	return "", "", terrors.New(terrors.CodeNotFound, "discover.moduleRoot", "go.mod not found").
-		With("repo", repoRoot)
-}
-
-func readModulePath(modFile string) (string, error) {
-	data, err := os.ReadFile(modFile)
-	if err != nil {
-		return "", terrors.Wrap(err, terrors.CodeUnavailable, "discover.readModulePath", "read go.mod").
-			With("path", modFile)
-	}
-	for _, line := range strings.Split(string(data), "\n") {
-		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "module ") {
-			return strings.TrimSpace(strings.TrimPrefix(line, "module ")), nil
-		}
-	}
-	return "", terrors.New(terrors.CodeInvalid, "discover.readModulePath", "module line missing").
-		With("path", modFile)
 }
 
 func goCmd(dir string, args ...string) *exec.Cmd {
@@ -227,28 +218,52 @@ func goCmd(dir string, args ...string) *exec.Cmd {
 	return cmd
 }
 
-func listPackages(dir string) ([]string, error) {
-	cmd := goCmd(dir, "list", "./...")
-	out, err := cmd.Output()
-	if err != nil {
-		if ee, ok := err.(*exec.ExitError); ok {
-			return nil, terrors.Wrap(err, terrors.CodeUnavailable, "discover.listPackages", "go list failed").
-				With("stderr", strings.TrimSpace(string(ee.Stderr))).
-				With("dir", dir)
-		}
-		return nil, terrors.Wrap(err, terrors.CodeUnavailable, "discover.listPackages", "go list").
-			With("dir", dir)
-	}
-	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+func listPackages(modules []gorepo.Module) ([]string, error) {
 	var pkgs []string
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
-		}
-		rel, err := importToRel(dir, line)
+	seen := map[string]struct{}{}
+	for _, mod := range modules {
+		modPkgs, err := listPackagesInModule(mod.Dir)
 		if err != nil {
 			return nil, err
+		}
+		for _, p := range modPkgs {
+			repoRel := workspacePkgPath(mod.Rel, p)
+			if _, ok := seen[repoRel]; ok {
+				continue
+			}
+			seen[repoRel] = struct{}{}
+			pkgs = append(pkgs, repoRel)
+		}
+	}
+	sort.Strings(pkgs)
+	return pkgs, nil
+}
+
+func moduleRels(modules []gorepo.Module) []string {
+	rels := make([]string, 0, len(modules))
+	for _, module := range modules {
+		rels = append(rels, filepath.ToSlash(module.Rel))
+	}
+	sort.Strings(rels)
+	return rels
+}
+
+func listPackagesInModule(modRoot string) ([]string, error) {
+	infos, err := listPackageInfosInModule(modRoot)
+	if err != nil {
+		return nil, err
+	}
+	modPath, err := gorepo.ReadModulePath(filepath.Join(modRoot, "go.mod"))
+	if err != nil {
+		return nil, err
+	}
+	var pkgs []string
+	for _, info := range infos {
+		rel, err := importToRel(modRoot, info.ImportPath)
+		if err != nil {
+			return nil, terrors.Wrap(err, terrors.CodeInvalid, "discover.listPackages", "resolve package path").
+				With("module", modPath).
+				With("package", info.ImportPath)
 		}
 		pkgs = append(pkgs, rel)
 	}
@@ -256,8 +271,39 @@ func listPackages(dir string) ([]string, error) {
 	return pkgs, nil
 }
 
+type packageInfo struct {
+	ImportPath string
+	Imports    []string
+}
+
+func listPackageInfosInModule(modRoot string) ([]packageInfo, error) {
+	cmd := goCmd(modRoot, "list", "-json", "./...")
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	out, err := cmd.Output()
+	if err != nil {
+		return nil, terrors.Wrap(err, terrors.CodeUnavailable, "discover.listPackages", "go list failed").
+			With("stderr", strings.TrimSpace(stderr.String())).
+			With("dir", modRoot)
+	}
+	dec := json.NewDecoder(bytes.NewReader(out))
+	var infos []packageInfo
+	for {
+		var info packageInfo
+		if err := dec.Decode(&info); err != nil {
+			if err == io.EOF {
+				break
+			}
+			return nil, terrors.Wrap(err, terrors.CodeInternal, "discover.listPackages", "decode go list json").
+				With("dir", modRoot)
+		}
+		infos = append(infos, info)
+	}
+	return infos, nil
+}
+
 func importToRel(modRoot, importPath string) (string, error) {
-	modPath, err := readModulePath(filepath.Join(modRoot, "go.mod"))
+	modPath, err := gorepo.ReadModulePath(filepath.Join(modRoot, "go.mod"))
 	if err != nil {
 		return "", err
 	}
@@ -273,28 +319,30 @@ func importToRel(modRoot, importPath string) (string, error) {
 	return "./" + strings.TrimPrefix(importPath, prefix), nil
 }
 
-func packageImports(dir, relPkg string) ([]string, error) {
-	cmd := goCmd(dir, "list", "-json", relPkg)
-	out, err := cmd.Output()
-	if err != nil {
-		if ee, ok := err.(*exec.ExitError); ok {
-			return nil, terrors.Wrap(err, terrors.CodeUnavailable, "discover.packageImports", "go list -json failed").
-				With("stderr", strings.TrimSpace(string(ee.Stderr))).
-				With("pkg", relPkg)
+func workspacePkgPath(modRel, pkgRel string) string {
+	pkg := strings.TrimPrefix(pkgRel, "./")
+	if modRel == "." || modRel == "" {
+		if pkg == "" || pkg == "." {
+			return "."
 		}
-		return nil, terrors.Wrap(err, terrors.CodeUnavailable, "discover.packageImports", "go list -json").
-			With("pkg", relPkg)
+		return "./" + pkg
 	}
-	var info struct {
-		ImportPath string   `json:"ImportPath"`
-		Imports    []string `json:"Imports"`
+	if pkg == "" || pkg == "." {
+		return "./" + filepath.ToSlash(modRel)
 	}
-	dec := json.NewDecoder(bytes.NewReader(out))
-	if err := dec.Decode(&info); err != nil {
-		return nil, terrors.Wrap(err, terrors.CodeInternal, "discover.packageImports", "decode go list json").
-			With("pkg", relPkg)
+	return "./" + filepath.ToSlash(filepath.Join(modRel, pkg))
+}
+
+func moduleLabel(modules []gorepo.Module) string {
+	if len(modules) == 1 {
+		return modules[0].Path
 	}
-	return info.Imports, nil
+	parts := make([]string, 0, len(modules))
+	for _, m := range modules {
+		parts = append(parts, m.Path)
+	}
+	sort.Strings(parts)
+	return "workspace:" + strings.Join(parts, ",")
 }
 
 func clusterPackages(pkgs []string) map[string][]string {
@@ -324,10 +372,9 @@ func clusterID(relPkg string) string {
 	return parts[0]
 }
 
-func componentID(modPath, relPkg string) string {
+func componentID(relPkg string) string {
 	rel := strings.TrimPrefix(relPkg, "./")
-	rel = strings.ReplaceAll(rel, "/", "-")
-	return strings.TrimPrefix(rel, modPath+"-")
+	return strings.ReplaceAll(rel, "/", "-")
 }
 
 func inferLayer(relPkg string) (catalog.Layer, catalog.InteractionKind) {
@@ -383,6 +430,15 @@ type GraphSummary struct {
 // AnalyzeGraph analyzes package import topology from a repo root.
 func AnalyzeGraph(repoRoot string) (GraphSummary, error) {
 	graph, err := ImportGraph(repoRoot)
+	if err != nil {
+		return GraphSummary{}, err
+	}
+	return BuildGraphSummary(graph), nil
+}
+
+// AnalyzeGraphInModules analyzes topology for the selected modules.
+func AnalyzeGraphInModules(repoRoot string, modules []gorepo.Module) (GraphSummary, error) {
+	graph, err := ImportGraphInModules(repoRoot, modules)
 	if err != nil {
 		return GraphSummary{}, err
 	}
