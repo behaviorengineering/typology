@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/behaviorengineering/typology/internal/gorepo"
 	"github.com/behaviorengineering/typology/internal/sourceindex"
 )
 
@@ -47,7 +48,11 @@ func TestBuild_indexesWorkspaceRoot(t *testing.T) {
 	mustWrite(t, filepath.Join(root, "lib", "go.mod"), "module example.com/ws/lib\n\ngo 1.26.5\n")
 	mustWrite(t, filepath.Join(root, "lib", "widget", "widget.go"), "package widget\n\nfunc New() {}\n")
 
-	idx, err := sourceindex.Build(root)
+	modules, err := gorepo.ResolveModules(root, []string{"engine", "lib"}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	idx, err := sourceindex.BuildInModules(root, modules)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -56,6 +61,45 @@ func TestBuild_indexesWorkspaceRoot(t *testing.T) {
 	}
 	if _, ok := idx.Package("lib/widget"); !ok {
 		t.Fatalf("expected lib/widget, got %+v", idx.Packages)
+	}
+}
+
+func TestBuild_workspaceRequiresScope(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	mustWrite(t, filepath.Join(root, "go.work"), "go 1.26.5\n\nuse (\n\t./engine\n\t./lib\n)\n")
+	mustWrite(t, filepath.Join(root, "engine", "go.mod"), "module example.com/ws/engine\n\ngo 1.26.5\n")
+	mustWrite(t, filepath.Join(root, "engine", "svc", "svc.go"), "package svc\n")
+	mustWrite(t, filepath.Join(root, "lib", "go.mod"), "module example.com/ws/lib\n\ngo 1.26.5\n")
+	mustWrite(t, filepath.Join(root, "lib", "widget", "widget.go"), "package widget\n")
+
+	if _, err := sourceindex.Build(root); err == nil {
+		t.Fatal("expected an unscoped multi-module workspace to fail")
+	}
+}
+
+func TestBuildInModules_excludesSibling(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	mustWrite(t, filepath.Join(root, "go.work"), "go 1.26.5\n\nuse (\n\t./engine\n\t./lib\n)\n")
+	mustWrite(t, filepath.Join(root, "engine", "go.mod"), "module example.com/ws/engine\n\ngo 1.26.5\n")
+	mustWrite(t, filepath.Join(root, "engine", "svc", "svc.go"), "package svc\n")
+	mustWrite(t, filepath.Join(root, "lib", "go.mod"), "module example.com/ws/lib\n\ngo 1.26.5\n")
+	mustWrite(t, filepath.Join(root, "lib", "widget", "widget.go"), "package widget\n")
+
+	modules, err := gorepo.ResolveModules(root, []string{"engine"}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	idx, err := sourceindex.BuildInModules(root, modules)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := idx.Package("lib/widget"); ok {
+		t.Fatalf("out-of-scope package appeared in source index: %+v", idx.Packages)
+	}
+	if _, ok := idx.Package("engine/svc"); !ok {
+		t.Fatalf("in-scope package missing from source index: %+v", idx.Packages)
 	}
 }
 

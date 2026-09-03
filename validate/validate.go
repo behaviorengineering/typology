@@ -8,6 +8,7 @@ import (
 
 	"github.com/behaviorengineering/typology/catalog"
 	"github.com/behaviorengineering/typology/internal/discover"
+	"github.com/behaviorengineering/typology/internal/gorepo"
 	"github.com/behaviorengineering/typology/internal/sourceindex"
 )
 
@@ -17,6 +18,8 @@ type Options struct {
 	Catalog     catalog.Typology
 	SliceID     string
 	SkipImports bool
+	Modules     []string
+	Module      string
 }
 
 // Run validates catalog structure and repo paths/imports.
@@ -28,7 +31,13 @@ func Run(opts Options) []catalog.Issue {
 	if repo == "" {
 		return issues
 	}
-	index, err := sourceindex.Build(repo)
+	modules, err := gorepo.ResolveModules(repo, opts.Modules, opts.Module)
+	if err != nil {
+		issues = append(issues, catalog.Issue{Message: fmt.Sprintf("module scope: %v", err)})
+		catalog.SortIssues(issues)
+		return issues
+	}
+	index, err := sourceindex.BuildInModules(repo, modules)
 	if err != nil {
 		issues = append(issues, catalog.Issue{Message: fmt.Sprintf("source index: %v", err)})
 		catalog.SortIssues(issues)
@@ -42,7 +51,7 @@ func Run(opts Options) []catalog.Issue {
 		issues = append(issues, checkSliceWithIndex(repo, s, index)...)
 	}
 	if opts.SliceID == "" && !opts.SkipImports {
-		issues = append(issues, checkImports(repo, opts.Catalog)...)
+		issues = append(issues, checkImports(repo, opts.Catalog, modules)...)
 	}
 	catalog.SortIssues(issues)
 	return issues
@@ -151,8 +160,8 @@ func checkProgramPages(repoRoot string, s catalog.Slice) []catalog.Issue {
 	return issues
 }
 
-func checkImports(repoRoot string, topo catalog.Typology) []catalog.Issue {
-	graph, err := discover.ImportGraph(repoRoot)
+func checkImports(repoRoot string, topo catalog.Typology, modules []gorepo.Module) []catalog.Issue {
+	graph, err := discover.ImportGraphInModules(repoRoot, modules)
 	if err != nil {
 		return []catalog.Issue{{Message: fmt.Sprintf("import graph: %v", err)}}
 	}

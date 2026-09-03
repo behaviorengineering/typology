@@ -97,6 +97,44 @@ func TestValidateStructure_requiresSliceObjective(t *testing.T) {
 	}
 }
 
+func TestValidateStructure_scopeModules(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name string
+		typ  catalog.Typology
+		want string
+	}{
+		{
+			name: "empty module",
+			typ:  catalog.Typology{Scope: catalog.Scope{Modules: []string{""}}},
+			want: "scope module path is empty",
+		},
+		{
+			name: "traversal",
+			typ:  catalog.Typology{Scope: catalog.Scope{Modules: []string{"../engine"}}},
+			want: `scope module path "../engine" must stay within the repository`,
+		},
+		{
+			name: "absolute",
+			typ:  catalog.Typology{Scope: catalog.Scope{Modules: []string{"/tmp/engine"}}},
+			want: `scope module path "/tmp/engine" must stay within the repository`,
+		},
+		{
+			name: "duplicate",
+			typ:  catalog.Typology{Scope: catalog.Scope{Modules: []string{"engine", "./engine"}}},
+			want: `duplicate scope module "engine"`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if !hasIssue(catalog.Typology{Scope: tt.typ.Scope}.ValidateStructure(), tt.want) {
+				t.Fatalf("expected scope issue %q, got %v", tt.want, catalog.Typology{Scope: tt.typ.Scope}.ValidateStructure())
+			}
+		})
+	}
+}
+
 func TestValidateStructure_subprogramAndActuator(t *testing.T) {
 	t.Parallel()
 	ok := catalog.Typology{

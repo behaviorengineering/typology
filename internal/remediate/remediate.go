@@ -14,6 +14,8 @@ type Options struct {
 	RepoRoot string
 	Catalog  catalog.Typology
 	SliceID  string
+	Modules  []string
+	Module   string
 }
 
 // Report is agent-facing guidance for one remediation pass.
@@ -37,6 +39,8 @@ func Run(opts Options) (Report, error) {
 		RepoRoot: opts.RepoRoot,
 		Catalog:  opts.Catalog,
 		SliceID:  sliceID,
+		Modules:  opts.Modules,
+		Module:   opts.Module,
 	})
 	var scoped []catalog.Issue
 	for _, issue := range all {

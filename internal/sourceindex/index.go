@@ -49,7 +49,25 @@ func Build(repoRoot string) (Index, error) {
 		return Index{}, terrors.Wrap(err, terrors.CodeInvalid, "sourceindex.Build", "abs repo").
 			With("repo", repo)
 	}
-	pkgs, err := listPackages(absRepo)
+	modules, err := gorepo.ResolveModules(absRepo, nil, "")
+	if err != nil {
+		return Index{}, err
+	}
+	return BuildInModules(absRepo, modules)
+}
+
+// BuildInModules scans only the selected Go modules for source evidence.
+func BuildInModules(repoRoot string, modules []gorepo.Module) (Index, error) {
+	repo := strings.TrimSpace(repoRoot)
+	if repo == "" {
+		return Index{}, terrors.New(terrors.CodeInvalid, "sourceindex.BuildInModules", "repo root empty")
+	}
+	absRepo, err := filepath.Abs(repo)
+	if err != nil {
+		return Index{}, terrors.Wrap(err, terrors.CodeInvalid, "sourceindex.BuildInModules", "abs repo").
+			With("repo", repo)
+	}
+	pkgs, err := listPackagesInModules(modules)
 	if err != nil {
 		return Index{}, err
 	}
@@ -117,11 +135,7 @@ type listPackage struct {
 	CompiledGoFiles []string `json:"CompiledGoFiles"`
 }
 
-func listPackages(repoRoot string) ([]listPackage, error) {
-	modules, err := gorepo.Modules(repoRoot)
-	if err != nil {
-		return nil, err
-	}
+func listPackagesInModules(modules []gorepo.Module) ([]listPackage, error) {
 	var all []listPackage
 	for _, mod := range modules {
 		pkgs, err := listPackagesInModule(mod.Dir)

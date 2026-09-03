@@ -81,6 +81,72 @@ func TestModules_singleModule(t *testing.T) {
 	}
 }
 
+func TestResolveModules_requiresScopeForWorkspace(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	mustWrite(t, filepath.Join(root, "go.work"), "go 1.26.5\n\nuse (\n\t./engine\n\t./lib\n)\n")
+	mustWrite(t, filepath.Join(root, "engine", "go.mod"), "module example.com/engine\n\ngo 1.26.5\n")
+	mustWrite(t, filepath.Join(root, "lib", "go.mod"), "module example.com/lib\n\ngo 1.26.5\n")
+
+	_, err := gorepo.ResolveModules(root, nil, "")
+	if err == nil {
+		t.Fatal("expected an unscoped workspace to fail")
+	}
+}
+
+func TestResolveModules_selectsConfiguredModules(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	mustWrite(t, filepath.Join(root, "go.work"), "go 1.26.5\n\nuse (\n\t./engine\n\t./lib\n)\n")
+	mustWrite(t, filepath.Join(root, "engine", "go.mod"), "module example.com/engine\n\ngo 1.26.5\n")
+	mustWrite(t, filepath.Join(root, "lib", "go.mod"), "module example.com/lib\n\ngo 1.26.5\n")
+
+	modules, err := gorepo.ResolveModules(root, []string{"./lib"}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(modules) != 1 || modules[0].Rel != "lib" {
+		t.Fatalf("modules = %+v, want lib", modules)
+	}
+}
+
+func TestResolveModules_overrideWins(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	mustWrite(t, filepath.Join(root, "go.work"), "go 1.26.5\n\nuse (\n\t./engine\n\t./lib\n)\n")
+	mustWrite(t, filepath.Join(root, "engine", "go.mod"), "module example.com/engine\n\ngo 1.26.5\n")
+	mustWrite(t, filepath.Join(root, "lib", "go.mod"), "module example.com/lib\n\ngo 1.26.5\n")
+
+	modules, err := gorepo.ResolveModules(root, []string{"engine", "lib"}, "engine")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(modules) != 1 || modules[0].Rel != "engine" {
+		t.Fatalf("modules = %+v, want engine", modules)
+	}
+}
+
+func TestResolveModules_rejectsUnknownModule(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	mustWrite(t, filepath.Join(root, "go.mod"), "module example.com/engine\n\ngo 1.26.5\n")
+
+	if _, err := gorepo.ResolveModules(root, []string{"missing"}, ""); err == nil {
+		t.Fatal("expected unknown module error")
+	}
+}
+
+func TestResolveModules_rejectsUnsafeConfiguredPath(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	mustWrite(t, filepath.Join(root, "go.work"), "go 1.26.5\n\nuse (\n\t./engine\n)\n")
+	mustWrite(t, filepath.Join(root, "engine", "go.mod"), "module example.com/engine\n\ngo 1.26.5\n")
+
+	if _, err := gorepo.ResolveModules(root, []string{"../engine"}, ""); err == nil {
+		t.Fatal("expected unsafe scope path error")
+	}
+}
+
 func mustWrite(t *testing.T, path, content string) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {

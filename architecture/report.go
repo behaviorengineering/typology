@@ -6,12 +6,14 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"text/template"
 
 	"github.com/behaviorengineering/typology/catalog"
 	terrors "github.com/behaviorengineering/typology/errors"
 	"github.com/behaviorengineering/typology/internal/discover"
+	"github.com/behaviorengineering/typology/internal/gorepo"
 	"github.com/behaviorengineering/typology/validate"
 )
 
@@ -26,11 +28,14 @@ type BuildOptions struct {
 	RepoRoot    string
 	Catalog     catalog.Typology
 	SkipImports bool
+	Modules     []string
+	Module      string
 }
 
 // Report combines the intended catalog with observed repository evidence.
 type Report struct {
 	Catalog  catalog.Typology `json:"catalog"`
+	Modules  []string         `json:"modules,omitempty"`
 	Graph    Graph            `json:"graph"`
 	Findings []catalog.Issue  `json:"findings,omitempty"`
 }
@@ -78,7 +83,15 @@ func Build(opts BuildOptions) (Report, error) {
 	if repo == "" {
 		return Report{}, terrors.New(terrors.CodeInvalid, "architecture.Build", "repo root empty")
 	}
-	graph, err := discover.AnalyzeGraph(repo)
+	selectors := opts.Catalog.Scope.Modules
+	if len(opts.Modules) > 0 {
+		selectors = opts.Modules
+	}
+	modules, err := gorepo.ResolveModules(repo, selectors, opts.Module)
+	if err != nil {
+		return Report{}, terrors.Wrap(err, terrors.CodeFailedPrecondition, "architecture.Build", "resolve module scope")
+	}
+	graph, err := discover.AnalyzeGraphInModules(repo, modules)
 	if err != nil {
 		return Report{}, terrors.Wrap(err, terrors.CodeUnavailable, "architecture.Build", "analyze import graph")
 	}
@@ -86,12 +99,23 @@ func Build(opts BuildOptions) (Report, error) {
 		RepoRoot:    repo,
 		Catalog:     opts.Catalog,
 		SkipImports: opts.SkipImports,
+		Modules:     moduleRels(modules),
 	})
 	return Report{
 		Catalog:  opts.Catalog,
+		Modules:  moduleRels(modules),
 		Graph:    publicGraph(graph),
 		Findings: findings,
 	}, nil
+}
+
+func moduleRels(modules []gorepo.Module) []string {
+	rels := make([]string, 0, len(modules))
+	for _, module := range modules {
+		rels = append(rels, filepath.ToSlash(module.Rel))
+	}
+	sort.Strings(rels)
+	return rels
 }
 
 // RenderMarkdown renders a deterministic human-readable architecture brief.
@@ -138,6 +162,7 @@ func WriteMarkdown(path, body string) (bool, error) {
 
 type markdownData struct {
 	Catalog        catalog.Typology
+	Modules        []string
 	Slices         []sliceRow
 	SliceBindings  []catalog.SliceBinding
 	ComponentBinds []catalog.ComponentBinding
@@ -178,6 +203,7 @@ type findingRow struct {
 func prepareMarkdown(report Report) markdownData {
 	data := markdownData{
 		Catalog:        report.Catalog,
+		Modules:        append([]string(nil), report.Modules...),
 		SliceBindings:  append([]catalog.SliceBinding(nil), report.Catalog.SliceBindings...),
 		ComponentBinds: append([]catalog.ComponentBinding(nil), report.Catalog.ComponentBindings...),
 		Findings:       make([]findingRow, 0, len(report.Findings)),
@@ -221,6 +247,15 @@ func prepareMarkdown(report Report) markdownData {
 			})
 		}
 	}
+	sort.Slice(data.Graph.MergeSuggestions, func(i, j int) bool {
+		if data.Graph.MergeSuggestions[i].SourcePackage != data.Graph.MergeSuggestions[j].SourcePackage {
+			return data.Graph.MergeSuggestions[i].SourcePackage < data.Graph.MergeSuggestions[j].SourcePackage
+		}
+		return data.Graph.MergeSuggestions[i].TargetPackage < data.Graph.MergeSuggestions[j].TargetPackage
+	})
+	sort.Slice(data.Graph.StemCollisions, func(i, j int) bool {
+		return data.Graph.StemCollisions[i].Stem < data.Graph.StemCollisions[j].Stem
+	})
 	if len(data.Slices) <= 20 {
 		data.MermaidLines = mermaidLines(report.Catalog)
 	}
@@ -350,12 +385,14 @@ flowchart LR
 
 ## Observed topology
 
-The repository contains **{{.Graph.NodeCount}} Go packages** in the inspected modules.
+The repository contains **{{.Graph.NodeCount}} Go packages** in the inspected modules:
+{{range .Modules}}- ` + "`{{.}}`" + `
+{{end}}
 
 {{if .Graph.HubRows}}### High-coupling packages
 
-| Package | Imported by | Imports |
-|---------|-------------|---------|
+| Package | In-degree | Out-degree |
+|---------|-----------|------------|
 {{range .Graph.HubRows}}| ` + "`{{.Path}}`" + ` | {{.InDegree}} | {{.OutDegree}} |
 {{end}}{{end}}
 {{if .Graph.LeafRows}}### Leaf packages

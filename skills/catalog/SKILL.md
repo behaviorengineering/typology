@@ -24,7 +24,7 @@ description: >-
 
 | Type | Role |
 |------|------|
-| `Typology` | Whole map (`id`, `slices`, optional bindings) |
+| `Typology` | Whole map (`id`, optional `scope.modules`, `slices`, optional bindings) |
 | `Slice` | Bounded context with a required business `objective` (`owns`, `surfaces`, `opRuns`, `subprograms`, `actuators`, `docs`) |
 | `Component` | Package path. Domain packages live on `owns[]`. Interaction packages live under a `Surface`. |
 | `Surface` | Built interaction artefact (`kind`: `ui`, `cli`, or `api`) with nested `components[]` (id + path only). |
@@ -37,6 +37,8 @@ description: >-
 Gates: `auto` | `test` | `human`.
 
 Default catalog path: `.typology/typology.yaml`. Default docs root: `docs/develop`.
+
+**Scope:** One repository owns one catalog and its architecture docs. In a multi-module workspace, set `scope.modules` to repository-relative module roots such as `engine` or `ui/viewer`. `go.work` does not define Typology scope.
 
 **CONSTRAINT:** Every slice MUST set a non-empty `objective` that states the bounded context's business purpose.
 

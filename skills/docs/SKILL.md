@@ -15,6 +15,16 @@ description: >-
 
 MUST NOT use this skill for README pitch, story, or counsel prose (Consilium `revise-flow` owns those). MUST NOT invent HTTP, CLI, UI, or pipeline surface the catalog does not name.
 
+The human architecture brief at `docs/architecture/typology.md` is a separate
+reviewed projection owned by the repository. Run `typology architecture REPO`
+after the catalog is confirmed. In a multi-module repository it only inspects
+the modules listed in `scope.modules`, not every module in `go.work`. It compares
+catalog intent with observed Go topology and lists
+findings, but it does not decide whether a design is correct. Read each
+finding, fix the code or catalog when appropriate, and record unresolved
+boundary debt in the journey file. Remove the generated marker only after a
+human accepts the explanation.
+
 ## When to load
 
 - Journey Status.phase is `docs`

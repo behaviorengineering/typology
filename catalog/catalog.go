@@ -2,6 +2,7 @@ package catalog
 
 import (
 	"fmt"
+	"path"
 	"sort"
 	"strings"
 )
@@ -127,6 +128,7 @@ func DefaultDocCluster(s Slice, docsRoot string) DocCluster {
 // ValidateStructure checks ids and cross references without touching the repo.
 func (t Typology) ValidateStructure() []Issue {
 	var issues []Issue
+	issues = append(issues, validateScope(t.Scope)...)
 	seenSlice := map[string]struct{}{}
 	seenComp := map[string]string{}
 	for _, s := range t.Slices {
@@ -208,6 +210,33 @@ func (t Typology) ValidateStructure() []Issue {
 				})
 			}
 		}
+	}
+	return issues
+}
+
+func validateScope(scope Scope) []Issue {
+	var issues []Issue
+	seen := map[string]struct{}{}
+	for _, raw := range scope.Modules {
+		module := strings.TrimSpace(raw)
+		if module == "" {
+			issues = append(issues, Issue{Message: "scope module path is empty"})
+			continue
+		}
+		normalized := path.Clean(strings.ReplaceAll(module, `\`, "/"))
+		if strings.HasPrefix(normalized, "/") || normalized == ".." || strings.HasPrefix(normalized, "../") {
+			issues = append(issues, Issue{Message: fmt.Sprintf("scope module path %q must stay within the repository", raw)})
+			continue
+		}
+		if strings.Contains(normalized, ":") {
+			issues = append(issues, Issue{Message: fmt.Sprintf("scope module path %q must be repository-relative", raw)})
+			continue
+		}
+		if _, ok := seen[normalized]; ok {
+			issues = append(issues, Issue{Message: fmt.Sprintf("duplicate scope module %q", normalized)})
+			continue
+		}
+		seen[normalized] = struct{}{}
 	}
 	return issues
 }

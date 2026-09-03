@@ -10,14 +10,14 @@ description: >-
 
 # Typology CLI
 
-**Moral:** Discover drafts. A human confirms slice names. Emit writes docs only where the `<!-- typology:generated -->` marker is present. Validate fail-closes. Remediate scopes the agent to one slice.
+**Moral:** Discover drafts. A human confirms slice names. One repository owns one catalog and its architecture docs. In a multi-module workspace, `scope.modules` is authoritative and `go.work` does not widen the scan. Emit writes docs only where the `<!-- typology:generated -->` marker is present. Validate fail-closes. Remediate scopes the agent to one slice.
 
 **Binary:** `make build` → `./bin/typology` · **Catalog skill:** [catalog/SKILL.md](../catalog/SKILL.md) (load first when the YAML shape is in doubt) · **First map:** [journey/SKILL.md](../journey/SKILL.md) · **DocPages:** [docs/SKILL.md](../docs/SKILL.md)
 
 ## When to load
 
 - First catalog on a Go module (load [journey/SKILL.md](../journey/SKILL.md) first; this skill is the command layer)
-- Refreshing DocPage skeletons under `docs/develop`
+- Refreshing DocPage skeletons under `docs/develop` or the human architecture brief
 - `typology validate` failures (missing path, import, or doc page)
 - Scoping a fix to one slice (`remediate`)
 
@@ -25,11 +25,12 @@ description: >-
 
 ```text
 typology init REPO [--module PATH] [--version VERSION]
-typology discover REPO [--out PATH] [--docs-root PATH] [--suggest-merges]
+typology discover REPO [--module PATH] [--out PATH] [--docs-root PATH] [--suggest-merges]
 typology emit REPO [--catalog PATH] [--docs-only] [--go-only]
-typology validate REPO [--catalog PATH] [SLICE]
-typology show [SLICE|graph] [--json] [--catalog PATH]
-typology remediate REPO SLICE [--catalog PATH]
+typology architecture REPO [--module PATH] [--catalog PATH] [--out PATH]
+typology validate REPO [--module PATH] [--catalog PATH] [SLICE]
+typology show [SLICE|graph] [--module PATH] [--json] [--catalog PATH]
+typology remediate REPO SLICE [--module PATH] [--catalog PATH]
 typology version
 ```
 
@@ -38,13 +39,14 @@ Default catalog: `REPO/.typology/typology.yaml`. `discover` writes its draft to 
 ## Steps
 
 1. **Bootstrap (Consumer)**: before the first Typology command in a consuming Go module, run `go run github.com/behaviorengineering/typology/cmd/typology@v0.0.5 init REPO`. This adds the CLI to the selected module's `tool` directives and verifies `go tool typology version`. Pass `--module PATH` for a multi-module workspace; MUST NOT guess which module to change.
-2. **Discover (Inventory)**: on a first map, follow [journey/SKILL.md](../journey/SKILL.md) (`typology discover REPO --suggest-merges`, which writes the draft to `REPO/tmp/typology/typology.yaml`). Raw discover writes a package-level draft; MUST NOT treat 1:1 package clusters as final slice names.
+2. **Discover (Inventory)**: on a first map, follow [journey/SKILL.md](../journey/SKILL.md) (`typology discover REPO --suggest-merges`, which writes the draft to `REPO/tmp/typology/typology.yaml`). For a multi-module workspace with no confirmed catalog scope, pass `--module PATH`; MUST NOT scan every `go.work` module by accident. Raw discover writes a package-level draft; MUST NOT treat 1:1 package clusters as final slice names.
 3. **Cluster Pass (Domain Consolidation)**: run `typology show graph REPO` to inspect coupling metrics, hubs, and merge suggestions. Consolidate companion packages, job families, and sequential pipeline stages into true bounded contexts. Get operator approval on candidate clusters before slice-walk.
 4. **Confirm (Slice Walk)**: operator accepts or renames consolidated slices and bindings (one slice per turn). MUST NOT emit or validate-as-done on unconfirmed names when this is a first map.
 5. **Emit**: `typology emit REPO` writes catalog YAML (unless `--docs-only`), `.typology/README.md` (agent guidance), `.typology/tools.yaml` from CLI `opRuns`, ensures `AGENTS.md` points at `.typology/README.md`, a slice README hub, DocPage skeletons (unless `--go-only`), and program leaves. MUST NOT overwrite a doc page that exists and lacks `<!-- typology:generated -->`. On a first map, load [docs/SKILL.md](../docs/SKILL.md) after emit (journey phase `docs`). Default `docs.pages` follows surfaces and opRuns; MUST NOT treat six missing files per slice as architecture failure.
-6. **Fill catalog** — add subprograms, actuators, opRuns, bindings per [catalog/SKILL.md](../catalog/SKILL.md). Every subprogram and actuator MUST have a non-empty `objective`. Owned paths MUST exist as directories.
-7. **Validate** — `typology validate REPO` (optional slice id). MUST fix every issue. MUST NOT ignore import or missing-path findings.
-8. **Remediate** — `typology remediate REPO SLICE` when the job is one slice. MUST follow the returned `protocol`. MUST NOT refactor other slices in that pass.
+6. **Architecture brief**: `typology architecture REPO` writes `docs/architecture/typology.md`, combining catalog intent with observed Go topology and validation findings within `scope.modules`. Read it as a human diagnostic projection, not as a second source of truth. Have an agent or architect fix each finding or record the boundary debt in the journey file. The command preserves a report after its generated marker is removed.
+7. **Fill catalog** — add subprograms, actuators, opRuns, bindings per [catalog/SKILL.md](../catalog/SKILL.md). Every subprogram and actuator MUST have a non-empty `objective`. Owned paths MUST exist as directories.
+8. **Validate** — `typology validate REPO` (optional slice id). MUST fix every issue. MUST NOT ignore import or missing-path findings.
+9. **Remediate** — `typology remediate REPO SLICE` when the job is one slice. MUST follow the returned `protocol`. MUST NOT refactor other slices in that pass.
 
 ## Core constraints
 
@@ -121,6 +123,10 @@ rep, err := remediate.Run(remediate.Options{RepoRoot: repo, Catalog: t, SliceID:
       Method: validate DocPage and program-page findings
       Pass: none
       Fail: STOP, emit or create the file
+- [ ] **Architecture brief:** the generated brief was reviewed and each finding was fixed or recorded as boundary debt
+      Method: read `docs/architecture/typology.md`, confirm its inspected modules, and review the journey debt table
+      Pass: no unexplained findings
+      Fail: STOP, assign or record each finding
 - [ ] **Remediate scope:** if `remediate` ran, diff is limited to that slice's owned paths
       Method: git diff paths vs slice `owns`
       Pass: no extra packages

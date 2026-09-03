@@ -2,8 +2,11 @@
 package gorepo
 
 import (
+	"fmt"
 	"os"
+	"path"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	terrors "github.com/behaviorengineering/typology/errors"
@@ -98,6 +101,95 @@ func Modules(repoRoot string) ([]Module, error) {
 	}
 	return nil, terrors.New(terrors.CodeNotFound, "gorepo.Modules", "go.work or go.mod not found").
 		With("repo", abs)
+}
+
+// ResolveModules selects the modules Typology should inspect. An explicit
+// override selects one module; otherwise configured contains the catalog's
+// repository-relative scope. An unscoped multi-module workspace fails closed.
+func ResolveModules(repoRoot string, configured []string, override string) ([]Module, error) {
+	modules, err := Modules(repoRoot)
+	if err != nil {
+		return nil, err
+	}
+	selectors := append([]string(nil), configured...)
+	if strings.TrimSpace(override) != "" {
+		selectors = []string{override}
+	}
+	if len(selectors) == 0 {
+		if len(modules) == 1 {
+			return modules, nil
+		}
+		return nil, terrors.New(terrors.CodeInvalid, "gorepo.ResolveModules", "multiple Go modules found; declare scope.modules or pass --module").
+			With("modules", moduleNames(modules))
+	}
+	if strings.TrimSpace(override) == "" {
+		for _, selector := range selectors {
+			if err := validateScopeSelector(selector); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	selected := make([]Module, 0, len(selectors))
+	seen := map[string]struct{}{}
+	for _, raw := range selectors {
+		selector := strings.TrimSpace(raw)
+		if selector == "" {
+			return nil, terrors.New(terrors.CodeInvalid, "gorepo.ResolveModules", "module selector is empty")
+		}
+		module, ok := findModule(modules, selector)
+		if !ok {
+			return nil, terrors.New(terrors.CodeNotFound, "gorepo.ResolveModules", "module selector did not match a workspace module").
+				With("selector", selector).
+				With("modules", moduleNames(modules))
+		}
+		if _, ok := seen[module.Rel]; ok {
+			return nil, terrors.New(terrors.CodeInvalid, "gorepo.ResolveModules", "duplicate module selector").
+				With("selector", selector)
+		}
+		seen[module.Rel] = struct{}{}
+		selected = append(selected, module)
+	}
+	sort.Slice(selected, func(i, j int) bool {
+		return selected[i].Rel < selected[j].Rel
+	})
+	return selected, nil
+}
+
+func validateScopeSelector(raw string) error {
+	selector := strings.TrimSpace(raw)
+	normalized := path.Clean(strings.ReplaceAll(selector, `\`, "/"))
+	if selector == "" {
+		return terrors.New(terrors.CodeInvalid, "gorepo.ResolveModules", "module selector is empty")
+	}
+	if strings.HasPrefix(normalized, "/") || normalized == ".." || strings.HasPrefix(normalized, "../") || strings.Contains(normalized, ":") {
+		return terrors.New(terrors.CodeInvalid, "gorepo.ResolveModules", "catalog module scope must be repository-relative").
+			With("selector", raw)
+	}
+	return nil
+}
+
+func findModule(modules []Module, selector string) (Module, bool) {
+	normalized := filepath.ToSlash(strings.TrimPrefix(selector, "./"))
+	if normalized == "" {
+		normalized = "."
+	}
+	for _, module := range modules {
+		if normalized == filepath.ToSlash(module.Rel) ||
+			normalized == filepath.ToSlash(module.Path) ||
+			filepath.Clean(selector) == filepath.Clean(module.Dir) {
+			return module, true
+		}
+	}
+	return Module{}, false
+}
+
+func moduleNames(modules []Module) string {
+	names := make([]string, 0, len(modules))
+	for _, module := range modules {
+		names = append(names, fmt.Sprintf("%s (%s)", module.Rel, module.Path))
+	}
+	return strings.Join(names, ", ")
 }
 
 // ReadModulePath returns the module line from a go.mod file.

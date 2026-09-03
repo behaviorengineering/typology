@@ -99,6 +99,59 @@ func TestCLI_architecture_writesReport(t *testing.T) {
 	}
 }
 
+func TestCLI_architecture_requiresScope(t *testing.T) {
+	t.Parallel()
+	repo := t.TempDir()
+	mustWrite(t, filepath.Join(repo, "go.work"), "go 1.26.5\n\nuse (\n\t./engine\n\t./lib\n)\n")
+	mustWrite(t, filepath.Join(repo, "engine", "go.mod"), "module example.com/ws/engine\n\ngo 1.26.5\n")
+	mustWrite(t, filepath.Join(repo, "engine", "svc", "svc.go"), "package svc\n")
+	mustWrite(t, filepath.Join(repo, "lib", "go.mod"), "module example.com/ws/lib\n\ngo 1.26.5\n")
+	mustWrite(t, filepath.Join(repo, "lib", "widget", "widget.go"), "package widget\n")
+	mustWrite(t, filepath.Join(repo, ".typology", "typology.yaml"), "id: workspace\nslices: []\n")
+
+	var out, errOut bytes.Buffer
+	code := cli.Run([]string{"architecture", repo}, nil, &out, &errOut)
+	if code != 1 {
+		t.Fatalf("exit=%d, want 1; stderr=%s", code, errOut.String())
+	}
+	if !strings.Contains(errOut.String(), "declare scope.modules or pass --module") {
+		t.Fatalf("stderr=%q", errOut.String())
+	}
+}
+
+func TestCLI_architecture_moduleOverride(t *testing.T) {
+	t.Parallel()
+	repo := t.TempDir()
+	mustWrite(t, filepath.Join(repo, "go.work"), "go 1.26.5\n\nuse (\n\t./engine\n\t./lib\n)\n")
+	mustWrite(t, filepath.Join(repo, "engine", "go.mod"), "module example.com/ws/engine\n\ngo 1.26.5\n")
+	mustWrite(t, filepath.Join(repo, "engine", "svc", "svc.go"), "package svc\n\nfunc Run() {}\n")
+	mustWrite(t, filepath.Join(repo, "lib", "go.mod"), "module example.com/ws/lib\n\ngo 1.26.5\n")
+	mustWrite(t, filepath.Join(repo, "lib", "widget", "widget.go"), "package widget\n")
+	mustWrite(t, filepath.Join(repo, ".typology", "typology.yaml"), `id: workspace
+slices:
+  - id: service
+    objective: Run the service.
+    owns:
+      - id: service-package
+        path: engine/svc
+        layer: domain
+`)
+	outPath := filepath.Join(repo, "architecture.md")
+
+	var out, errOut bytes.Buffer
+	code := cli.Run([]string{"architecture", repo, "--module", "engine", "--out", outPath}, nil, &out, &errOut)
+	if code != 0 {
+		t.Fatalf("exit=%d stderr=%s", code, errOut.String())
+	}
+	data, err := os.ReadFile(outPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "- `engine`") {
+		t.Fatalf("report missing selected module: %s", data)
+	}
+}
+
 func TestCLI_discover_defaultDraftPath(t *testing.T) {
 	t.Parallel()
 	repo := t.TempDir()

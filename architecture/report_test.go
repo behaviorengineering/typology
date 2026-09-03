@@ -45,6 +45,13 @@ func TestBuildAndRenderMarkdown(t *testing.T) {
 			t.Fatalf("rendered report missing %q:\n%s", want, body)
 		}
 	}
+	bodyAgain, err := architecture.RenderMarkdown(report)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bodyAgain != body {
+		t.Fatal("rendered report is not deterministic")
+	}
 }
 
 func TestBuildReportsUnmappedPackage(t *testing.T) {
@@ -74,6 +81,82 @@ func TestBuildReportsUnmappedPackage(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("expected unmapped package finding, got %+v", report.Findings)
+	}
+}
+
+func TestBuildHonorsCatalogScope(t *testing.T) {
+	t.Parallel()
+	repo := t.TempDir()
+	mustWrite(t, filepath.Join(repo, "go.work"), "go 1.26.5\n\nuse (\n\t./engine\n\t./lib\n)\n")
+	mustWrite(t, filepath.Join(repo, "engine", "go.mod"), "module example.com/ws/engine\n\ngo 1.26.5\n")
+	mustWrite(t, filepath.Join(repo, "engine", "svc", "svc.go"), "package svc\n")
+	mustWrite(t, filepath.Join(repo, "lib", "go.mod"), "module example.com/ws/lib\n\ngo 1.26.5\n")
+	mustWrite(t, filepath.Join(repo, "lib", "widget", "widget.go"), "package widget\n")
+
+	report, err := architecture.Build(architecture.BuildOptions{
+		RepoRoot: repo,
+		Catalog: catalog.Typology{
+			ID:    "workspace",
+			Scope: catalog.Scope{Modules: []string{"engine"}},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(report.Modules) != 1 || report.Modules[0] != "engine" {
+		t.Fatalf("report modules = %+v, want [engine]", report.Modules)
+	}
+	if _, ok := report.Graph.Nodes["./lib/widget"]; ok {
+		t.Fatalf("out-of-scope package appeared in report: %+v", report.Graph.Nodes)
+	}
+	body, err := architecture.RenderMarkdown(report)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(body, "- `engine`") {
+		t.Fatalf("report does not name inspected module:\n%s", body)
+	}
+}
+
+func TestBuildReportsForbiddenBinding(t *testing.T) {
+	t.Parallel()
+	repo := filepath.Join("..", "testdata", "tiny-module")
+	typ, err := catalog.LoadYAML(filepath.Join(repo, ".typology", "typology.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	typ.ComponentBindings = []catalog.ComponentBinding{{
+		From: "billing-store",
+		To:   "ledger-core",
+		Rule: catalog.BindingMustNot,
+	}}
+
+	report, err := architecture.Build(architecture.BuildOptions{
+		RepoRoot: repo,
+		Catalog:  typ,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, finding := range report.Findings {
+		if strings.Contains(finding.Message, "forbidden") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected forbidden binding finding, got %+v", report.Findings)
+	}
+}
+
+func mustWrite(t *testing.T, path, content string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
 	}
 }
 

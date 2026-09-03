@@ -20,6 +20,8 @@ import (
 type Options struct {
 	RepoRoot string
 	DocsRoot string
+	Modules  []string
+	Module   string
 }
 
 // Result is a proposed typology draft.
@@ -41,7 +43,7 @@ func Run(opts Options) (Result, error) {
 		return Result{}, terrors.Wrap(err, terrors.CodeInvalid, "discover.Run", "abs repo").
 			With("repo", repo)
 	}
-	modules, err := gorepo.Modules(absRepo)
+	modules, err := gorepo.ResolveModules(absRepo, opts.Modules, opts.Module)
 	if err != nil {
 		return Result{}, terrors.Wrap(err, terrors.CodeFailedPrecondition, "discover.Run", "resolve modules")
 	}
@@ -49,7 +51,7 @@ func Run(opts Options) (Result, error) {
 	if err != nil {
 		return Result{}, terrors.Wrap(err, terrors.CodeUnavailable, "discover.Run", "list packages")
 	}
-	graph, err := ImportGraph(absRepo)
+	graph, err := ImportGraphInModules(absRepo, modules)
 	if err != nil {
 		return Result{}, terrors.Wrap(err, terrors.CodeUnavailable, "discover.Run", "build import graph")
 	}
@@ -135,6 +137,7 @@ func Run(opts Options) (Result, error) {
 
 	t := catalog.Typology{
 		ID:                filepath.Base(absRepo),
+		Scope:             catalog.Scope{Modules: moduleRels(modules)},
 		Slices:            slices,
 		SliceBindings:     sliceBindings,
 		ComponentBindings: compBindings,
@@ -156,9 +159,19 @@ func ImportGraph(repoRoot string) (map[string][]string, error) {
 		return nil, terrors.Wrap(err, terrors.CodeInvalid, "discover.ImportGraph", "abs repo").
 			With("repo", repoRoot)
 	}
-	modules, err := gorepo.Modules(absRepo)
+	modules, err := gorepo.ResolveModules(absRepo, nil, "")
 	if err != nil {
 		return nil, terrors.Wrap(err, terrors.CodeFailedPrecondition, "discover.ImportGraph", "resolve modules")
+	}
+	return ImportGraphInModules(absRepo, modules)
+}
+
+// ImportGraphInModules returns import edges for the selected modules.
+func ImportGraphInModules(repoRoot string, modules []gorepo.Module) (map[string][]string, error) {
+	_, err := filepath.Abs(repoRoot)
+	if err != nil {
+		return nil, terrors.Wrap(err, terrors.CodeInvalid, "discover.ImportGraphInModules", "abs repo").
+			With("repo", repoRoot)
 	}
 	local := map[string]string{}
 	type pkgRef struct {
@@ -224,6 +237,15 @@ func listPackages(modules []gorepo.Module) ([]string, error) {
 	}
 	sort.Strings(pkgs)
 	return pkgs, nil
+}
+
+func moduleRels(modules []gorepo.Module) []string {
+	rels := make([]string, 0, len(modules))
+	for _, module := range modules {
+		rels = append(rels, filepath.ToSlash(module.Rel))
+	}
+	sort.Strings(rels)
+	return rels
 }
 
 func listPackagesInModule(modRoot string) ([]string, error) {
@@ -408,6 +430,15 @@ type GraphSummary struct {
 // AnalyzeGraph analyzes package import topology from a repo root.
 func AnalyzeGraph(repoRoot string) (GraphSummary, error) {
 	graph, err := ImportGraph(repoRoot)
+	if err != nil {
+		return GraphSummary{}, err
+	}
+	return BuildGraphSummary(graph), nil
+}
+
+// AnalyzeGraphInModules analyzes topology for the selected modules.
+func AnalyzeGraphInModules(repoRoot string, modules []gorepo.Module) (GraphSummary, error) {
+	graph, err := ImportGraphInModules(repoRoot, modules)
 	if err != nil {
 		return GraphSummary{}, err
 	}

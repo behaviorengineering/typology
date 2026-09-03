@@ -69,9 +69,16 @@ var DefaultDocPageKinds = []DocPageKind{
 // Typology is the whole architecture map.
 type Typology struct {
 	ID                string             `json:"id" yaml:"id"`
+	Scope             Scope              `json:"scope,omitempty" yaml:"scope,omitempty"`
 	Slices            []Slice            `json:"slices" yaml:"slices"`
 	SliceBindings     []SliceBinding     `json:"sliceBindings,omitempty" yaml:"sliceBindings,omitempty"`
 	ComponentBindings []ComponentBinding `json:"componentBindings,omitempty" yaml:"componentBindings,omitempty"`
+}
+
+// Scope identifies the repository-local Go modules covered by a catalog.
+// Modules are relative paths such as "." or "engine".
+type Scope struct {
+	Modules []string `json:"modules,omitempty" yaml:"modules,omitempty"`
 }
 
 // Slice is one bounded context with a required business objective.

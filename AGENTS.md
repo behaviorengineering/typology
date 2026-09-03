@@ -4,6 +4,8 @@ This module is a Go library and CLI. Humans read [README.md](README.md).
 
 Typology guides agents on how to put code together: slices are bounded contexts, components are packages, bindings are allowed couplings. It is not a police tool for every edit. Day-to-day: update the catalog first, implement to match it, then validate.
 
+One repository owns one Typology catalog and its architecture documentation. In a multi-module repository, `go.work` is dependency context, not Typology scope. The catalog's `scope.modules` list is authoritative; do not run a workspace-wide scan without an explicit scope.
+
 **Load these skills before you write a catalog, call the library, or run the CLI:**
 
 1. [skills/README.md](skills/README.md) (index)
@@ -32,7 +34,7 @@ go tool typology version
 
 `init` updates the selected consumer module's `go.mod` and `go.sum`. It does not add the CLI to application imports or binaries. If `go.work` covers more than one module, pass the module path with `--module`; the command fails rather than choosing one.
 
-After emit, agents in that repo start at `AGENTS.md` → `.typology/README.md` → skills. Full layout: [README.md](README.md) § Consumer setup.
+After emit, agents in that repo start at `AGENTS.md` → `.typology/README.md` → skills. Full layout: [README.md](README.md) § Consumer setup. Use `--module PATH` only for first-map or focused runs; it does not transfer catalog ownership between repositories.
 
 ## Optional: symlink into your host
 
