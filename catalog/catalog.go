@@ -138,6 +138,12 @@ func (t Typology) ValidateStructure() []Issue {
 			issues = append(issues, Issue{Slice: s.ID, Message: "duplicate slice id"})
 		}
 		seenSlice[s.ID] = struct{}{}
+		if strings.TrimSpace(s.Objective) == "" {
+			issues = append(issues, Issue{
+				Slice:   s.ID,
+				Message: "missing objective",
+			})
+		}
 		for _, c := range s.Owns {
 			if c.ID == "" {
 				issues = append(issues, Issue{Slice: s.ID, Message: "component with empty id"})

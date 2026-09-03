@@ -74,11 +74,11 @@ type Typology struct {
 	ComponentBindings []ComponentBinding `json:"componentBindings,omitempty" yaml:"componentBindings,omitempty"`
 }
 
-// Slice is one bounded context.
+// Slice is one bounded context with a required business objective.
 type Slice struct {
 	ID          string       `json:"id" yaml:"id"`
 	Route       string       `json:"route,omitempty" yaml:"route,omitempty"`
-	Objective   string       `json:"objective,omitempty" yaml:"objective,omitempty"`
+	Objective   string       `json:"objective" yaml:"objective"`
 	Must        []string     `json:"must,omitempty" yaml:"must,omitempty"`
 	MustNot     []string     `json:"mustNot,omitempty" yaml:"mustNot,omitempty"`
 	Success     string       `json:"success,omitempty" yaml:"success,omitempty"`
@@ -93,9 +93,9 @@ type Slice struct {
 // Surface is a built interaction artefact (UI, CLI, or API) that owns packages.
 // Nested components carry id and path only; kind lives on the surface.
 type Surface struct {
-	ID         string      `json:"id" yaml:"id"`
+	ID         string          `json:"id" yaml:"id"`
 	Kind       InteractionKind `json:"kind" yaml:"kind"`
-	Components []Component `json:"components,omitempty" yaml:"components,omitempty"`
+	Components []Component     `json:"components,omitempty" yaml:"components,omitempty"`
 }
 
 // Component is a package (or equivalent) inside a slice.

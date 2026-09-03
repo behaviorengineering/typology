@@ -8,7 +8,8 @@ import (
 
 func billingFixtureSlice() catalog.Slice {
 	return catalog.Slice{
-		ID: "billing",
+		ID:        "billing",
+		Objective: "Operate billing records for fixture tests.",
 		Owns: []catalog.Component{
 			{ID: "billing-store", Path: "internal/billing/store", Layer: catalog.LayerDomain},
 		},
@@ -59,13 +60,40 @@ func TestValidateStructure_ok(t *testing.T) {
 		t.Fatal("expected structure issues")
 	}
 	typ.Slices = append(typ.Slices, catalog.Slice{
-		ID: "ledger",
+		ID:        "ledger",
+		Objective: "Maintain the ledger for fixture tests.",
 		Owns: []catalog.Component{
 			{ID: "ledger-core", Path: "internal/ledger", Layer: catalog.LayerDomain},
 		},
 	})
 	if issues := typ.ValidateStructure(); len(issues) != 0 {
 		t.Fatalf("unexpected issues: %v", issues)
+	}
+}
+
+func TestValidateStructure_requiresSliceObjective(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name      string
+		objective string
+	}{
+		{name: "empty", objective: ""},
+		{name: "whitespace", objective: " \t"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			typ := catalog.Typology{
+				ID: "tiny",
+				Slices: []catalog.Slice{{
+					ID:        "billing",
+					Objective: tt.objective,
+				}},
+			}
+			if !hasIssue(typ.ValidateStructure(), "missing objective") {
+				t.Fatalf("expected missing slice objective issue, got %v", typ.ValidateStructure())
+			}
+		})
 	}
 }
 

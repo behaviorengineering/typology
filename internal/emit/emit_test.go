@@ -1,6 +1,7 @@
 package emit_test
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,16 +11,92 @@ import (
 	"github.com/behaviorengineering/typology/internal/emit"
 )
 
+func TestEmit_agentsPointer(t *testing.T) {
+	t.Parallel()
+	repo := t.TempDir()
+	src := filepath.Join("..", "..", "testdata", "tiny-module")
+	typ, err := catalog.LoadYAML(filepath.Join(src, ".typology", "typology.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := emit.Run(emit.Options{RepoRoot: repo, Catalog: typ, GoOnly: true}); err != nil {
+		t.Fatal(err)
+	}
+	agentsPath := filepath.Join(repo, "AGENTS.md")
+	agents, err := os.ReadFile(agentsPath)
+	if err != nil {
+		t.Fatalf("AGENTS.md not written: %v", err)
+	}
+	if !strings.Contains(string(agents), "typology:generated") || !strings.Contains(string(agents), ".typology/README.md") {
+		t.Fatalf("AGENTS.md missing typology pointer: %s", agents)
+	}
+
+	// Running emit again should not duplicate the pointer.
+	if err := emit.Run(emit.Options{RepoRoot: repo, Catalog: typ, GoOnly: true}); err != nil {
+		t.Fatal(err)
+	}
+	agents2, err := os.ReadFile(agentsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Count(agents2, []byte("typology:generated")) != 1 {
+		t.Fatalf("AGENTS.md pointer duplicated: %s", agents2)
+	}
+
+	// A pre-existing AGENTS.md without the marker gets the section appended.
+	repo2 := t.TempDir()
+	if err := os.WriteFile(filepath.Join(repo2, "AGENTS.md"), []byte("# Custom Agents\n\nLocal notes.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := emit.Run(emit.Options{RepoRoot: repo2, Catalog: typ, GoOnly: true}); err != nil {
+		t.Fatal(err)
+	}
+	agents3, err := os.ReadFile(filepath.Join(repo2, "AGENTS.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(agents3), "Local notes.") {
+		t.Fatalf("existing AGENTS.md content lost: %s", agents3)
+	}
+	if !strings.Contains(string(agents3), ".typology/README.md") {
+		t.Fatalf("AGENTS.md pointer not appended: %s", agents3)
+	}
+}
+
 func TestEmit_docs(t *testing.T) {
 	t.Parallel()
 	repo := t.TempDir()
 	src := filepath.Join("..", "..", "testdata", "tiny-module")
-	typ, err := catalog.LoadYAML(filepath.Join(src, "architecture", "typology.yaml"))
+	typ, err := catalog.LoadYAML(filepath.Join(src, ".typology", "typology.yaml"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := emit.Run(emit.Options{RepoRoot: repo, Catalog: typ, GoOnly: true}); err != nil {
 		t.Fatal(err)
+	}
+	catalogPath := filepath.Join(repo, ".typology", "typology.yaml")
+	if _, err := os.Stat(catalogPath); err != nil {
+		t.Fatalf("catalog not written to %s: %v", catalogPath, err)
+	}
+	typologyReadmePath := filepath.Join(repo, ".typology", "README.md")
+	typologyReadme, err := os.ReadFile(typologyReadmePath)
+	if err != nil {
+		t.Fatalf(".typology readme not written: %v", err)
+	}
+	if !strings.Contains(string(typologyReadme), "typology:generated") || !strings.Contains(string(typologyReadme), "typology-cli") {
+		t.Fatalf(".typology readme missing agent instructions: %s", typologyReadme)
+	}
+	toolsPath := filepath.Join(repo, ".typology", "tools.yaml")
+	tools, err := os.ReadFile(toolsPath)
+	if err != nil {
+		t.Fatalf("tools index not written: %v", err)
+	}
+	toolsBody := string(tools)
+	if !strings.Contains(toolsBody, `command: "billing mint-invoice"`) ||
+		!strings.Contains(toolsBody, `summary: "Mint an invoice record from a store request."`) ||
+		!strings.Contains(toolsBody, `actuates: "invoice-webhook"`) {
+		t.Fatalf("tools index missing expected entries: %s", toolsBody)
 	}
 	if err := emit.Run(emit.Options{RepoRoot: repo, Catalog: typ, DocsOnly: true}); err != nil {
 		t.Fatal(err)

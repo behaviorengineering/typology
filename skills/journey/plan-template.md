@@ -2,7 +2,7 @@
 
 Working session for mapping this Go module. The agent Reads this file first, updates it every turn, and waits at each human gate. Commands: `typology discover|emit|validate|show`. Skills: `typology-journey`, `typology-cli`, `typology-catalog`, `typology-docs`.
 
-Copy this template to `architecture/typology-journey.md` in the consumer repo. Do not treat a filled copy as a skill.
+Copy this template to `.typology/typology-journey.md` in the consumer repo. Do not treat a filled copy as a skill.
 
 ## Resume
 
@@ -17,8 +17,8 @@ Copy this template to `architecture/typology-journey.md` in the consumer repo. D
 | Repo | `REPO` |
 | Started | `YYYY-MM-DD` |
 | Phase | `land` |
-| Draft catalog | `architecture/typology.draft.yaml` |
-| Confirmed catalog | `architecture/typology.yaml` (absent until commit) |
+| Draft catalog | `tmp/typology/typology.yaml` (default; override with `--out`) |
+| Confirmed catalog | `.typology/typology.yaml` (absent until commit) |
 
 Phase order: `land` → `situation-draft` → `cluster-pass` → `slice-walk` → `situation-freeze` → `desired` → `commit` → `docs` → `done`.
 
@@ -35,10 +35,10 @@ Phase order: `land` → `situation-draft` → `cluster-pass` → `slice-walk` �
 
 ## Situation draft
 
-- [ ] **Draft exists:** `architecture/typology.draft.yaml` is on disk
+- [ ] **Draft exists:** `tmp/typology/typology.yaml` is on disk
       Method: file present
       Pass: file exists
-      Fail: STOP, `typology discover REPO --out architecture/typology.draft.yaml` (or copy confirmed yaml to the draft path)
+      Fail: STOP, `typology discover REPO` (or copy confirmed yaml to the draft path)
 - [ ] **Inventory seeded:** raw packages and import graph captured
       Method: discover output or `typology show graph`
       Pass: package count and draft catalog available
@@ -121,7 +121,7 @@ Open decisions (add a row per unresolved reshape). Close a row when the draft YA
 
 ## Commit
 
-- [ ] **Catalog written:** draft copied to `architecture/typology.yaml`
+- [ ] **Catalog written:** draft copied to `.typology/typology.yaml`
       Method: files differ only if emit also updated docs; yaml matches the frozen desired draft
       Pass: confirmed catalog exists
       Fail: STOP, copy the draft
@@ -165,7 +165,7 @@ Architectural boundary violations and domain conflations identified during mappi
 |----|-----------------|----------------|------------------------------|--------|
 | | | | | open |
 
-Violation kinds: `false-aggregate-owner` | `ui-domain-conflation` | `unmapped-orphan` | `cross-slice-bypass` | `temporal-pipeline-slice`
+Violation kinds: `false-aggregate-owner` | `ui-domain-conflation` | `projection-as-slice` | `unmapped-orphan` | `cross-slice-bypass` | `temporal-pipeline-slice`
 
 ## Notes
 

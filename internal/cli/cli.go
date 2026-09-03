@@ -13,6 +13,7 @@ import (
 	"github.com/behaviorengineering/typology/internal/discover"
 	"github.com/behaviorengineering/typology/internal/emit"
 	"github.com/behaviorengineering/typology/internal/remediate"
+	"github.com/behaviorengineering/typology/internal/sourceindex"
 	"github.com/behaviorengineering/typology/validate"
 )
 
@@ -68,13 +69,17 @@ func defaultCatalogPath(repo string) string {
 	return filepath.Join(repo, filepath.FromSlash(catalog.DefaultCatalogRel))
 }
 
+func defaultDraftCatalogPath(repo string) string {
+	return filepath.Join(repo, filepath.FromSlash(catalog.DefaultDraftCatalogRel))
+}
+
 func runDiscover(args []string, stdout, stderr io.Writer) int {
 	repo, rest, ok := firstArg(args)
 	if !ok {
 		_, _ = fmt.Fprintln(stderr, "usage: typology discover REPO [--out PATH] [--docs-root PATH]")
 		return 2
 	}
-	out := defaultCatalogPath(repo)
+	out := defaultDraftCatalogPath(repo)
 	docsRoot := catalog.DefaultDocsRoot
 	suggestMerges := false
 	for i := 0; i < len(rest); i++ {
@@ -309,6 +314,11 @@ func runShow(args []string, stdout, stderr io.Writer) int {
 			return 0
 		}
 		printGraphSummary(stdout, summary)
+		if idx, err := sourceindex.Build(repo); err == nil {
+			printSourceSummary(stdout, idx)
+		} else {
+			_, _ = fmt.Fprintf(stderr, "show graph source index: %v\n", err)
+		}
 		return 0
 	}
 	s, ok := t.LookupSlice(sliceID)
@@ -422,4 +432,10 @@ func printGraphSummary(w io.Writer, s discover.GraphSummary) {
 		}
 		_, _ = fmt.Fprintln(w)
 	}
+}
+
+func printSourceSummary(w io.Writer, idx sourceindex.Index) {
+	_, _ = fmt.Fprintf(w, "Source evidence (AST):\n")
+	_, _ = fmt.Fprintf(w, "  - packages: %d\n", len(idx.Packages))
+	_, _ = fmt.Fprintf(w, "  - anchored packages: %d\n", idx.AnchoredPackages())
 }

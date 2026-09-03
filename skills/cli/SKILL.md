@@ -1,11 +1,11 @@
 ---
 name: typology-cli
 description: >-
-  Run the Typology CLI: discover a Go repo into architecture/typology.yaml,
-  emit doc skeletons, validate paths and imports, show a slice, remediate one
-  slice. Load when the user asks to discover, emit, validate, show, or remediate
-  a typology catalog, or when ValidateStructure is not enough and repo files
-  must be checked.
+  Run the Typology CLI: discover a Go repo into a draft catalog under
+  tmp/typology/typology.yaml, emit doc skeletons, validate paths and imports,
+  show a slice, remediate one slice. Load when the user asks to discover, emit,
+  validate, show, or remediate a typology catalog, or when ValidateStructure is
+  not enough and repo files must be checked.
 ---
 
 # Typology CLI
@@ -32,14 +32,14 @@ typology remediate REPO SLICE [--catalog PATH]
 typology version
 ```
 
-Default catalog: `REPO/architecture/typology.yaml`. `show` with no `--catalog` looks for that path or `typology.yaml` via `catalog.FindCatalog`. `show graph` displays the package import topology (in/out degrees, hubs, leaves, sole-importer merge candidates, stem collision warnings).
+Default catalog: `REPO/.typology/typology.yaml`. `discover` writes its draft to `REPO/tmp/typology/typology.yaml` unless `--out` overrides it. `show` with no `--catalog` looks for `.typology/typology.yaml` or `typology.yaml` via `catalog.FindCatalog`. `show graph` displays the package import topology (in/out degrees, hubs, leaves, sole-importer merge candidates, stem collision warnings).
 
 ## Steps
 
-1. **Discover (Inventory)**: on a first map, follow [journey/SKILL.md](../journey/SKILL.md) (`typology discover REPO --out architecture/typology.draft.yaml --suggest-merges`). Raw discover writes a package-level draft; MUST NOT treat 1:1 package clusters as final slice names.
+1. **Discover (Inventory)**: on a first map, follow [journey/SKILL.md](../journey/SKILL.md) (`typology discover REPO --suggest-merges`, which writes the draft to `REPO/tmp/typology/typology.yaml`). Raw discover writes a package-level draft; MUST NOT treat 1:1 package clusters as final slice names.
 2. **Cluster Pass (Domain Consolidation)**: run `typology show graph REPO` to inspect coupling metrics, hubs, and merge suggestions. Consolidate companion packages, job families, and sequential pipeline stages into true bounded contexts. Get operator approval on candidate clusters before slice-walk.
 3. **Confirm (Slice Walk)**: operator accepts or renames consolidated slices and bindings (one slice per turn). MUST NOT emit or validate-as-done on unconfirmed names when this is a first map.
-4. **Emit**: `typology emit REPO` writes catalog YAML (unless `--docs-only`), a slice README hub, DocPage skeletons (unless `--go-only`), and program leaves. MUST NOT overwrite a doc page that exists and lacks `<!-- typology:generated -->`. On a first map, load [docs/SKILL.md](../docs/SKILL.md) after emit (journey phase `docs`). Default `docs.pages` follows surfaces and opRuns; MUST NOT treat six missing files per slice as architecture failure.
+4. **Emit**: `typology emit REPO` writes catalog YAML (unless `--docs-only`), `.typology/README.md` (agent guidance), `.typology/tools.yaml` from CLI `opRuns`, ensures `AGENTS.md` points at `.typology/README.md`, a slice README hub, DocPage skeletons (unless `--go-only`), and program leaves. MUST NOT overwrite a doc page that exists and lacks `<!-- typology:generated -->`. On a first map, load [docs/SKILL.md](../docs/SKILL.md) after emit (journey phase `docs`). Default `docs.pages` follows surfaces and opRuns; MUST NOT treat six missing files per slice as architecture failure.
 5. **Fill catalog** — add subprograms, actuators, opRuns, bindings per [catalog/SKILL.md](../catalog/SKILL.md). Every subprogram and actuator MUST have a non-empty `objective`. Owned paths MUST exist as directories.
 6. **Validate** — `typology validate REPO` (optional slice id). MUST fix every issue. MUST NOT ignore import or missing-path findings.
 7. **Remediate** — `typology remediate REPO SLICE` when the job is one slice. MUST follow the returned `protocol`. MUST NOT refactor other slices in that pass.
@@ -56,7 +56,7 @@ Violation: STOP, fix the listed issues, re-run validate
 
 CORRECT: `typology validate .` with empty issue output after a catalog change
 
-PROHIBITED: editing `architecture/typology.yaml` and skipping validate
+PROHIBITED: editing `.typology/typology.yaml` and skipping validate
 
 **CONSTRAINT:** Emit MUST NOT clobber human docs. Pages without `<!-- typology:generated -->` stay untouched.
 
@@ -84,15 +84,15 @@ PROHIBITED: remediate `billing` then rewrite `internal/ledger` in the same pass
 
 **CONSTRAINT:** Discover is a draft. Slice ids from package clusters are proposals.
 
-- MUST: keep human-confirmed `architecture/typology.yaml` as source after the first confirm
+- MUST: keep human-confirmed `.typology/typology.yaml` as source after the first confirm
 - MUST NOT: re-discover over a confirmed catalog without an explicit replace request
 
-Enforcement: operator intent; `discover --out` default is `architecture/typology.yaml` (overwrites if you pass the same path)
+Enforcement: operator intent; `discover` default output is `tmp/typology/typology.yaml`, which never touches the confirmed catalog
 Violation: STOP, restore the confirmed catalog from git, discover to a temp `--out` if you need a diff
 
-CORRECT: `typology discover . --out /tmp/draft-typology.yaml` then merge by hand
+CORRECT: `typology discover .` writes the draft to `tmp/typology/typology.yaml`; review it, then copy or emit from `.typology/typology.yaml`
 
-PROHIBITED: `typology discover .` onto a confirmed catalog with no backup
+PROHIBITED: `typology discover . --out .typology/typology.yaml` onto a confirmed catalog with no backup
 
 ## Library equivalent
 

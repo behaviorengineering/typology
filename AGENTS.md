@@ -2,15 +2,28 @@
 
 This module is a Go library and CLI. Humans read [README.md](README.md).
 
+Typology guides agents on how to put code together: slices are bounded contexts, components are packages, bindings are allowed couplings. It is not a police tool for every edit. Day-to-day: update the catalog first, implement to match it, then validate.
+
 **Load these skills before you write a catalog, call the library, or run the CLI:**
 
 1. [skills/README.md](skills/README.md) (index)
-2. [skills/journey/SKILL.md](skills/journey/SKILL.md) (first map, onboard, resume `architecture/typology-journey.md`)
+2. [skills/journey/SKILL.md](skills/journey/SKILL.md) (first map, onboard, resume `.typology/typology-journey.md`)
 3. [skills/docs/SKILL.md](skills/docs/SKILL.md) (fill and evaluate develop DocPages and program leaves)
 4. [skills/catalog/SKILL.md](skills/catalog/SKILL.md) (model and YAML/Go catalog)
 5. [skills/cli/SKILL.md](skills/cli/SKILL.md) (discover, emit, validate, remediate)
 
-Worked catalog: [testdata/tiny-module/architecture/typology.yaml](testdata/tiny-module/architecture/typology.yaml). Types: [catalog/types.go](catalog/types.go).
+Worked catalog: [testdata/tiny-module/.typology/typology.yaml](testdata/tiny-module/.typology/typology.yaml). Types: [catalog/types.go](catalog/types.go).
+
+## Consumer repos (other libraries)
+
+When another Go library adopts Typology, `typology emit REPO` installs the same agent setup in that repo:
+
+- `.typology/typology.yaml` — confirmed catalog
+- `.typology/README.md` — skills, commands, catalog-first workflow
+- `AGENTS.md` — pointer to `.typology/README.md` (created or appended; keeps existing content)
+- `tmp/typology/` — discover drafts only
+
+After emit, agents in that repo start at `AGENTS.md` → `.typology/README.md` → skills. Full layout: [README.md](README.md) § Consumer setup.
 
 ## Optional: symlink into your host
 

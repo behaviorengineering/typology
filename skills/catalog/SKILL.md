@@ -3,7 +3,7 @@ name: typology-catalog
 description: >-
   Author Typology catalogs (YAML or catalog.Typology in Go): slices, components,
   surfaces, subprograms, actuators, opRuns, sliceBindings, componentBindings. Load when
-  writing architecture/typology.yaml, calling catalog.LoadYAML or SaveYAML, or
+  writing .typology/typology.yaml, calling catalog.LoadYAML or SaveYAML, or
   mapping a product contract onto the Typology model.
 ---
 
@@ -11,11 +11,11 @@ description: >-
 
 **Moral:** A slice is a bounded context. A component is a package. A surface is a built interaction artefact (UI, CLI, or API) that owns packages. A subprogram is a standing program. An opRun is one gated invocation. An actuator is a signal-triggered emit. Do not collapse those five.
 
-**Types:** `catalog/types.go` · **Fixture:** `testdata/tiny-module/architecture/typology.yaml` · **I/O:** `catalog.LoadYAML`, `catalog.SaveYAML`, `catalog.ValidateStructure`
+**Types:** `catalog/types.go` · **Fixture:** `testdata/tiny-module/.typology/typology.yaml` · **I/O:** `catalog.LoadYAML`, `catalog.SaveYAML`, `catalog.ValidateStructure`
 
 ## When to load
 
-- Adding or editing `architecture/typology.yaml` (or `typology.yaml` at repo root)
+- Adding or editing `.typology/typology.yaml` (or `typology.yaml` at repo root)
 - Building a `catalog.Typology` in Go and writing it with `SaveYAML`
 - Naming subprograms, actuators, opRuns, or bindings
 - A validate error about `runs`, `actuates`, `ownerComponent`, `signals`, or `emits`
@@ -25,7 +25,7 @@ description: >-
 | Type | Role |
 |------|------|
 | `Typology` | Whole map (`id`, `slices`, optional bindings) |
-| `Slice` | Bounded context (`owns`, `surfaces`, `opRuns`, `subprograms`, `actuators`, `docs`) |
+| `Slice` | Bounded context with a required business `objective` (`owns`, `surfaces`, `opRuns`, `subprograms`, `actuators`, `docs`) |
 | `Component` | Package path. Domain packages live on `owns[]`. Interaction packages live under a `Surface`. |
 | `Surface` | Built interaction artefact (`kind`: `ui`, `cli`, or `api`) with nested `components[]` (id + path only). |
 | `OpRun` | One gated invocation (CLI, HTTP, human, signal, or later schedule). Optional `runs` or `actuates`, not both. |
@@ -36,7 +36,33 @@ description: >-
 
 Gates: `auto` | `test` | `human`.
 
-Default catalog path: `architecture/typology.yaml`. Default docs root: `docs/develop`.
+Default catalog path: `.typology/typology.yaml`. Default docs root: `docs/develop`.
+
+**CONSTRAINT:** Every slice MUST set a non-empty `objective` that states the bounded context's business purpose.
+
+- MUST: write one plain-English objective clause for every slice
+- MUST NOT: omit `objective` or use a generic placeholder that gives no business purpose
+
+Enforcement: `catalog.ValidateStructure` (`missing objective`)
+Violation: STOP, write the slice's business why, then re-validate
+
+CORRECT:
+```yaml
+slices:
+  - id: billing
+    objective: Operate billing records for fixture tests.
+```
+
+PROHIBITED:
+```yaml
+slices:
+  - id: billing
+    owns:
+      - id: billing-store
+        path: internal/billing/store
+        layer: domain
+    # missing objective
+```
 
 ## Core constraints
 
@@ -262,7 +288,7 @@ owns:
 Enforcement: YAML/Go compile against `catalog` types; `ValidateStructure` unknown keys are dropped by YAML unmarshal (they never validate)
 Violation: STOP, rename to the typed fields, re-validate
 
-CORRECT: `input` / `output` / `store` / `runs` / `actuates` as in `testdata/tiny-module/architecture/typology.yaml`
+CORRECT: `input` / `output` / `store` / `runs` / `actuates` as in `testdata/tiny-module/.typology/typology.yaml`
 
 PROHIBITED: `mint: invoice` on a subprogram; `mints: invoice` on an opRun
 
@@ -277,12 +303,12 @@ Violation: STOP, fix issues, re-run validate
 ## Go library
 
 ```go
-t, err := catalog.LoadYAML("architecture/typology.yaml")
+t, err := catalog.LoadYAML(".typology/typology.yaml")
 if err != nil { return err }
 if issues := t.ValidateStructure(); len(issues) > 0 {
     return fmt.Errorf("catalog: %v", issues)
 }
-if err := catalog.SaveYAML("architecture/typology.yaml", t); err != nil {
+if err := catalog.SaveYAML(".typology/typology.yaml", t); err != nil {
     return err
 }
 ```

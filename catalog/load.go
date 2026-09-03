@@ -9,7 +9,12 @@ import (
 )
 
 // DefaultCatalogRel is the usual catalog path under a repo root.
-const DefaultCatalogRel = "architecture/typology.yaml"
+const DefaultCatalogRel = ".typology/typology.yaml"
+
+// DefaultDraftCatalogRel is the default draft catalog path written by discover.
+// It keeps discovery output out of the committed catalog directory until the
+// operator confirms the catalog.
+const DefaultDraftCatalogRel = "tmp/typology/typology.yaml"
 
 // DefaultDocsRoot is the usual per-slice docs prefix under a repo root.
 const DefaultDocsRoot = "docs/develop"
@@ -46,7 +51,7 @@ func SaveYAML(path string, t Typology) error {
 	return nil
 }
 
-// FindCatalog walks repoRoot for architecture/typology.yaml.
+// FindCatalog walks repoRoot for .typology/typology.yaml or a root typology.yaml.
 func FindCatalog(repoRoot string) (string, error) {
 	candidates := []string{
 		filepath.Join(repoRoot, filepath.FromSlash(DefaultCatalogRel)),

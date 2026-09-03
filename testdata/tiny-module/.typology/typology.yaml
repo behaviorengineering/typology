@@ -35,10 +35,12 @@ slices:
       - id: mint-invoice
         ownerComponent: billing-store
         gate: auto
+        cli: billing mint-invoice
         runs: invoice
       - id: push-invoice
         ownerComponent: billing-http
         gate: auto
+        cli: billing push-invoice
         actuates: invoice-webhook
     docs:
       pages:

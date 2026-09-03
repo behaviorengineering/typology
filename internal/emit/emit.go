@@ -1,8 +1,10 @@
 package emit
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"text/template"
 
@@ -23,6 +25,7 @@ var tmplFuncs = template.FuncMap{
 		}
 		return strings.Join(parts, ", ")
 	},
+	"yamlQuote": strconv.Quote,
 	"apiComponents": func(s catalog.Slice) []catalog.Component {
 		if surf, ok := s.SurfaceByKind(catalog.InteractionAPI); ok {
 			return surf.Components
@@ -63,6 +66,15 @@ func Run(opts Options) error {
 			return terrors.Wrap(err, terrors.CodeUnavailable, "emit.Run", "save catalog").
 				With("path", catalogPath)
 		}
+		if err := emitTypologyReadme(repo); err != nil {
+			return err
+		}
+		if err := emitAgentsPointer(repo); err != nil {
+			return err
+		}
+		if err := emitToolsIndex(repo, opts.Catalog); err != nil {
+			return err
+		}
 	}
 	if !opts.GoOnly {
 		for _, s := range opts.Catalog.Slices {
@@ -73,6 +85,93 @@ func Run(opts Options) error {
 		}
 	}
 	return nil
+}
+
+func emitTypologyReadme(repoRoot string) error {
+	body, err := renderGenerated("typology-readme", typologyReadmeTmpl, nil)
+	if err != nil {
+		return terrors.Wrap(err, terrors.CodeInternal, "emit.Run", "render typology readme")
+	}
+	return writeGenerated(repoRoot, ".typology/README.md", body)
+}
+
+func emitAgentsPointer(repoRoot string) error {
+	const marker = "<!-- typology:generated -->"
+	section := "\n" + marker + "\n\nFor guidance on architecture, code structure, and validation using Typology principles, load the skills listed in [.typology/README.md](.typology/README.md).\n"
+	fullFile := "# Agents\n" + section
+
+	abs := filepath.Join(repoRoot, "AGENTS.md")
+	existing, err := os.ReadFile(abs)
+	if err != nil && !os.IsNotExist(err) {
+		return terrors.Wrap(err, terrors.CodeUnavailable, "emit.emitAgentsPointer", "read AGENTS.md").
+			With("path", abs)
+	}
+	if os.IsNotExist(err) {
+		if err := os.WriteFile(abs, []byte(fullFile), 0o644); err != nil {
+			return terrors.Wrap(err, terrors.CodeUnavailable, "emit.emitAgentsPointer", "write AGENTS.md").
+				With("path", abs)
+		}
+		return nil
+	}
+	if bytes.Contains(existing, []byte(marker)) {
+		return nil
+	}
+	if len(existing) > 0 && existing[len(existing)-1] != '\n' {
+		existing = append(existing, '\n')
+	}
+	if err := os.WriteFile(abs, append(existing, []byte(section)...), 0o644); err != nil {
+		return terrors.Wrap(err, terrors.CodeUnavailable, "emit.emitAgentsPointer", "append AGENTS.md section").
+			With("path", abs)
+	}
+	return nil
+}
+
+func emitToolsIndex(repoRoot string, t catalog.Typology) error {
+	body, err := renderGenerated("tools", toolsTmpl, toolsData{
+		Typology: t.ID,
+		Tools:    cliTools(t),
+	})
+	if err != nil {
+		return terrors.Wrap(err, terrors.CodeInternal, "emit.emitToolsIndex", "render tools index")
+	}
+	return writeGeneratedWithMarker(repoRoot, ".typology/tools.yaml", body, "# typology:generated")
+}
+
+func cliTools(t catalog.Typology) []cliTool {
+	var tools []cliTool
+	for _, s := range t.Slices {
+		subprograms := make(map[string]string, len(s.Subprograms))
+		for _, sp := range s.Subprograms {
+			subprograms[sp.ID] = sp.Objective
+		}
+		actuators := make(map[string]string, len(s.Actuators))
+		for _, a := range s.Actuators {
+			actuators[a.ID] = a.Objective
+		}
+		for _, run := range s.OpRuns {
+			command := strings.TrimSpace(run.CLI)
+			if command == "" {
+				continue
+			}
+			tool := cliTool{
+				ID:             run.ID,
+				Command:        command,
+				Slice:          s.ID,
+				OwnerComponent: run.OwnerComponent,
+				Gate:           string(run.Gate),
+				Runs:           run.Runs,
+				Actuates:       run.Actuates,
+			}
+			switch {
+			case run.Runs != "":
+				tool.Summary = subprograms[run.Runs]
+			case run.Actuates != "":
+				tool.Summary = actuators[run.Actuates]
+			}
+			tools = append(tools, tool)
+		}
+	}
+	return tools
 }
 
 func emitSliceDocs(repoRoot string, s catalog.Slice, t catalog.Typology) error {
@@ -116,6 +215,10 @@ func emitSliceDocs(repoRoot string, s catalog.Slice, t catalog.Typology) error {
 }
 
 func writeGenerated(repoRoot, rel, body string) error {
+	return writeGeneratedWithMarker(repoRoot, rel, body, "<!-- typology:generated -->")
+}
+
+func writeGeneratedWithMarker(repoRoot, rel, body, marker string) error {
 	abs := filepath.Join(repoRoot, filepath.FromSlash(rel))
 	if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
 		return terrors.Wrap(err, terrors.CodeUnavailable, "emit.writeGenerated", "mkdir docs").
@@ -126,7 +229,7 @@ func writeGenerated(repoRoot, rel, body string) error {
 		return terrors.Wrap(err, terrors.CodeUnavailable, "emit.writeGenerated", "read existing page").
 			With("path", rel)
 	}
-	if len(existing) > 0 && !strings.Contains(string(existing), "<!-- typology:generated -->") {
+	if len(existing) > 0 && !strings.Contains(string(existing), marker) {
 		return nil
 	}
 	if err := os.WriteFile(abs, []byte(body), 0o644); err != nil {
@@ -149,6 +252,22 @@ type subprogramData struct {
 type actuatorData struct {
 	Slice    catalog.Slice
 	Actuator catalog.Actuator
+}
+
+type toolsData struct {
+	Typology string
+	Tools    []cliTool
+}
+
+type cliTool struct {
+	ID             string
+	Command        string
+	Summary        string
+	Slice          string
+	OwnerComponent string
+	Gate           string
+	Runs           string
+	Actuates       string
 }
 
 func renderGenerated(name, tmpl string, data any) (string, error) {
@@ -233,8 +352,16 @@ func renderReadme(s catalog.Slice, pages []catalog.DocPage) string {
 	b.WriteString("```text\nSlice\n")
 	overview := pageRel(pages, catalog.DocOverview)
 	owns := pageRel(pages, catalog.DocComponents)
-	b.WriteString("├── Overview          [" + overview + "](" + overview + ")\n")
-	b.WriteString("├── Owns              [" + owns + "](" + owns + ")\n")
+	b.WriteString("├── Overview          [")
+	b.WriteString(overview)
+	b.WriteString("](")
+	b.WriteString(overview)
+	b.WriteString(")\n")
+	b.WriteString("├── Owns              [")
+	b.WriteString(owns)
+	b.WriteString("](")
+	b.WriteString(owns)
+	b.WriteString(")\n")
 	if len(s.Subprograms) > 0 {
 		b.WriteString("├── Subprograms\n")
 		items := make([]string, 0, len(s.Subprograms))
@@ -427,6 +554,66 @@ Operator runs for slice {{.S.ID}} (CLI, HTTP, human gate, signal, or later sched
 {{else}}| _(none)_ | | | | | |
 {{end}}
 `
+
+const typologyReadmeTmpl = `# Typology
+
+<!-- typology:generated -->
+
+This directory holds the Typology catalog for this repository. Use it to guide architecture decisions and code structure: slices are bounded contexts, components are packages, and bindings are the allowed couplings.
+
+` + "`typology.yaml`" + ` is the source of truth for slices, components, bindings, subprograms, actuators, and opRuns.
+
+## For Agents
+
+Before you change this catalog or the code it describes, load these skills:
+
+- ` + "`typology-journey`" + ` — first map, resume ` + "`typology-journey.md`" + `
+- ` + "`typology-catalog`" + ` — model, YAML shape, subprograms, actuators, bindings
+- ` + "`typology-cli`" + ` — discover, emit, validate, remediate
+- ` + "`typology-docs`" + ` — fill and evaluate develop DocPages
+
+If your host does not have these skills, install the Typology module and symlink the skills from ` + "`$TYPOLOGY_ROOT/skills/`" + ` into your host skills directory (see the Typology module ` + "`AGENTS.md`" + `).
+
+## Typical commands
+
+- ` + "`typology discover REPO`" + ` — writes a draft to ` + "`tmp/typology/typology.yaml`" + `
+- ` + "`typology emit REPO`" + ` — writes ` + "`.typology/typology.yaml`" + ` and DocPages
+- ` + "`typology validate REPO`" + ` — checks the catalog and repo against each other
+- ` + "`typology remediate REPO SLICE`" + ` — agent-scoped violations for one slice
+
+## Workflow
+
+Catalog first, code second, validation last:
+
+1. Update ` + "`typology.yaml`" + ` to declare the intended architecture, components, bindings, and programs before writing the code.
+2. Implement the code to match the catalog.
+3. Run ` + "`typology validate REPO`" + ` and fix every issue before considering the change done.
+
+A green catalog means the code matches the declared slices, components, and bindings.
+
+## Files
+
+- ` + "`typology.yaml`" + ` — confirmed catalog
+- ` + "`tools.yaml`" + ` — generated CLI tool index from catalog ` + "`opRuns`" + `
+- ` + "`typology-journey.md`" + ` — first-map session file (created during a journey)
+- ` + "`README.md`" + ` — this file
+`
+
+const toolsTmpl = `# typology:generated
+# Generated from .typology/typology.yaml. Do not edit this file.
+
+typology: {{yamlQuote .Typology}}
+{{if .Tools}}tools:
+{{range .Tools}}  - id: {{yamlQuote .ID}}
+    command: {{yamlQuote .Command}}
+{{if .Summary}}    summary: {{yamlQuote .Summary}}
+{{end}}    slice: {{yamlQuote .Slice}}
+    ownerComponent: {{yamlQuote .OwnerComponent}}
+{{if .Gate}}    gate: {{yamlQuote .Gate}}
+{{end}}{{if .Runs}}    runs: {{yamlQuote .Runs}}
+{{end}}{{if .Actuates}}    actuates: {{yamlQuote .Actuates}}
+{{end}}{{end}}{{else}}tools: []
+{{end}}`
 
 func sliceBindingsFor(t catalog.Typology, sliceID string) []catalog.SliceBinding {
 	var out []catalog.SliceBinding

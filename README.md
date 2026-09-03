@@ -33,13 +33,29 @@ typology remediate REPO SLICE [--catalog PATH]
 typology version
 ```
 
+## Consumer setup
+
+Typology is guidance for agents that design and structure code. Any Go library that adopts it gets the same layout when you run `typology emit` in that repo.
+
+| Path | Role |
+|------|------|
+| `.typology/typology.yaml` | Confirmed catalog (source of truth) |
+| `.typology/README.md` | Agent instructions: skills, commands, catalog-first workflow |
+| `.typology/tools.yaml` | Generated CLI tool index from `opRuns` |
+| `.typology/typology-journey.md` | First-map session file (journey skill) |
+| `tmp/typology/typology.yaml` | Discover draft (not the confirmed catalog) |
+| `AGENTS.md` | Pointer to `.typology/README.md` (created or appended by emit) |
+| `docs/develop/` | Per-slice DocPages (default docs root) |
+
+Day-to-day in a consumer: update the catalog first, implement code to match it, then `typology validate`. Agents load the skills listed in `.typology/README.md` before changing architecture or package layout.
+
 ## Workflow
 
-First map in a new repo: load [skills/journey/SKILL.md](skills/journey/SKILL.md) (plan file `architecture/typology-journey.md`, discover to a draft, walk slices, emit, then fill DocPages with [skills/docs/SKILL.md](skills/docs/SKILL.md)).
+First map in a new repo: load [skills/journey/SKILL.md](skills/journey/SKILL.md) (plan file `.typology/typology-journey.md`, discover to a draft, walk slices, emit, then fill DocPages with [skills/docs/SKILL.md](skills/docs/SKILL.md)).
 
-1. `typology discover` on a Go repo (draft; first map uses `--out architecture/typology.draft.yaml`).
+1. `typology discover` on a Go repo (draft; writes to `tmp/typology/typology.yaml` by default).
 2. Human confirms slice names and bindings.
-3. `typology emit` writes catalog YAML, a slice README hub (tree nav), DocPage skeletons, and `subprograms/` / `actuators/` leaves under the docs root (default `docs/develop`). Empty CLI/UI/API/Jobs pages are omitted unless listed in YAML.
+3. `typology emit` writes `.typology/typology.yaml`, `.typology/README.md`, `.typology/tools.yaml`, ensures `AGENTS.md` points at `.typology/README.md`, plus DocPage skeletons under the docs root (default `docs/develop`). Empty CLI/UI/API/Jobs pages are omitted unless listed in YAML.
 4. `typology validate` fails closed on missing paths, bindings, DocPages, or program leaves.
 5. `typology remediate REPO SLICE` returns agent-scoped violations for one slice.
 
@@ -63,7 +79,7 @@ testdata/tiny-module/ Fixture Go module
 | Type | Role |
 |------|------|
 | `Typology` | Whole map |
-| `Slice` | Bounded context |
+| `Slice` | Bounded context with a required business `objective` |
 | `Component` | Package. Domain on `owns[]`; interaction nested under a `Surface`. |
 | `Surface` | Built UI, CLI, or API artefact (`kind` + `components[]`). |
 | `OpRun` | One gated operator invocation (CLI, HTTP, human, signal, or schedule). Optional `runs` / `actuates`. |
