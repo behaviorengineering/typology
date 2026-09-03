@@ -38,6 +38,27 @@ func TestBuild_indexesFixturePackages(t *testing.T) {
 	}
 }
 
+func TestBuild_indexesWorkspaceRoot(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	mustWrite(t, filepath.Join(root, "go.work"), "go 1.26.5\n\nuse (\n\t./engine\n\t./lib\n)\n")
+	mustWrite(t, filepath.Join(root, "engine", "go.mod"), "module example.com/ws/engine\n\ngo 1.26.5\n")
+	mustWrite(t, filepath.Join(root, "engine", "cmd", "app", "main.go"), "package main\n\nfunc main() {}\n")
+	mustWrite(t, filepath.Join(root, "lib", "go.mod"), "module example.com/ws/lib\n\ngo 1.26.5\n")
+	mustWrite(t, filepath.Join(root, "lib", "widget", "widget.go"), "package widget\n\nfunc New() {}\n")
+
+	idx, err := sourceindex.Build(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := idx.Package("engine/cmd/app"); !ok {
+		t.Fatalf("expected engine/cmd/app, got %+v", idx.Packages)
+	}
+	if _, ok := idx.Package("lib/widget"); !ok {
+		t.Fatalf("expected lib/widget, got %+v", idx.Packages)
+	}
+}
+
 func TestBuild_marksUnanchoredPackage(t *testing.T) {
 	t.Parallel()
 	repo := t.TempDir()

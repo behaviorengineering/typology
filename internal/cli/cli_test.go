@@ -46,6 +46,22 @@ func TestCLI_nil_writers(t *testing.T) {
 	}
 }
 
+func TestCLI_init_rejectsUnpinnedVersion(t *testing.T) {
+	t.Parallel()
+	repo := t.TempDir()
+	if err := os.WriteFile(filepath.Join(repo, "go.mod"), []byte("module example.com/consumer\n\ngo 1.27\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var out, errOut bytes.Buffer
+	code := cli.Run([]string{"init", repo, "--version", "latest"}, nil, &out, &errOut)
+	if code != 1 {
+		t.Fatalf("exit=%d, want 1; stderr=%s", code, errOut.String())
+	}
+	if !strings.Contains(errOut.String(), "tagged Go module version") {
+		t.Fatalf("stderr=%q", errOut.String())
+	}
+}
+
 func TestCLI_show_graph(t *testing.T) {
 	t.Parallel()
 	repo, _ := filepath.Abs(filepath.Join("..", "..", "testdata", "tiny-module"))
@@ -59,6 +75,27 @@ func TestCLI_show_graph(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "Source evidence (AST)") {
 		t.Fatalf("stdout missing source evidence summary: %q", out.String())
+	}
+}
+
+func TestCLI_architecture_writesReport(t *testing.T) {
+	t.Parallel()
+	repo, _ := filepath.Abs(filepath.Join("..", "..", "testdata", "tiny-module"))
+	outPath := filepath.Join(t.TempDir(), "architecture.md")
+	var out, errOut bytes.Buffer
+	code := cli.Run([]string{"architecture", repo, "--out", outPath}, nil, &out, &errOut)
+	if code != 0 {
+		t.Fatalf("exit=%d stderr=%s", code, errOut.String())
+	}
+	data, err := os.ReadFile(outPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "# Typology Architecture Brief") {
+		t.Fatalf("report missing title: %s", data)
+	}
+	if !strings.Contains(out.String(), "architecture: wrote") {
+		t.Fatalf("stdout=%q", out.String())
 	}
 }
 

@@ -15,16 +15,30 @@ make build
 ./bin/typology version
 ```
 
-Pin the module in a consumer:
+In a consuming Go module, register the CLI as a Go tool:
 
-```bash
-go get github.com/behaviorengineering/typology@vX.Y.Z
+```text
+go run github.com/behaviorengineering/typology/cmd/typology@v0.0.5 init .
+go tool typology version
+```
+
+The bootstrap command updates the selected consumer `go.mod` and `go.sum`. It does not add the CLI to application imports or binaries. For a multi-module workspace, pass the module path explicitly:
+
+```text
+go run github.com/behaviorengineering/typology/cmd/typology@v0.0.5 init . --module engine
+```
+
+To use the catalog package in application code, pin the library separately:
+
+```text
+go get github.com/behaviorengineering/typology@v0.0.5
 go mod tidy
 ```
 
 ## Commands
 
 ```text
+typology init REPO [--module PATH] [--version VERSION]
 typology discover REPO [--out PATH] [--docs-root PATH]
 typology emit REPO [--catalog PATH] [--docs-only] [--go-only]
 typology validate REPO [--catalog PATH] [SLICE]

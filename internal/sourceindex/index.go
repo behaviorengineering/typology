@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	terrors "github.com/behaviorengineering/typology/errors"
+	"github.com/behaviorengineering/typology/internal/gorepo"
 )
 
 // PackageEvidence summarizes static source evidence for one Go package.
@@ -117,18 +118,35 @@ type listPackage struct {
 }
 
 func listPackages(repoRoot string) ([]listPackage, error) {
+	modules, err := gorepo.Modules(repoRoot)
+	if err != nil {
+		return nil, err
+	}
+	var all []listPackage
+	for _, mod := range modules {
+		pkgs, err := listPackagesInModule(mod.Dir)
+		if err != nil {
+			return nil, err
+		}
+		all = append(all, pkgs...)
+	}
+	return all, nil
+}
+
+func listPackagesInModule(moduleRoot string) ([]listPackage, error) {
 	cmd := exec.Command("go", "list", "-json", "./...")
-	cmd.Dir = repoRoot
+	cmd.Dir = moduleRoot
+	// Isolate each module from an enclosing workspace so sibling modules stay out of scope.
 	cmd.Env = append(os.Environ(), "GOWORK=off")
 	out, err := cmd.Output()
 	if err != nil {
 		if ee, ok := err.(*exec.ExitError); ok {
 			return nil, terrors.Wrap(err, terrors.CodeUnavailable, "sourceindex.listPackages", "go list failed").
 				With("stderr", strings.TrimSpace(string(ee.Stderr))).
-				With("dir", repoRoot)
+				With("dir", moduleRoot)
 		}
 		return nil, terrors.Wrap(err, terrors.CodeUnavailable, "sourceindex.listPackages", "go list").
-			With("dir", repoRoot)
+			With("dir", moduleRoot)
 	}
 	dec := json.NewDecoder(bytes.NewReader(out))
 	var pkgs []listPackage
@@ -139,7 +157,7 @@ func listPackages(repoRoot string) ([]listPackage, error) {
 				break
 			}
 			return nil, terrors.Wrap(err, terrors.CodeInternal, "sourceindex.listPackages", "decode go list json").
-				With("dir", repoRoot)
+				With("dir", moduleRoot)
 		}
 		pkgs = append(pkgs, pkg)
 	}

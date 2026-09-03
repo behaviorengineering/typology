@@ -1,6 +1,7 @@
 package discover_test
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -63,5 +64,47 @@ func TestDiscover_graphSummary(t *testing.T) {
 	}
 	if !foundLedger {
 		t.Fatalf("expected ./internal/ledger in leaves: %+v", summary.Leaves)
+	}
+}
+
+func TestDiscover_workspaceGraph(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	mustWrite(t, filepath.Join(root, "go.work"), "go 1.26.5\n\nuse (\n\t./engine\n\t./lib\n)\n")
+	mustWrite(t, filepath.Join(root, "engine", "go.mod"), "module example.com/ws/engine\n\ngo 1.26.5\n")
+	mustWrite(t, filepath.Join(root, "engine", "svc", "svc.go"), "package svc\n\nimport \"example.com/ws/lib/widget\"\n\nfunc Run() { _ = widget.New }\n")
+	mustWrite(t, filepath.Join(root, "lib", "go.mod"), "module example.com/ws/lib\n\ngo 1.26.5\n")
+	mustWrite(t, filepath.Join(root, "lib", "widget", "widget.go"), "package widget\n\nvar New = 1\n")
+
+	summary, err := discover.AnalyzeGraph(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := summary.Nodes["./engine/svc"]; !ok {
+		t.Fatalf("expected ./engine/svc node, got %+v", summary.Nodes)
+	}
+	if _, ok := summary.Nodes["./lib/widget"]; !ok {
+		t.Fatalf("expected ./lib/widget node, got %+v", summary.Nodes)
+	}
+	imports := summary.Nodes["./engine/svc"].Imports
+	found := false
+	for _, imp := range imports {
+		if imp == "./lib/widget" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected cross-module import ./lib/widget, got %+v", imports)
+	}
+}
+
+func mustWrite(t *testing.T, path, content string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
 	}
 }

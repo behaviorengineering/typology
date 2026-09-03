@@ -23,6 +23,15 @@ When another Go library adopts Typology, `typology emit REPO` installs the same 
 - `AGENTS.md` — pointer to `.typology/README.md` (created or appended; keeps existing content)
 - `tmp/typology/` — discover drafts only
 
+Before running Typology commands in a consumer, register the CLI as a Go tool:
+
+```bash
+go run github.com/behaviorengineering/typology/cmd/typology@v0.0.5 init .
+go tool typology version
+```
+
+`init` updates the selected consumer module's `go.mod` and `go.sum`. It does not add the CLI to application imports or binaries. If `go.work` covers more than one module, pass the module path with `--module`; the command fails rather than choosing one.
+
 After emit, agents in that repo start at `AGENTS.md` → `.typology/README.md` → skills. Full layout: [README.md](README.md) § Consumer setup.
 
 ## Optional: symlink into your host

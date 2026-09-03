@@ -574,8 +574,20 @@ Before you change this catalog or the code it describes, load these skills:
 
 If your host does not have these skills, install the Typology module and symlink the skills from ` + "`$TYPOLOGY_ROOT/skills/`" + ` into your host skills directory (see the Typology module ` + "`AGENTS.md`" + `).
 
+## Consumer bootstrap
+
+Before running Typology commands in a consumer, register the CLI as a Go tool:
+
+` + "```bash" + `
+go run github.com/behaviorengineering/typology/cmd/typology@v0.0.5 init .
+go tool typology version
+` + "```" + `
+
+The bootstrap updates the selected module's ` + "`go.mod`" + ` and ` + "`go.sum`" + `, but it does not add the CLI to application imports or binaries. If ` + "`go.work`" + ` covers more than one module, pass ` + "`--module PATH`" + ` explicitly.
+
 ## Typical commands
 
+- ` + "`typology init REPO [--module PATH] [--version VERSION]`" + ` — registers the CLI as a Go tool in the consumer module
 - ` + "`typology discover REPO`" + ` — writes a draft to ` + "`tmp/typology/typology.yaml`" + `
 - ` + "`typology emit REPO`" + ` — writes ` + "`.typology/typology.yaml`" + ` and DocPages
 - ` + "`typology validate REPO`" + ` — checks the catalog and repo against each other
