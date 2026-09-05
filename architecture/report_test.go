@@ -39,11 +39,26 @@ func TestBuildAndRenderMarkdown(t *testing.T) {
 		"## Agent review protocol",
 		"`billing`",
 		"internal/billing/store",
+		"- `./internal/billing/store`",
+		"- Surfaces: billing-api (api)",
+		"- Surfaces: _(none)_",
+		"- Programs: _(none)_",
 		"```mermaid",
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("rendered report missing %q:\n%s", want, body)
 		}
+	}
+	idx := strings.Index(body, "Go packages** in the inspected modules:")
+	if idx < 0 {
+		t.Fatalf("missing package inventory sentence:\n%s", body)
+	}
+	inventory := body[idx:]
+	if end := strings.Index(inventory, "###"); end > 0 {
+		inventory = inventory[:end]
+	}
+	if strings.Contains(inventory, "- `.`\n") || strings.TrimSpace(inventory) == "Go packages** in the inspected modules:\n- `.`" {
+		t.Fatalf("package inventory still lists module scope instead of packages:\n%s", inventory)
 	}
 	bodyAgain, err := architecture.RenderMarkdown(report)
 	if err != nil {
@@ -113,8 +128,11 @@ func TestBuildHonorsCatalogScope(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(body, "- `engine`") {
-		t.Fatalf("report does not name inspected module:\n%s", body)
+	if !strings.Contains(body, "- `./engine/svc`") && !strings.Contains(body, "- `engine/svc`") {
+		t.Fatalf("report does not list in-scope package paths:\n%s", body)
+	}
+	if strings.Contains(body, "- `lib`") || strings.Contains(body, "./lib/widget") {
+		t.Fatalf("out-of-scope package listed in brief:\n%s", body)
 	}
 }
 

@@ -182,6 +182,7 @@ type sliceRow struct {
 
 type graphData struct {
 	NodeCount        int
+	PackagePaths     []string
 	HubRows          []graphNodeRow
 	LeafRows         []graphNodeRow
 	MergeSuggestions []MergeSuggestion
@@ -214,6 +215,12 @@ func prepareMarkdown(report Report) markdownData {
 			PlatformLeaves:   append([]string(nil), report.Graph.PlatformLeaves...),
 		},
 	}
+	packagePaths := make([]string, 0, len(report.Graph.Nodes))
+	for path := range report.Graph.Nodes {
+		packagePaths = append(packagePaths, path)
+	}
+	sort.Strings(packagePaths)
+	data.Graph.PackagePaths = packagePaths
 	for _, s := range report.Catalog.Slices {
 		row := sliceRow{ID: s.ID, Objective: s.Objective, Route: s.Route}
 		for _, component := range s.AllComponents() {
@@ -365,8 +372,16 @@ flowchart LR
 {{.Objective}}
 
 - Packages: {{join .Components ", "}}
+{{- if .Surfaces}}
 - Surfaces: {{join .Surfaces ", "}}
+{{- else}}
+- Surfaces: _(none)_
+{{- end}}
+{{- if .Programs}}
 - Programs: {{join .Programs ", "}}
+{{- else}}
+- Programs: _(none)_
+{{- end}}
 
 {{end}}
 ### Declared coupling
@@ -386,7 +401,7 @@ flowchart LR
 ## Observed topology
 
 The repository contains **{{.Graph.NodeCount}} Go packages** in the inspected modules:
-{{range .Modules}}- ` + "`{{.}}`" + `
+{{range .Graph.PackagePaths}}- ` + "`{{.}}`" + `
 {{end}}
 
 {{if .Graph.HubRows}}### High-coupling packages
