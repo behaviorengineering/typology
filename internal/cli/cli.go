@@ -38,6 +38,8 @@ func Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return runInit(args[1:], stdout, stderr)
 	case "discover":
 		return runDiscover(args[1:], stdout, stderr)
+	case "contracts":
+		return runContracts(args[1:], stdout, stderr)
 	case "emit":
 		return runEmit(args[1:], stdout, stderr)
 	case "architecture":
@@ -67,6 +69,7 @@ func printUsage(w io.Writer) {
 	_, _ = fmt.Fprintln(w, "Usage:")
 	_, _ = fmt.Fprintln(w, "  typology init REPO [--module PATH] [--version VERSION]")
 	_, _ = fmt.Fprintln(w, "  typology discover REPO [--module PATH] [--out PATH] [--docs-root PATH] [--suggest-merges]")
+	_, _ = fmt.Fprintln(w, "  typology contracts REPO [--module PATH] [--out PATH]")
 	_, _ = fmt.Fprintln(w, "  typology emit REPO [--catalog PATH] [--docs-only] [--go-only]")
 	_, _ = fmt.Fprintln(w, "  typology architecture REPO [--module PATH] [--catalog PATH] [--out PATH]")
 	_, _ = fmt.Fprintln(w, "  typology validate REPO [--module PATH] [--catalog PATH] [SLICE]")
@@ -81,6 +84,10 @@ func defaultCatalogPath(repo string) string {
 
 func defaultDraftCatalogPath(repo string) string {
 	return filepath.Join(repo, filepath.FromSlash(catalog.DefaultDraftCatalogRel))
+}
+
+func defaultPackageContractsPath(repo string) string {
+	return filepath.Join(repo, filepath.FromSlash(catalog.DefaultPackageContractsRel))
 }
 
 func runInit(args []string, stdout, stderr io.Writer) int {
@@ -176,8 +183,14 @@ func runDiscover(args []string, stdout, stderr io.Writer) int {
 		_, _ = fmt.Fprintf(stderr, "discover: %v\n", err)
 		return 1
 	}
+	contractsOut := defaultPackageContractsPath(repo)
+	if err := writePackageContracts(repo, module, contractsOut); err != nil {
+		_, _ = fmt.Fprintf(stderr, "discover: package contracts: %v\n", err)
+		return 1
+	}
 	_, _ = fmt.Fprintf(stdout, "discover: wrote draft catalog (%d slices, %d packages) -> %s\n",
 		len(result.Typology.Slices), len(result.Packages), out)
+	_, _ = fmt.Fprintf(stdout, "discover: wrote package contracts -> %s\n", contractsOut)
 	if suggestMerges && len(result.Graph.MergeSuggestions) > 0 {
 		_, _ = fmt.Fprintln(stdout, "\nMerge candidates (sole importer / companion heuristics):")
 		for _, m := range result.Graph.MergeSuggestions {
@@ -186,6 +199,51 @@ func runDiscover(args []string, stdout, stderr io.Writer) int {
 	}
 	_, _ = fmt.Fprintln(stdout, "discover: review and rename before emit/validate")
 	return 0
+}
+
+func runContracts(args []string, stdout, stderr io.Writer) int {
+	repo, rest, ok := firstArg(args)
+	if !ok {
+		_, _ = fmt.Fprintln(stderr, "usage: typology contracts REPO [--module PATH] [--out PATH]")
+		return 2
+	}
+	out := defaultPackageContractsPath(repo)
+	module := ""
+	for i := 0; i < len(rest); i++ {
+		switch rest[i] {
+		case "--module":
+			if i+1 >= len(rest) {
+				_, _ = fmt.Fprintln(stderr, "contracts: --module requires path")
+				return 2
+			}
+			module = rest[i+1]
+			i++
+		case "--out":
+			if i+1 >= len(rest) {
+				_, _ = fmt.Fprintln(stderr, "contracts: --out requires path")
+				return 2
+			}
+			out = rest[i+1]
+			i++
+		default:
+			_, _ = fmt.Fprintf(stderr, "contracts: unknown flag %q\n", rest[i])
+			return 2
+		}
+	}
+	if err := writePackageContracts(repo, module, out); err != nil {
+		_, _ = fmt.Fprintf(stderr, "contracts: %v\n", err)
+		return 1
+	}
+	_, _ = fmt.Fprintf(stdout, "contracts: wrote package contracts -> %s\n", out)
+	return 0
+}
+
+func writePackageContracts(repo, module, outPath string) error {
+	modules, err := gorepo.ResolveModules(repo, nil, module)
+	if err != nil {
+		return err
+	}
+	return sourceindex.WritePackageContractsFile(repo, modules, outPath)
 }
 
 func runEmit(args []string, stdout, stderr io.Writer) int {

@@ -67,6 +67,9 @@ func BuildInModules(repoRoot string, modules []gorepo.Module) (Index, error) {
 		return Index{}, terrors.Wrap(err, terrors.CodeInvalid, "sourceindex.BuildInModules", "abs repo").
 			With("repo", repo)
 	}
+	if resolved, err := filepath.EvalSymlinks(absRepo); err == nil {
+		absRepo = resolved
+	}
 	pkgs, err := listPackagesInModules(modules)
 	if err != nil {
 		return Index{}, err
@@ -81,6 +84,9 @@ func BuildInModules(repoRoot string, modules []gorepo.Module) (Index, error) {
 		if err != nil {
 			return Index{}, terrors.Wrap(err, terrors.CodeInternal, "sourceindex.Build", "abs package dir").
 				With("dir", pkg.Dir)
+		}
+		if resolved, err := filepath.EvalSymlinks(absDir); err == nil {
+			absDir = resolved
 		}
 		rel, err := filepath.Rel(absRepo, absDir)
 		if err != nil {

@@ -16,6 +16,10 @@ const DefaultCatalogRel = ".typology/typology.yaml"
 // operator confirms the catalog.
 const DefaultDraftCatalogRel = "tmp/typology/typology.yaml"
 
+// DefaultPackageContractsRel is the default public-contract markdown path
+// written next to the discover draft under tmp/typology/.
+const DefaultPackageContractsRel = "tmp/typology/package_contracts.md"
+
 // DefaultDocsRoot is the usual per-slice docs prefix under a repo root.
 const DefaultDocsRoot = "docs/develop"
 
