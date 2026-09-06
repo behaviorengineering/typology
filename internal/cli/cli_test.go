@@ -147,8 +147,11 @@ slices:
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(data), "- `engine`") {
-		t.Fatalf("report missing selected module: %s", data)
+	if !strings.Contains(string(data), "./engine/svc") {
+		t.Fatalf("report missing scoped engine package: %s", data)
+	}
+	if strings.Contains(string(data), "./lib/widget") {
+		t.Fatalf("report should not include unscoped lib package: %s", data)
 	}
 }
 
@@ -156,7 +159,7 @@ func TestCLI_discover_defaultDraftPath(t *testing.T) {
 	t.Parallel()
 	repo := t.TempDir()
 	mustWrite(t, filepath.Join(repo, "go.mod"), "module example.com/draft-test\n\ngo 1.26.5\n")
-	mustWrite(t, filepath.Join(repo, "internal", "billing", "billing.go"), "package billing\n")
+	mustWrite(t, filepath.Join(repo, "internal", "billing", "billing.go"), "package billing\n\nfunc Charge() {}\n")
 	mustWrite(t, filepath.Join(repo, "internal", "ledger", "ledger.go"), "package ledger\n")
 
 	var out, errOut bytes.Buffer
@@ -171,6 +174,42 @@ func TestCLI_discover_defaultDraftPath(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), expectedPath) {
 		t.Fatalf("stdout did not report draft path %q: %q", expectedPath, out.String())
+	}
+	contractsPath := filepath.Join(repo, "tmp", "typology", "package_contracts.md")
+	data, err := os.ReadFile(contractsPath)
+	if err != nil {
+		t.Fatalf("expected package contracts at %s: %v", contractsPath, err)
+	}
+	if !strings.Contains(string(data), "Charge") {
+		t.Fatalf("contracts missing Charge export:\n%s", data)
+	}
+}
+
+func TestCLI_contracts(t *testing.T) {
+	t.Parallel()
+	repo := t.TempDir()
+	mustWrite(t, filepath.Join(repo, "go.mod"), "module example.com/contracts-test\n\ngo 1.26.5\n")
+	mustWrite(t, filepath.Join(repo, "internal", "cliexec", "exec.go"), "package cliexec\n\nfunc Run(cmd string) error { return nil }\n")
+
+	var out, errOut bytes.Buffer
+	code := cli.Run([]string{"contracts", repo}, nil, &out, &errOut)
+	if code != 0 {
+		t.Fatalf("exit=%d stderr=%s", code, errOut.String())
+	}
+	contractsPath := filepath.Join(repo, "tmp", "typology", "package_contracts.md")
+	data, err := os.ReadFile(contractsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data)
+	if !strings.Contains(text, "./internal/cliexec") {
+		t.Fatalf("missing cliexec path:\n%s", text)
+	}
+	if !strings.Contains(text, "Run") {
+		t.Fatalf("missing Run export:\n%s", text)
+	}
+	if !strings.Contains(text, "hasMain: false") {
+		t.Fatalf("expected hasMain false:\n%s", text)
 	}
 }
 
