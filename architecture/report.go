@@ -164,6 +164,7 @@ type markdownData struct {
 	Catalog        catalog.Typology
 	Modules        []string
 	Slices         []sliceRow
+	Libraries      []libraryRow
 	SliceBindings  []catalog.SliceBinding
 	ComponentBinds []catalog.ComponentBinding
 	Graph          graphData
@@ -178,6 +179,12 @@ type sliceRow struct {
 	Components []string
 	Surfaces   []string
 	Programs   []string
+}
+
+type libraryRow struct {
+	ID         string
+	Purpose    string
+	Components []string
 }
 
 type graphData struct {
@@ -236,6 +243,13 @@ func prepareMarkdown(report Report) markdownData {
 			row.Programs = append(row.Programs, actuator.ID+" (actuator)")
 		}
 		data.Slices = append(data.Slices, row)
+	}
+	for _, lib := range report.Catalog.Libraries {
+		row := libraryRow{ID: lib.ID, Purpose: lib.Purpose}
+		for _, component := range lib.Owns {
+			row.Components = append(row.Components, component.Path)
+		}
+		data.Libraries = append(data.Libraries, row)
 	}
 	for _, finding := range report.Findings {
 		data.Findings = append(data.Findings, findingRow{Slice: finding.Slice, Message: finding.Message})
@@ -308,20 +322,27 @@ func publicGraph(summary discover.GraphSummary) Graph {
 }
 
 func mermaidLines(t catalog.Typology) []string {
-	lines := make([]string, 0, len(t.Slices)+len(t.SliceBindings))
+	lines := make([]string, 0, len(t.Slices)+len(t.Libraries)+len(t.SliceBindings))
 	for _, s := range t.Slices {
-		lines = append(lines, "  "+mermaidID(s.ID)+"[\""+mermaidLabel(s.ID)+"\"]")
+		lines = append(lines, "  "+mermaidNodeID(t, s.ID)+"[\""+mermaidLabel(s.ID)+"\"]")
+	}
+	for _, lib := range t.Libraries {
+		lines = append(lines, "  "+mermaidNodeID(t, lib.ID)+"[(\""+mermaidLabel(lib.ID)+"\")]")
 	}
 	for _, binding := range t.SliceBindings {
-		lines = append(lines, "  "+mermaidID(binding.From)+" -->|"+mermaidLabel(string(binding.Kind))+"| "+mermaidID(binding.To))
+		lines = append(lines, "  "+mermaidNodeID(t, binding.From)+" -->|"+mermaidLabel(string(binding.Kind))+"| "+mermaidNodeID(t, binding.To))
 	}
 	return lines
 }
 
-func mermaidID(value string) string {
+func mermaidNodeID(t catalog.Typology, id string) string {
+	prefix := "slice_"
+	if _, ok := t.LookupLibrary(id); ok {
+		prefix = "lib_"
+	}
 	var b strings.Builder
-	b.WriteString("slice_")
-	for _, r := range value {
+	b.WriteString(prefix)
+	for _, r := range id {
 		switch {
 		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
 			b.WriteRune(r)
@@ -365,6 +386,15 @@ flowchart LR
 {{else}}| _(none)_ | | |
 {{end}}
 
+{{if .Libraries}}### Libraries
+
+Technical packages with no domain knowledge. They claim packages without a product objective.
+
+| Library | Purpose | Packages |
+|---------|---------|----------|
+{{range .Libraries}}| ` + "`{{.ID}}`" + ` | {{.Purpose}} | {{join .Components ", "}} |
+{{end}}
+{{end}}
 ### Context details
 
 {{range .Slices}}#### ` + "`{{.ID}}`" + `
@@ -391,6 +421,8 @@ flowchart LR
 {{range .SliceBindings}}| ` + "`{{.From}}`" + ` | ` + "`{{.To}}`" + ` | {{.Kind}} |
 {{end}}{{else}}No slice bindings are declared.
 {{end}}
+
+Bindings may target a slice or a library. ` + "`from`" + ` is always a slice.
 
 {{if .ComponentBinds}}| Component | Component | Rule |
 |-----------|-----------|------|

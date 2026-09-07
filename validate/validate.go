@@ -50,10 +50,43 @@ func Run(opts Options) []catalog.Issue {
 		}
 		issues = append(issues, checkSliceWithIndex(repo, s, index)...)
 	}
+	if opts.SliceID == "" {
+		for _, lib := range opts.Catalog.Libraries {
+			issues = append(issues, checkLibraryWithIndex(repo, lib, index)...)
+		}
+	}
 	if opts.SliceID == "" && !opts.SkipImports {
 		issues = append(issues, checkImports(repo, opts.Catalog, modules)...)
 	}
 	catalog.SortIssues(issues)
+	return issues
+}
+
+func checkLibraryWithIndex(repoRoot string, lib catalog.Library, index sourceindex.Index) []catalog.Issue {
+	var issues []catalog.Issue
+	for _, c := range lib.Owns {
+		if strings.TrimSpace(c.Path) == "" {
+			issues = append(issues, catalog.Issue{
+				Slice:   lib.ID,
+				Message: fmt.Sprintf("library component %q: empty path", c.ID),
+			})
+			continue
+		}
+		if _, ok := index.Package(c.Path); !ok {
+			issues = append(issues, catalog.Issue{
+				Slice:   lib.ID,
+				Message: fmt.Sprintf("source package %q not found for library component %q", c.Path, c.ID),
+			})
+			continue
+		}
+		abs := filepath.Join(repoRoot, filepath.FromSlash(c.Path))
+		if fi, err := os.Stat(abs); err != nil || !fi.IsDir() {
+			issues = append(issues, catalog.Issue{
+				Slice:   lib.ID,
+				Message: fmt.Sprintf("library owned path %q does not exist", c.Path),
+			})
+		}
+	}
 	return issues
 }
 
@@ -166,13 +199,22 @@ func checkImports(repoRoot string, topo catalog.Typology, modules []gorepo.Modul
 		return []catalog.Issue{{Message: fmt.Sprintf("import graph: %v", err)}}
 	}
 	pathToComp := map[string]string{}
-	compToSlice := map[string]string{}
+	compToOwner := map[string]catalog.ComponentOwner{}
 	for _, s := range topo.Slices {
 		for _, c := range s.AllComponents() {
 			if c.Path != "" {
 				key := normalizePkgPath(c.Path)
 				pathToComp[key] = c.ID
-				compToSlice[c.ID] = s.ID
+				compToOwner[c.ID] = catalog.ComponentOwner{Kind: catalog.OwnerSlice, ID: s.ID}
+			}
+		}
+	}
+	for _, lib := range topo.Libraries {
+		for _, c := range lib.Owns {
+			if c.Path != "" {
+				key := normalizePkgPath(c.Path)
+				pathToComp[key] = c.ID
+				compToOwner[c.ID] = catalog.ComponentOwner{Kind: catalog.OwnerLibrary, ID: lib.ID}
 			}
 		}
 	}
@@ -196,52 +238,81 @@ func checkImports(repoRoot string, topo catalog.Typology, modules []gorepo.Modul
 				break
 			}
 		}
+		fromOwner := compToOwner[b.From]
 		switch b.Rule {
 		case catalog.BindingMustNot:
 			if has {
 				issues = append(issues, catalog.Issue{
-					Slice:   compToSlice[b.From],
+					Slice:   fromOwner.ID,
 					Message: fmt.Sprintf("ComponentBinding %s -> %s forbidden (%s) but import exists", b.From, b.To, b.Rule),
 				})
 			}
 		case catalog.BindingMust:
 			if !has {
 				issues = append(issues, catalog.Issue{
-					Slice:   compToSlice[b.From],
+					Slice:   fromOwner.ID,
 					Message: fmt.Sprintf("ComponentBinding %s -> %s required (%s) but import missing", b.From, b.To, b.Rule),
 				})
 			}
 		}
 	}
 
-	// Cross-slice imports without SliceBinding.
+	// Cross-owner imports without allowed SliceBinding.
 	for from, imports := range graph {
 		from = normalizePkgPath(from)
 		fromComp := pathToComp[from]
 		if fromComp == "" {
 			continue
 		}
-		fromSlice := compToSlice[fromComp]
+		fromOwner := compToOwner[fromComp]
 		for _, imp := range imports {
 			imp = normalizePkgPath(imp)
 			toComp := pathToComp[imp]
 			if toComp == "" {
 				continue
 			}
-			toSlice := compToSlice[toComp]
-			if toSlice == "" || fromSlice == toSlice {
+			toOwner := compToOwner[toComp]
+			if toOwner.ID == "" || (fromOwner.Kind == toOwner.Kind && fromOwner.ID == toOwner.ID) {
 				continue
 			}
-			if !hasSliceBinding(topo, fromSlice, toSlice) {
+			if fromOwner.Kind == catalog.OwnerLibrary && toOwner.Kind == catalog.OwnerSlice {
 				issues = append(issues, catalog.Issue{
-					Slice:   fromSlice,
-					Message: fmt.Sprintf("SliceBinding %s -> %s missing but cross-slice import exists (%s -> %s)", fromSlice, toSlice, fromComp, toComp),
+					Slice: fromOwner.ID,
+					Message: fmt.Sprintf(
+						"library %s must not import slice package (%s -> %s); utilities gained domain knowledge",
+						fromOwner.ID, fromComp, toComp,
+					),
+				})
+				continue
+			}
+			if fromOwner.Kind == catalog.OwnerLibrary && toOwner.Kind == catalog.OwnerLibrary {
+				issues = append(issues, catalog.Issue{
+					Slice: fromOwner.ID,
+					Message: fmt.Sprintf(
+						"library-to-library import %s -> %s (%s -> %s) is not supported yet",
+						fromOwner.ID, toOwner.ID, fromComp, toComp,
+					),
+				})
+				continue
+			}
+			// Slice -> slice or slice -> library: require SliceBinding from -> to.
+			if fromOwner.Kind == catalog.OwnerSlice && !hasSliceBinding(topo, fromOwner.ID, toOwner.ID) {
+				targetKind := "slice"
+				if toOwner.Kind == catalog.OwnerLibrary {
+					targetKind = "library"
+				}
+				issues = append(issues, catalog.Issue{
+					Slice: fromOwner.ID,
+					Message: fmt.Sprintf(
+						"SliceBinding %s -> %s missing but cross-%s import exists (%s -> %s)",
+						fromOwner.ID, toOwner.ID, targetKind, fromComp, toComp,
+					),
 				})
 			}
 		}
 	}
 
-	// Unmapped packages in module (orphan packages not claimed by any slice).
+	// Unmapped packages in module (orphan packages not claimed by any slice or library).
 	for pkg := range graph {
 		norm := normalizePkgPath(pkg)
 		if norm == "." || norm == "" {
@@ -249,7 +320,7 @@ func checkImports(repoRoot string, topo catalog.Typology, modules []gorepo.Modul
 		}
 		if _, ok := pathToComp[norm]; !ok {
 			issues = append(issues, catalog.Issue{
-				Message: fmt.Sprintf("unmapped package %q in module; not claimed by any slice in owns[] or surfaces[]", norm),
+				Message: fmt.Sprintf("unmapped package %q in module; not claimed by any slice or library in owns[] or surfaces[]", norm),
 			})
 		}
 	}

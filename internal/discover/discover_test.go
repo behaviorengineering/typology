@@ -23,7 +23,23 @@ func TestDiscover_tinyModule(t *testing.T) {
 	if len(result.Typology.Slices) == 0 {
 		t.Fatal("expected proposed slices")
 	}
+	foundConfigLib := false
+	for _, lib := range result.Typology.Libraries {
+		if lib.ID == "config" {
+			foundConfigLib = true
+			if len(lib.Owns) == 0 || lib.Owns[0].Path != "internal/config" {
+				t.Fatalf("config library owns unexpected: %+v", lib.Owns)
+			}
+			break
+		}
+	}
+	if !foundConfigLib {
+		t.Fatalf("expected discover to place config under libraries, got %+v", result.Typology.Libraries)
+	}
 	for _, s := range result.Typology.Slices {
+		if s.ID == "config" {
+			t.Fatal("discover must not invent a config platform slice")
+		}
 		if s.ID != "billing" {
 			continue
 		}
@@ -55,16 +71,26 @@ func TestDiscover_graphSummary(t *testing.T) {
 	if len(summary.Nodes) == 0 {
 		t.Fatal("expected graph nodes")
 	}
-	// tiny-module internal/ledger is a leaf (imported by billing/store, imports nothing)
-	foundLedger := false
-	for _, leaf := range summary.Leaves {
-		if leaf == "./internal/ledger" {
-			foundLedger = true
+	// tiny-module internal/config is a shared platform leaf (imported by billing + ledger).
+	foundConfig := false
+	for _, leaf := range summary.PlatformLeaves {
+		if leaf == "./internal/config" || leaf == "internal/config" {
+			foundConfig = true
 			break
 		}
 	}
-	if !foundLedger {
-		t.Fatalf("expected ./internal/ledger in leaves: %+v", summary.Leaves)
+	if !foundConfig {
+		t.Fatalf("expected internal/config in platformLeaves: %+v", summary.PlatformLeaves)
+	}
+	foundLeaf := false
+	for _, leaf := range summary.Leaves {
+		if leaf == "./internal/config" || leaf == "internal/config" {
+			foundLeaf = true
+			break
+		}
+	}
+	if !foundLeaf {
+		t.Fatalf("expected internal/config in leaves: %+v", summary.Leaves)
 	}
 }
 

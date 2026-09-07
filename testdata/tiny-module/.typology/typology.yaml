@@ -68,6 +68,19 @@ sliceBindings:
   - from: billing
     to: ledger
     kind: reads
+  - from: billing
+    to: config
+    kind: reads
+  - from: ledger
+    to: config
+    kind: reads
+libraries:
+  - id: config
+    purpose: Load process settings without domain knowledge
+    owns:
+      - id: config
+        path: internal/config
+        layer: domain
 componentBindings:
   - from: billing-http
     to: billing-store

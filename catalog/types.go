@@ -71,6 +71,7 @@ type Typology struct {
 	ID                string             `json:"id" yaml:"id"`
 	Scope             Scope              `json:"scope,omitempty" yaml:"scope,omitempty"`
 	Slices            []Slice            `json:"slices" yaml:"slices"`
+	Libraries         []Library          `json:"libraries,omitempty" yaml:"libraries,omitempty"`
 	SliceBindings     []SliceBinding     `json:"sliceBindings,omitempty" yaml:"sliceBindings,omitempty"`
 	ComponentBindings []ComponentBinding `json:"componentBindings,omitempty" yaml:"componentBindings,omitempty"`
 }
@@ -97,6 +98,14 @@ type Slice struct {
 	Docs        DocCluster   `json:"docs,omitempty" yaml:"docs,omitempty"`
 }
 
+// Library is a technical package group with no domain knowledge.
+// Libraries sit beside slices: they claim packages without a product objective.
+type Library struct {
+	ID      string      `json:"id" yaml:"id"`
+	Purpose string      `json:"purpose" yaml:"purpose"`
+	Owns    []Component `json:"owns,omitempty" yaml:"owns,omitempty"`
+}
+
 // Surface is a built interaction artefact (UI, CLI, or API) that owns packages.
 // Nested components carry id and path only; kind lives on the surface.
 type Surface struct {
@@ -105,7 +114,7 @@ type Surface struct {
 	Components []Component     `json:"components,omitempty" yaml:"components,omitempty"`
 }
 
-// Component is a package (or equivalent) inside a slice.
+// Component is a package (or equivalent) inside a slice or library.
 type Component struct {
 	ID    string          `json:"id" yaml:"id"`
 	Path  string          `json:"path" yaml:"path"`
@@ -157,7 +166,8 @@ type Actuator struct {
 	Gate           Gate     `json:"gate,omitempty" yaml:"gate,omitempty"`
 }
 
-// SliceBinding couples two slices.
+// SliceBinding couples a slice to another slice or to a library.
+// From must be a slice id. To may be a slice id or a library id.
 type SliceBinding struct {
 	From string           `json:"from" yaml:"from"`
 	To   string           `json:"to" yaml:"to"`
