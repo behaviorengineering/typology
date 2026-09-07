@@ -1,15 +1,15 @@
 ---
 name: typology-catalog
 description: >-
-  Author Typology catalogs (YAML or catalog.Typology in Go): slices, components,
-  surfaces, subprograms, actuators, opRuns, sliceBindings, componentBindings. Load when
-  writing .typology/typology.yaml, calling catalog.LoadYAML or SaveYAML, or
-  mapping a product contract onto the Typology model.
+  Author Typology catalogs (YAML or catalog.Typology in Go): slices, libraries,
+  components, surfaces, subprograms, actuators, opRuns, sliceBindings,
+  componentBindings. Load when writing .typology/typology.yaml, calling
+  catalog.LoadYAML or SaveYAML, or mapping a product contract onto the Typology model.
 ---
 
 # Typology catalog
 
-**Moral:** A slice is a bounded context. A component is a package. A surface is a built interaction artefact (UI, CLI, or API) that owns packages. A subprogram is a standing program. An opRun is one gated invocation. An actuator is a signal-triggered emit. Do not collapse those five.
+**Moral:** A slice is a bounded context. A library is a technical package group with no domain knowledge. A component is a package. A surface is a built interaction artefact (UI, CLI, or API) that owns packages. A subprogram is a standing program. An opRun is one gated invocation. An actuator is a signal-triggered emit. Do not collapse those.
 
 **Types:** `catalog/types.go` · **Fixture:** `testdata/tiny-module/.typology/typology.yaml` · **I/O:** `catalog.LoadYAML`, `catalog.SaveYAML`, `catalog.ValidateStructure`
 
@@ -24,9 +24,10 @@ description: >-
 
 | Type | Role |
 |------|------|
-| `Typology` | Whole map (`id`, optional `scope.modules`, `slices`, optional bindings) |
+| `Typology` | Whole map (`id`, optional `scope.modules`, `slices`, optional `libraries`, optional bindings) |
 | `Slice` | Bounded context with a required business `objective` (`owns`, `surfaces`, `opRuns`, `subprograms`, `actuators`, `docs`) |
-| `Component` | Package path. Domain packages live on `owns[]`. Interaction packages live under a `Surface`. |
+| `Library` | Technical package group with a `purpose` and `owns[]` only (no surfaces, programs, or docs) |
+| `Component` | Package path. Domain packages live on slice or library `owns[]`. Interaction packages live under a `Surface`. |
 | `Surface` | Built interaction artefact (`kind`: `ui`, `cli`, or `api`) with nested `components[]` (id + path only). |
 | `OpRun` | One gated invocation (CLI, HTTP, human, signal, or later schedule). Optional `runs` or `actuates`, not both. |
 | `Subprogram` | Standing program: required `objective` (business why), `input`, `output`, optional `store`, `gate`. Origin for `store` paths when first written. |
@@ -280,7 +281,8 @@ owns:
 - MUST NOT: elevate internal capabilities (DSPy eval, LLM gateway, workspace inspection) into standalone domain pillars
 - MUST NOT: create horizontal technical slices (e.g. `cli` or `platform`); place CLI packages on `surfaces[kind: cli]` of the domain slice they invoke
 - MUST NOT: merge packages based on stem similarity alone (e.g. `agent` dispatch vs `agenting` grounding) without verifying shared importers and domain purpose
-- MUST: keep platform utility leaves (`config`, telemetry, auth) small and shared rather than swallowed into an arbitrary domain hub
+- MUST: declare platform utility leaves (`config`, telemetry, auth, logger) under root `libraries[]` with a technical `purpose` and `owns[]`; wire consumers with `sliceBindings` from the slice to the library
+- MUST NOT: stuff a domain-free utility into an arbitrary slice `owns[]` or invent a capability/platform slice to claim it
 
 **CONSTRAINT:** Catalog field names are `input`, `output`, `store` on subprograms; `runs` / `actuates` on opRuns. MUST NOT invent mint, writes-as-subprogram-fields, job-as-opRun-type, or aggregate-as-subprogram.
 

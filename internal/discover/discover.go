@@ -32,7 +32,7 @@ type Result struct {
 	Graph    GraphSummary     `json:"graph,omitempty"`
 }
 
-// Run scans a Go module or workspace and proposes slices plus bindings.
+// Run scans a Go module or workspace and proposes slices, libraries, and bindings.
 func Run(opts Options) (Result, error) {
 	repo := strings.TrimSpace(opts.RepoRoot)
 	if repo == "" {
@@ -55,13 +55,28 @@ func Run(opts Options) (Result, error) {
 	if err != nil {
 		return Result{}, terrors.Wrap(err, terrors.CodeUnavailable, "discover.Run", "build import graph")
 	}
+	graphSummary := BuildGraphSummary(graph)
 
-	clusters := clusterPackages(pkgs)
+	platformPaths := map[string]string{} // normalized -> display path
+	for _, p := range graphSummary.PlatformLeaves {
+		platformPaths[normalizeDiscoverPath(p)] = normalizeDiscoverPath(p)
+	}
+
 	docsRoot := opts.DocsRoot
 	if docsRoot == "" {
 		docsRoot = catalog.DefaultDocsRoot
 	}
 
+	libraries, libForPath := draftLibraries(platformPaths)
+	slicePkgs := make([]string, 0, len(pkgs))
+	for _, p := range pkgs {
+		if _, ok := platformPaths[normalizeDiscoverPath(p)]; ok {
+			continue
+		}
+		slicePkgs = append(slicePkgs, p)
+	}
+
+	clusters := clusterPackages(slicePkgs)
 	slices := make([]catalog.Slice, 0, len(clusters))
 	sliceForPath := map[string]string{}
 	for _, clusterID := range sortedKeys(clusters) {
@@ -74,16 +89,19 @@ func Run(opts Options) (Result, error) {
 			if layer == catalog.LayerDomain {
 				owns = append(owns, catalog.Component{
 					ID:    compID,
-					Path:  p,
+					Path:  normalizeDiscoverPath(p),
 					Layer: layer,
 				})
 			} else {
 				surfaceByKind[kind] = append(surfaceByKind[kind], catalog.Component{
 					ID:   compID,
-					Path: p,
+					Path: normalizeDiscoverPath(p),
 				})
 			}
-			sliceForPath[p] = clusterID
+			sliceForPath[normalizeDiscoverPath(p)] = clusterID
+		}
+		if len(owns) == 0 && len(surfaceByKind) == 0 {
+			continue
 		}
 		slice := catalog.Slice{
 			ID:       clusterID,
@@ -94,23 +112,59 @@ func Run(opts Options) (Result, error) {
 		slices = append(slices, slice)
 	}
 
+	// Avoid library ids colliding with slice ids.
+	sliceIDs := map[string]struct{}{}
+	for _, s := range slices {
+		sliceIDs[s.ID] = struct{}{}
+	}
+	for i := range libraries {
+		id := libraries[i].ID
+		if _, ok := sliceIDs[id]; !ok {
+			continue
+		}
+		newID := id + "-lib"
+		libraries[i].ID = newID
+		for path, libID := range libForPath {
+			if libID == id {
+				libForPath[path] = newID
+			}
+		}
+	}
+
 	var sliceBindings []catalog.SliceBinding
 	seenSliceBind := map[string]struct{}{}
 	var compBindings []catalog.ComponentBinding
 	seenCompBind := map[string]struct{}{}
 
 	for from, imports := range graph {
-		fromSlice := sliceForPath[from]
-		if fromSlice == "" {
-			continue
-		}
-		fromComp := componentID(from)
+		fromNorm := normalizeDiscoverPath(from)
+		fromSlice := sliceForPath[fromNorm]
+		fromLib := libForPath[fromNorm]
+		fromComp := componentID(fromNorm)
 		for _, imp := range imports {
-			toSlice := sliceForPath[imp]
-			if toSlice == "" {
+			toNorm := normalizeDiscoverPath(imp)
+			toSlice := sliceForPath[toNorm]
+			toLib := libForPath[toNorm]
+			toComp := componentID(toNorm)
+			if fromSlice != "" && toLib != "" {
+				key := fromSlice + "->" + toLib
+				if _, ok := seenSliceBind[key]; !ok {
+					seenSliceBind[key] = struct{}{}
+					sliceBindings = append(sliceBindings, catalog.SliceBinding{
+						From: fromSlice,
+						To:   toLib,
+						Kind: catalog.SliceReads,
+					})
+				}
 				continue
 			}
-			toComp := componentID(imp)
+			if fromLib != "" {
+				// Libraries must not gain domain knowledge via slice imports; skip draft bindings.
+				continue
+			}
+			if fromSlice == "" || toSlice == "" {
+				continue
+			}
 			if fromSlice != toSlice {
 				key := fromSlice + "->" + toSlice
 				if _, ok := seenSliceBind[key]; !ok {
@@ -139,16 +193,65 @@ func Run(opts Options) (Result, error) {
 		ID:                filepath.Base(absRepo),
 		Scope:             catalog.Scope{Modules: moduleRels(modules)},
 		Slices:            slices,
+		Libraries:         libraries,
 		SliceBindings:     sliceBindings,
 		ComponentBindings: compBindings,
 	}
-	graphSummary := BuildGraphSummary(graph)
 	return Result{
 		Typology: t,
 		Module:   moduleLabel(modules),
 		Packages: pkgs,
 		Graph:    graphSummary,
 	}, nil
+}
+
+func draftLibraries(platformPaths map[string]string) ([]catalog.Library, map[string]string) {
+	libForPath := map[string]string{}
+	if len(platformPaths) == 0 {
+		return nil, libForPath
+	}
+	paths := make([]string, 0, len(platformPaths))
+	for _, p := range platformPaths {
+		paths = append(paths, p)
+	}
+	sort.Strings(paths)
+
+	usedIDs := map[string]struct{}{}
+	libraries := make([]catalog.Library, 0, len(paths))
+	for _, p := range paths {
+		id := libraryIDFromPath(p)
+		base := id
+		for i := 2; ; i++ {
+			if _, ok := usedIDs[id]; !ok {
+				break
+			}
+			id = fmt.Sprintf("%s-%d", base, i)
+		}
+		usedIDs[id] = struct{}{}
+		libForPath[p] = id
+		libraries = append(libraries, catalog.Library{
+			ID:      id,
+			Purpose: "Shared technical package without domain knowledge (discover draft)",
+			Owns: []catalog.Component{{
+				ID:    componentID(p),
+				Path:  p,
+				Layer: catalog.LayerDomain,
+			}},
+		})
+	}
+	return libraries, libForPath
+}
+
+func libraryIDFromPath(relPkg string) string {
+	base := filepath.Base(normalizeDiscoverPath(relPkg))
+	if base == "" || base == "." || base == "/" {
+		return "library"
+	}
+	return base
+}
+
+func normalizeDiscoverPath(p string) string {
+	return filepath.ToSlash(strings.TrimPrefix(strings.TrimSpace(p), "./"))
 }
 
 // ImportGraph returns import edges between local packages (dir paths relative to

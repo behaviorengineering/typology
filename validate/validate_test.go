@@ -165,6 +165,87 @@ func TestValidate_surfaceStaticAnchor_ok(t *testing.T) {
 	}
 }
 
+func TestValidate_libraryClaimsPackage(t *testing.T) {
+	t.Parallel()
+	repo := filepath.Join("..", "testdata", "tiny-module")
+	catalogPath := filepath.Join(repo, ".typology", "typology.yaml")
+	typ, err := catalog.LoadYAML(catalogPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	issues := validate.Run(validate.Options{RepoRoot: repo, Catalog: typ})
+	if len(issues) != 0 {
+		t.Fatalf("validate with library: %v", issues)
+	}
+}
+
+func TestValidate_missingSliceToLibraryBinding(t *testing.T) {
+	t.Parallel()
+	repo := filepath.Join("..", "testdata", "tiny-module")
+	catalogPath := filepath.Join(repo, ".typology", "typology.yaml")
+	typ, err := catalog.LoadYAML(catalogPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	filtered := typ.SliceBindings[:0]
+	for _, b := range typ.SliceBindings {
+		if b.To == "config" {
+			continue
+		}
+		filtered = append(filtered, b)
+	}
+	typ.SliceBindings = filtered
+
+	issues := validate.Run(validate.Options{RepoRoot: repo, Catalog: typ})
+	found := false
+	for _, issue := range issues {
+		if strings.Contains(issue.Message, "SliceBinding") && strings.Contains(issue.Message, "config") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected missing slice-to-library binding, got %v", issues)
+	}
+}
+
+func TestValidate_libraryMustNotImportSlice(t *testing.T) {
+	t.Parallel()
+	repo := t.TempDir()
+	mustWrite(t, filepath.Join(repo, "go.mod"), "module example.com/libimport\n\ngo 1.26.5\n")
+	mustWrite(t, filepath.Join(repo, "internal", "config", "config.go"), "package config\n\nimport \"example.com/libimport/internal/billing\"\n\nfunc Load() { _ = billing.OK }\n")
+	mustWrite(t, filepath.Join(repo, "internal", "billing", "billing.go"), "package billing\n\nvar OK = 1\n")
+	mustWrite(t, filepath.Join(repo, "docs", "develop", "billing", "overview.md"), "# Overview\n")
+	mustWrite(t, filepath.Join(repo, "docs", "develop", "billing", "components.md"), "# Components\n")
+
+	typ := catalog.Typology{
+		ID: "libimport",
+		Slices: []catalog.Slice{{
+			ID:        "billing",
+			Objective: "Billing product work.",
+			Owns: []catalog.Component{
+				{ID: "billing", Path: "internal/billing", Layer: catalog.LayerDomain},
+			},
+			Docs: catalog.DocCluster{Pages: []catalog.DocPage{
+				{Kind: catalog.DocOverview, Path: "docs/develop/billing/overview.md"},
+				{Kind: catalog.DocComponents, Path: "docs/develop/billing/components.md"},
+			}},
+		}},
+		Libraries: []catalog.Library{{
+			ID:      "config",
+			Purpose: "Settings without domain knowledge",
+			Owns: []catalog.Component{
+				{ID: "config", Path: "internal/config", Layer: catalog.LayerDomain},
+			},
+		}},
+	}
+
+	issues := validate.Run(validate.Options{RepoRoot: repo, Catalog: typ})
+	if !hasMessage(issues, "library config must not import slice package") {
+		t.Fatalf("expected library-must-not-import-slice finding, got %v", issues)
+	}
+}
+
 func hasMessage(issues []catalog.Issue, want string) bool {
 	for _, issue := range issues {
 		if strings.Contains(issue.Message, want) {

@@ -227,6 +227,107 @@ func TestSliceAllComponents(t *testing.T) {
 	}
 }
 
+func TestValidateStructure_libraryClaimsAndBindings(t *testing.T) {
+	t.Parallel()
+	typ := catalog.Typology{
+		ID: "tiny",
+		Slices: []catalog.Slice{
+			{
+				ID:        "billing",
+				Objective: "Operate billing records for fixture tests.",
+				Owns: []catalog.Component{
+					{ID: "billing-store", Path: "internal/billing/store", Layer: catalog.LayerDomain},
+				},
+			},
+			{
+				ID:        "ledger",
+				Objective: "Maintain the ledger for fixture tests.",
+				Owns: []catalog.Component{
+					{ID: "ledger-core", Path: "internal/ledger", Layer: catalog.LayerDomain},
+				},
+			},
+		},
+		Libraries: []catalog.Library{{
+			ID:      "config",
+			Purpose: "Load process settings without domain knowledge",
+			Owns: []catalog.Component{
+				{ID: "config", Path: "internal/config", Layer: catalog.LayerDomain},
+			},
+		}},
+		SliceBindings: []catalog.SliceBinding{
+			{From: "billing", To: "ledger", Kind: catalog.SliceReads},
+			{From: "billing", To: "config", Kind: catalog.SliceReads},
+			{From: "ledger", To: "config", Kind: catalog.SliceReads},
+		},
+	}
+	if issues := typ.ValidateStructure(); len(issues) != 0 {
+		t.Fatalf("unexpected issues: %v", issues)
+	}
+	if typ.OwnerForComponent("config").Kind != catalog.OwnerLibrary {
+		t.Fatalf("expected config owned by library, got %+v", typ.OwnerForComponent("config"))
+	}
+	if typ.SliceForComponent("config") != "" {
+		t.Fatalf("library component must not report a slice owner")
+	}
+}
+
+func TestValidateStructure_libraryIdCollisionAndMissingPurpose(t *testing.T) {
+	t.Parallel()
+	collide := catalog.Typology{
+		ID: "tiny",
+		Slices: []catalog.Slice{{
+			ID:        "config",
+			Objective: "Pretend config is a product slice.",
+		}},
+		Libraries: []catalog.Library{{
+			ID:      "config",
+			Purpose: "Load settings",
+		}},
+	}
+	if !hasIssue(collide.ValidateStructure(), `library id "config" collides with a slice id`) {
+		t.Fatalf("expected id collision, got %v", collide.ValidateStructure())
+	}
+
+	noPurpose := catalog.Typology{
+		ID: "tiny",
+		Libraries: []catalog.Library{{
+			ID: "config",
+		}},
+	}
+	if !hasIssue(noPurpose.ValidateStructure(), "library missing purpose") {
+		t.Fatalf("expected missing purpose, got %v", noPurpose.ValidateStructure())
+	}
+}
+
+func TestValidateStructure_sliceBindingToLibrary(t *testing.T) {
+	t.Parallel()
+	typ := catalog.Typology{
+		ID: "tiny",
+		Slices: []catalog.Slice{{
+			ID:        "billing",
+			Objective: "Operate billing.",
+		}},
+		Libraries: []catalog.Library{{
+			ID:      "config",
+			Purpose: "Settings",
+		}},
+		SliceBindings: []catalog.SliceBinding{
+			{From: "billing", To: "config", Kind: catalog.SliceReads},
+		},
+	}
+	if issues := typ.ValidateStructure(); len(issues) != 0 {
+		t.Fatalf("unexpected issues: %v", issues)
+	}
+
+	unknownTo := typ
+	unknownTo.SliceBindings = []catalog.SliceBinding{
+		{From: "billing", To: "missing", Kind: catalog.SliceReads},
+	}
+	if !hasIssue(unknownTo.ValidateStructure(), `SliceBinding to unknown slice or library "missing"`) {
+		t.Fatalf("expected unknown to, got %v", unknownTo.ValidateStructure())
+	}
+}
+
 func hasIssue(issues []catalog.Issue, want string) bool {
 	for _, iss := range issues {
 		if iss.Message == want {

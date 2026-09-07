@@ -7,6 +7,20 @@ import (
 	"strings"
 )
 
+// OwnerKind names whether a component is claimed by a slice or a library.
+type OwnerKind string
+
+const (
+	OwnerSlice   OwnerKind = "slice"
+	OwnerLibrary OwnerKind = "library"
+)
+
+// ComponentOwner identifies the catalog owner of a component.
+type ComponentOwner struct {
+	Kind OwnerKind
+	ID   string
+}
+
 // LookupSlice returns a slice by id.
 func (t Typology) LookupSlice(id string) (Slice, bool) {
 	for _, s := range t.Slices {
@@ -17,7 +31,17 @@ func (t Typology) LookupSlice(id string) (Slice, bool) {
 	return Slice{}, false
 }
 
-// ComponentByID maps component id across all slices (owns + surface components).
+// LookupLibrary returns a library by id.
+func (t Typology) LookupLibrary(id string) (Library, bool) {
+	for _, lib := range t.Libraries {
+		if lib.ID == id {
+			return lib, true
+		}
+	}
+	return Library{}, false
+}
+
+// ComponentByID maps component id across all slices and libraries.
 func (t Typology) ComponentByID() map[string]Component {
 	out := make(map[string]Component)
 	for _, s := range t.Slices {
@@ -27,19 +51,53 @@ func (t Typology) ComponentByID() map[string]Component {
 			}
 		}
 	}
+	for _, lib := range t.Libraries {
+		for _, c := range lib.Owns {
+			if c.ID != "" {
+				out[c.ID] = c
+			}
+		}
+	}
 	return out
 }
 
 // SliceForComponent returns the slice id owning a component id.
+// Library-owned components return "".
 func (t Typology) SliceForComponent(componentID string) string {
+	owner := t.OwnerForComponent(componentID)
+	if owner.Kind == OwnerSlice {
+		return owner.ID
+	}
+	return ""
+}
+
+// LibraryForComponent returns the library id owning a component id.
+// Slice-owned components return "".
+func (t Typology) LibraryForComponent(componentID string) string {
+	owner := t.OwnerForComponent(componentID)
+	if owner.Kind == OwnerLibrary {
+		return owner.ID
+	}
+	return ""
+}
+
+// OwnerForComponent returns the slice or library that claims a component id.
+func (t Typology) OwnerForComponent(componentID string) ComponentOwner {
 	for _, s := range t.Slices {
 		for _, c := range s.AllComponents() {
 			if c.ID == componentID {
-				return s.ID
+				return ComponentOwner{Kind: OwnerSlice, ID: s.ID}
 			}
 		}
 	}
-	return ""
+	for _, lib := range t.Libraries {
+		for _, c := range lib.Owns {
+			if c.ID == componentID {
+				return ComponentOwner{Kind: OwnerLibrary, ID: lib.ID}
+			}
+		}
+	}
+	return ComponentOwner{}
 }
 
 // AllComponents returns domain owns plus every surface component.
@@ -130,6 +188,7 @@ func (t Typology) ValidateStructure() []Issue {
 	var issues []Issue
 	issues = append(issues, validateScope(t.Scope)...)
 	seenSlice := map[string]struct{}{}
+	seenLibrary := map[string]struct{}{}
 	seenComp := map[string]string{}
 	for _, s := range t.Slices {
 		if s.ID == "" {
@@ -154,10 +213,10 @@ func (t Typology) ValidateStructure() []Issue {
 			if owner, ok := seenComp[c.ID]; ok {
 				issues = append(issues, Issue{
 					Slice:   s.ID,
-					Message: fmt.Sprintf("duplicate component id %q (also on slice %q)", c.ID, owner),
+					Message: fmt.Sprintf("duplicate component id %q (also on %s)", c.ID, owner),
 				})
 			}
-			seenComp[c.ID] = s.ID
+			seenComp[c.ID] = "slice " + s.ID
 			if c.Layer == LayerInteraction {
 				issues = append(issues, Issue{
 					Slice:   s.ID,
@@ -176,39 +235,103 @@ func (t Typology) ValidateStructure() []Issue {
 		issues = append(issues, s.validateActuators()...)
 		issues = append(issues, s.validateOpRuns()...)
 	}
+	for _, lib := range t.Libraries {
+		if lib.ID == "" {
+			issues = append(issues, Issue{Message: "library with empty id"})
+			continue
+		}
+		if _, ok := seenSlice[lib.ID]; ok {
+			issues = append(issues, Issue{
+				Slice:   lib.ID,
+				Message: fmt.Sprintf("library id %q collides with a slice id", lib.ID),
+			})
+		}
+		if _, ok := seenLibrary[lib.ID]; ok {
+			issues = append(issues, Issue{Slice: lib.ID, Message: "duplicate library id"})
+		}
+		seenLibrary[lib.ID] = struct{}{}
+		if strings.TrimSpace(lib.Purpose) == "" {
+			issues = append(issues, Issue{
+				Slice:   lib.ID,
+				Message: "library missing purpose",
+			})
+		}
+		for _, c := range lib.Owns {
+			if c.ID == "" {
+				issues = append(issues, Issue{Slice: lib.ID, Message: "library component with empty id"})
+				continue
+			}
+			if owner, ok := seenComp[c.ID]; ok {
+				issues = append(issues, Issue{
+					Slice:   lib.ID,
+					Message: fmt.Sprintf("duplicate component id %q (also on %s)", c.ID, owner),
+				})
+			}
+			seenComp[c.ID] = "library " + lib.ID
+			if c.Layer == LayerInteraction {
+				issues = append(issues, Issue{
+					Slice:   lib.ID,
+					Message: fmt.Sprintf("library component %q: interaction packages belong on slice surfaces, not libraries", c.ID),
+				})
+			}
+			if c.Layer != "" && c.Layer != LayerDomain {
+				issues = append(issues, Issue{
+					Slice:   lib.ID,
+					Message: fmt.Sprintf("library component %q: owns[] requires layer domain", c.ID),
+				})
+			}
+		}
+	}
 	for _, b := range t.SliceBindings {
 		if _, ok := seenSlice[b.From]; !ok {
 			issues = append(issues, Issue{Message: fmt.Sprintf("SliceBinding from unknown slice %q", b.From)})
 		}
-		if _, ok := seenSlice[b.To]; !ok {
-			issues = append(issues, Issue{Message: fmt.Sprintf("SliceBinding to unknown slice %q", b.To)})
+		_, toSlice := seenSlice[b.To]
+		_, toLibrary := seenLibrary[b.To]
+		if !toSlice && !toLibrary {
+			issues = append(issues, Issue{Message: fmt.Sprintf("SliceBinding to unknown slice or library %q", b.To)})
 		}
 	}
 	for _, b := range t.ComponentBindings {
-		fromSlice := t.SliceForComponent(b.From)
-		toSlice := t.SliceForComponent(b.To)
-		if fromSlice == "" {
+		fromOwner := t.OwnerForComponent(b.From)
+		toOwner := t.OwnerForComponent(b.To)
+		if fromOwner.ID == "" {
 			issues = append(issues, Issue{Message: fmt.Sprintf("ComponentBinding from unknown component %q", b.From)})
 			continue
 		}
-		if toSlice == "" {
+		if toOwner.ID == "" {
 			issues = append(issues, Issue{Message: fmt.Sprintf("ComponentBinding to unknown component %q", b.To)})
 			continue
 		}
-		if fromSlice != toSlice {
-			hasSliceBinding := false
-			for _, sb := range t.SliceBindings {
-				if (sb.From == fromSlice && sb.To == toSlice) || (sb.From == toSlice && sb.To == fromSlice) {
-					hasSliceBinding = true
-					break
-				}
+		if fromOwner.Kind == OwnerLibrary && toOwner.Kind == OwnerSlice {
+			issues = append(issues, Issue{
+				Slice:   fromOwner.ID,
+				Message: fmt.Sprintf("ComponentBinding %q -> %q: libraries must not bind to slice packages", b.From, b.To),
+			})
+			continue
+		}
+		if fromOwner.Kind == OwnerLibrary && toOwner.Kind == OwnerLibrary && fromOwner.ID != toOwner.ID {
+			issues = append(issues, Issue{
+				Slice:   fromOwner.ID,
+				Message: fmt.Sprintf("ComponentBinding %q -> %q: cross-library bindings are not supported", b.From, b.To),
+			})
+			continue
+		}
+		if fromOwner.ID == toOwner.ID && fromOwner.Kind == toOwner.Kind {
+			continue
+		}
+		hasSliceBinding := false
+		for _, sb := range t.SliceBindings {
+			if (sb.From == fromOwner.ID && sb.To == toOwner.ID) || (sb.From == toOwner.ID && sb.To == fromOwner.ID) {
+				hasSliceBinding = true
+				break
 			}
-			if !hasSliceBinding {
-				issues = append(issues, Issue{
-					Slice:   fromSlice,
-					Message: fmt.Sprintf("ComponentBinding %q -> %q crosses slices without SliceBinding", b.From, b.To),
-				})
-			}
+		}
+		if !hasSliceBinding {
+			issues = append(issues, Issue{
+				Slice:   fromOwner.ID,
+				Message: fmt.Sprintf("ComponentBinding %q -> %q crosses owners without SliceBinding", b.From, b.To),
+			})
 		}
 	}
 	return issues
@@ -299,10 +422,10 @@ func (s Slice) validateSurfaces(seenComp map[string]string) []Issue {
 			if owner, ok := seenComp[c.ID]; ok {
 				issues = append(issues, Issue{
 					Slice:   s.ID,
-					Message: fmt.Sprintf("duplicate component id %q (also on slice %q)", c.ID, owner),
+					Message: fmt.Sprintf("duplicate component id %q (also on %s)", c.ID, owner),
 				})
 			}
-			seenComp[c.ID] = s.ID
+			seenComp[c.ID] = "slice " + s.ID
 			if c.Layer == LayerInteraction || c.Kind != "" {
 				issues = append(issues, Issue{
 					Slice:   s.ID,

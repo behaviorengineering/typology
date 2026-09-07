@@ -79,7 +79,7 @@ PROHIBITED: `typology discover . --out .typology/typology.yaml` onto a confirmed
   - **Anti-pattern 2: Capabilities as domain pillars.** Internal facilities (DSPy eval, LLM gateways, workspace inspection) are capabilities invoked by workflows, not autonomous domain pillars.
   - **Anti-pattern 3: Horizontal technical tiers as slices.** Having a standalone `cli` or `platform` slice fragments the domain. CLI commands belong on `surfaces[]` of the domain slice they invoke; root entry binary belongs under host/operations boundary.
   - **Anti-pattern 4: Projection / Visualizer as a standalone slice (`projection-as-slice`).** A package that exists solely to project, query, or render a graph, tree, or dashboard from domain entities defined elsewhere has no aggregate lifecycle of its own; it belongs on `surfaces[]` of the underlying entity domain slice, not as an independent peer slice.
-  - **Platform leaves:** keep platform utility leaves (`config`, telemetry, auth) small and separate rather than swallowing them into the first domain hub.
+  - **Libraries (not platform slices):** declare platform utility leaves (`config`, telemetry, auth, logger) under catalog `libraries[]` with a technical `purpose`. Bind importer slices with `sliceBindings` to the library. MUST NOT invent a `platform` slice or hostage the package under the first domain hub.
 - MUST NOT: trust name similarity alone without checking importers (`agent` dispatch vs `agenting` grounding have different callers and represent different contexts)
 - MUST: present candidate merge clusters with one-line rationale to the operator and obtain approval before seeding the slice-walk table
 
