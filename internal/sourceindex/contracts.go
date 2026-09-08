@@ -10,11 +10,22 @@ import (
 
 	terrors "github.com/behaviorengineering/typology/errors"
 	"github.com/behaviorengineering/typology/internal/gorepo"
+	"gopkg.in/yaml.v3"
 )
 
 // FormatPackageContractsMarkdown renders a compact public-contract summary for LLMs.
-// Each package is one block with path, package name, delivery facts, and exported symbols.
+// Each package is one block with path, package name, delivery facts, observed role, and exported symbols.
 func FormatPackageContractsMarkdown(idx Index) string {
+	return FormatPackageContractsMarkdownWithRoles(idx, RoleTopology{})
+}
+
+// FormatPackageContractsMarkdownWithRoles includes observed role fields when topo is non-empty.
+func FormatPackageContractsMarkdownWithRoles(idx Index, topo RoleTopology) string {
+	roleByPath := map[string]RoleNode{}
+	for _, n := range topo.Packages {
+		roleByPath[normalizePath(n.Path)] = n
+	}
+
 	paths := make([]string, 0, len(idx.Packages))
 	for p := range idx.Packages {
 		paths = append(paths, p)
@@ -24,7 +35,7 @@ func FormatPackageContractsMarkdown(idx Index) string {
 	var b strings.Builder
 	b.WriteString("# Package public contracts\n\n")
 	b.WriteString("Exported symbols and delivery facts from static Go analysis.\n")
-	b.WriteString("Use packageDoc, methods, jsonTags, goEmbed, and deliveryHint to place packages under owns[] vs surfaces[] (kind: cli requires a real CLI/main delivery package).\n\n")
+	b.WriteString("Use packageDoc, methods, jsonTags, goEmbed, deliveryHint, and observed role (never folder names) to classify packages.\n\n")
 	for _, p := range paths {
 		ev := idx.Packages[p]
 		display := "./" + strings.TrimPrefix(filepath.ToSlash(ev.Path), "./")
@@ -41,8 +52,16 @@ func FormatPackageContractsMarkdown(idx Index) string {
 		fmt.Fprintf(&b, "- jsonTags: %t\n", ev.JSONTags)
 		fmt.Fprintf(&b, "- goEmbed: %t\n", ev.GoEmbed)
 		fmt.Fprintf(&b, "- importsNetHTTP: %t\n", ev.ImportsNetHTTP)
+		fmt.Fprintf(&b, "- importsOsExec: %t\n", ev.ImportsOsExec)
 		if hint := strings.TrimSpace(ev.DeliveryHint); hint != "" {
 			fmt.Fprintf(&b, "- deliveryHint: %s\n", hint)
+		}
+		if n, ok := roleByPath[normalizePath(ev.Path)]; ok {
+			fmt.Fprintf(&b, "- role: %s\n", n.Role)
+			fmt.Fprintf(&b, "- confidence: %.2f\n", n.Confidence)
+			if len(n.Evidence) > 0 {
+				fmt.Fprintf(&b, "- roleEvidence: %s\n", strings.Join(n.Evidence, ", "))
+			}
 		}
 		if len(ev.ExportedDecls) > 0 {
 			fmt.Fprintf(&b, "- exportedDecls: %s\n", strings.Join(ev.ExportedDecls, ", "))
@@ -78,6 +97,11 @@ func WritePackageContractsMarkdown(idx Index, w io.Writer) error {
 
 // WritePackageContractsFile builds a module-scoped source index and writes package contracts markdown.
 func WritePackageContractsFile(repoRoot string, modules []gorepo.Module, outPath string) error {
+	return WritePackageContractsFileWithGraph(repoRoot, modules, outPath, nil)
+}
+
+// WritePackageContractsFileWithGraph writes contracts including observed roles when importGraph is set.
+func WritePackageContractsFileWithGraph(repoRoot string, modules []gorepo.Module, outPath string, importGraph map[string][]string) error {
 	out := strings.TrimSpace(outPath)
 	if out == "" {
 		return terrors.New(terrors.CodeInvalid, "sourceindex.WritePackageContractsFile", "out path empty")
@@ -85,6 +109,10 @@ func WritePackageContractsFile(repoRoot string, modules []gorepo.Module, outPath
 	idx, err := BuildInModules(repoRoot, modules)
 	if err != nil {
 		return err
+	}
+	topo := RoleTopology{}
+	if importGraph != nil {
+		topo = BuildRoleTopology(idx, importGraph)
 	}
 	if err := os.MkdirAll(filepath.Dir(out), 0o755); err != nil {
 		return terrors.Wrap(err, terrors.CodeUnavailable, "sourceindex.WritePackageContractsFile", "mkdir contracts dir").
@@ -96,8 +124,44 @@ func WritePackageContractsFile(repoRoot string, modules []gorepo.Module, outPath
 			With("path", out)
 	}
 	defer f.Close()
-	if err := WritePackageContractsMarkdown(idx, f); err != nil {
+	_, err = io.WriteString(f, FormatPackageContractsMarkdownWithRoles(idx, topo))
+	if err != nil {
+		return terrors.Wrap(err, terrors.CodeUnavailable, "sourceindex.WritePackageContractsFile", "write contracts markdown")
+	}
+	return nil
+}
+
+// WriteEvidenceFiles writes package_contracts.md and package_roles.yaml from one index build.
+func WriteEvidenceFiles(repoRoot string, modules []gorepo.Module, contractsOut, rolesOut string, importGraph map[string][]string) error {
+	idx, err := BuildInModules(repoRoot, modules)
+	if err != nil {
 		return err
+	}
+	topo := BuildRoleTopology(idx, importGraph)
+
+	if strings.TrimSpace(contractsOut) != "" {
+		if err := os.MkdirAll(filepath.Dir(contractsOut), 0o755); err != nil {
+			return terrors.Wrap(err, terrors.CodeUnavailable, "sourceindex.WriteEvidenceFiles", "mkdir contracts").
+				With("path", contractsOut)
+		}
+		if err := os.WriteFile(contractsOut, []byte(FormatPackageContractsMarkdownWithRoles(idx, topo)), 0o644); err != nil {
+			return terrors.Wrap(err, terrors.CodeUnavailable, "sourceindex.WriteEvidenceFiles", "write contracts").
+				With("path", contractsOut)
+		}
+	}
+	if strings.TrimSpace(rolesOut) != "" {
+		if err := os.MkdirAll(filepath.Dir(rolesOut), 0o755); err != nil {
+			return terrors.Wrap(err, terrors.CodeUnavailable, "sourceindex.WriteEvidenceFiles", "mkdir roles").
+				With("path", rolesOut)
+		}
+		data, err := yaml.Marshal(topo)
+		if err != nil {
+			return terrors.Wrap(err, terrors.CodeInternal, "sourceindex.WriteEvidenceFiles", "marshal roles")
+		}
+		if err := os.WriteFile(rolesOut, data, 0o644); err != nil {
+			return terrors.Wrap(err, terrors.CodeUnavailable, "sourceindex.WriteEvidenceFiles", "write roles").
+				With("path", rolesOut)
+		}
 	}
 	return nil
 }

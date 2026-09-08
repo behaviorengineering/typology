@@ -90,6 +90,10 @@ func defaultPackageContractsPath(repo string) string {
 	return filepath.Join(repo, filepath.FromSlash(catalog.DefaultPackageContractsRel))
 }
 
+func defaultPackageRolesPath(repo string) string {
+	return filepath.Join(repo, filepath.FromSlash(catalog.DefaultPackageRolesRel))
+}
+
 func runInit(args []string, stdout, stderr io.Writer) int {
 	repo, rest, ok := firstArg(args)
 	if !ok {
@@ -184,13 +188,15 @@ func runDiscover(args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 	contractsOut := defaultPackageContractsPath(repo)
-	if err := writePackageContracts(repo, module, contractsOut); err != nil {
-		_, _ = fmt.Fprintf(stderr, "discover: package contracts: %v\n", err)
+	rolesOut := defaultPackageRolesPath(repo)
+	if err := writePackageEvidence(repo, module, contractsOut, rolesOut); err != nil {
+		_, _ = fmt.Fprintf(stderr, "discover: package evidence: %v\n", err)
 		return 1
 	}
 	_, _ = fmt.Fprintf(stdout, "discover: wrote draft catalog (%d slices, %d packages) -> %s\n",
 		len(result.Typology.Slices), len(result.Packages), out)
 	_, _ = fmt.Fprintf(stdout, "discover: wrote package contracts -> %s\n", contractsOut)
+	_, _ = fmt.Fprintf(stdout, "discover: wrote package roles -> %s\n", rolesOut)
 	if suggestMerges && len(result.Graph.MergeSuggestions) > 0 {
 		_, _ = fmt.Fprintln(stdout, "\nMerge candidates (sole importer / companion heuristics):")
 		for _, m := range result.Graph.MergeSuggestions {
@@ -230,20 +236,29 @@ func runContracts(args []string, stdout, stderr io.Writer) int {
 			return 2
 		}
 	}
-	if err := writePackageContracts(repo, module, out); err != nil {
+	if err := writePackageEvidence(repo, module, out, defaultPackageRolesPath(repo)); err != nil {
 		_, _ = fmt.Fprintf(stderr, "contracts: %v\n", err)
 		return 1
 	}
 	_, _ = fmt.Fprintf(stdout, "contracts: wrote package contracts -> %s\n", out)
+	_, _ = fmt.Fprintf(stdout, "contracts: wrote package roles -> %s\n", defaultPackageRolesPath(repo))
 	return 0
 }
 
-func writePackageContracts(repo, module, outPath string) error {
+func writePackageEvidence(repo, module, contractsOut, rolesOut string) error {
 	modules, err := gorepo.ResolveModules(repo, nil, module)
 	if err != nil {
 		return err
 	}
-	return sourceindex.WritePackageContractsFile(repo, modules, outPath)
+	graph, err := discover.ImportGraphInModules(repo, modules)
+	if err != nil {
+		return err
+	}
+	return sourceindex.WriteEvidenceFiles(repo, modules, contractsOut, rolesOut, graph)
+}
+
+func writePackageContracts(repo, module, outPath string) error {
+	return writePackageEvidence(repo, module, outPath, defaultPackageRolesPath(repo))
 }
 
 func runEmit(args []string, stdout, stderr io.Writer) int {

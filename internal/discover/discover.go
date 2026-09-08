@@ -14,6 +14,7 @@ import (
 	"github.com/behaviorengineering/typology/catalog"
 	terrors "github.com/behaviorengineering/typology/errors"
 	"github.com/behaviorengineering/typology/internal/gorepo"
+	"github.com/behaviorengineering/typology/internal/sourceindex"
 )
 
 // Options configures discovery.
@@ -57,6 +58,15 @@ func Run(opts Options) (Result, error) {
 	}
 	graphSummary := BuildGraphSummary(graph)
 
+	idx, err := sourceindex.BuildInModules(absRepo, modules)
+	if err != nil {
+		return Result{}, terrors.Wrap(err, terrors.CodeUnavailable, "discover.Run", "build source index")
+	}
+	roleByPath := map[string]sourceindex.RoleNode{}
+	for _, n := range sourceindex.BuildRoleTopology(idx, graph).Packages {
+		roleByPath[normalizeDiscoverPath(n.Path)] = n
+	}
+
 	platformPaths := map[string]string{} // normalized -> display path
 	for _, p := range graphSummary.PlatformLeaves {
 		platformPaths[normalizeDiscoverPath(p)] = normalizeDiscoverPath(p)
@@ -85,7 +95,7 @@ func Run(opts Options) (Result, error) {
 		surfaceByKind := map[catalog.InteractionKind][]catalog.Component{}
 		for _, p := range paths {
 			compID := componentID(p)
-			layer, kind := inferLayer(p)
+			layer, kind := layerFromRole(roleByPath[normalizeDiscoverPath(p)])
 			if layer == catalog.LayerDomain {
 				owns = append(owns, catalog.Component{
 					ID:    compID,
@@ -480,18 +490,26 @@ func componentID(relPkg string) string {
 	return strings.ReplaceAll(rel, "/", "-")
 }
 
-func inferLayer(relPkg string) (catalog.Layer, catalog.InteractionKind) {
-	rel := strings.TrimPrefix(relPkg, "./")
-	switch {
-	case strings.Contains(rel, "/http") || strings.HasSuffix(rel, "api") || strings.HasSuffix(rel, "/api") || strings.Contains(rel, "api/") || strings.Contains(rel, "/api/"):
-		return catalog.LayerInteraction, catalog.InteractionAPI
-	case strings.HasPrefix(rel, "cmd/") || strings.Contains(rel, "/cli") || strings.HasSuffix(rel, "/cli") || rel == "cli" || strings.Contains(rel, "cli/"):
+func layerFromRole(node sourceindex.RoleNode) (catalog.Layer, catalog.InteractionKind) {
+	switch node.Role {
+	case sourceindex.RoleEntrypoint:
 		return catalog.LayerInteraction, catalog.InteractionCLI
-	case strings.HasPrefix(rel, "ui/") || strings.Contains(rel, "/ui/") || strings.HasPrefix(rel, "viewer/") || strings.Contains(rel, "/viewer") || strings.HasSuffix(rel, "/view") || strings.HasSuffix(rel, "/views") || strings.Contains(rel, "/view/") || strings.Contains(rel, "/views/") || rel == "view" || rel == "views" || rel == "viewer":
-		return catalog.LayerInteraction, catalog.InteractionUI
+	case sourceindex.RoleHTTPSurface:
+		for _, e := range node.Evidence {
+			if e == "embeds_static" {
+				return catalog.LayerInteraction, catalog.InteractionUI
+			}
+		}
+		return catalog.LayerInteraction, catalog.InteractionAPI
 	default:
 		return catalog.LayerDomain, ""
 	}
+}
+
+// inferLayer is retained for tests that call the old name; it never uses path tokens.
+func inferLayer(relPkg string) (catalog.Layer, catalog.InteractionKind) {
+	_ = relPkg
+	return catalog.LayerDomain, ""
 }
 
 // PackageNode provides degree metrics and caller relationships for a package.

@@ -20,6 +20,10 @@ const DefaultDraftCatalogRel = "tmp/typology/typology.yaml"
 // written next to the discover draft under tmp/typology/.
 const DefaultPackageContractsRel = "tmp/typology/package_contracts.md"
 
+// DefaultPackageRolesRel is the default observed package-role topology path
+// written next to the discover draft under tmp/typology/.
+const DefaultPackageRolesRel = "tmp/typology/package_roles.yaml"
+
 // DefaultDocsRoot is the usual per-slice docs prefix under a repo root.
 const DefaultDocsRoot = "docs/develop"
 

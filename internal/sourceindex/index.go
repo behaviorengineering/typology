@@ -38,7 +38,10 @@ type PackageEvidence struct {
 	HasMain         bool     `json:"hasMain,omitempty"`
 	JSONTags        bool     `json:"jsonTags,omitempty"`
 	GoEmbed         bool     `json:"goEmbed,omitempty"`
+	EmbedsStatic    bool     `json:"embedsStatic,omitempty"`
 	ImportsNetHTTP  bool     `json:"importsNetHTTP,omitempty"`
+	ImportsOsExec   bool     `json:"importsOsExec,omitempty"`
+	HTTPSurfaceIdent bool    `json:"httpSurfaceIdent,omitempty"`
 	DeliveryHint    string   `json:"deliveryHint,omitempty"`
 }
 
@@ -237,8 +240,11 @@ func scanPackage(repoRoot string, pkg listPackage) (PackageEvidence, error) {
 		}
 		for _, imp := range parsed.Imports {
 			path := strings.Trim(imp.Path.Value, `"`)
-			if path == "net/http" {
+			switch path {
+			case "net/http":
 				ev.ImportsNetHTTP = true
+			case "os/exec":
+				ev.ImportsOsExec = true
 			}
 		}
 		for _, decl := range parsed.Decls {
@@ -269,6 +275,9 @@ func scanPackage(repoRoot string, pkg listPackage) (PackageEvidence, error) {
 			case *ast.GenDecl:
 				if hasGoEmbed(d.Doc) {
 					ev.GoEmbed = true
+					if goEmbedLooksStatic(d.Doc) {
+						ev.EmbedsStatic = true
+					}
 				}
 				for _, spec := range d.Specs {
 					switch s := spec.(type) {
@@ -285,6 +294,9 @@ func scanPackage(repoRoot string, pkg listPackage) (PackageEvidence, error) {
 					case *ast.ValueSpec:
 						if hasGoEmbed(s.Doc) || hasGoEmbed(d.Doc) {
 							ev.GoEmbed = true
+							if goEmbedLooksStatic(s.Doc) || goEmbedLooksStatic(d.Doc) {
+								ev.EmbedsStatic = true
+							}
 						}
 						for _, name := range s.Names {
 							if ast.IsExported(name.Name) {
@@ -302,6 +314,7 @@ func scanPackage(repoRoot string, pkg listPackage) (PackageEvidence, error) {
 	ev.ExportedDecls = sortedKeys(exportedDecls)
 	ev.ExportedFuncs = sortedKeys(exportedFuncs)
 	ev.ExportedMethods = sortedKeys(exportedMethods)
+	ev.HTTPSurfaceIdent = httpSurfaceIdent
 	ev.DeliveryHint = deliveryHint(ev, httpSurfaceIdent)
 	return ev, nil
 }
@@ -367,6 +380,24 @@ func hasGoEmbed(doc *ast.CommentGroup) bool {
 	for _, c := range doc.List {
 		text := strings.TrimSpace(c.Text)
 		if strings.HasPrefix(text, "//go:embed") || strings.HasPrefix(text, "/*go:embed") {
+			return true
+		}
+	}
+	return false
+}
+
+func goEmbedLooksStatic(doc *ast.CommentGroup) bool {
+	if doc == nil {
+		return false
+	}
+	for _, c := range doc.List {
+		text := strings.ToLower(strings.TrimSpace(c.Text))
+		if !strings.HasPrefix(text, "//go:embed") && !strings.HasPrefix(text, "/*go:embed") {
+			continue
+		}
+		if strings.Contains(text, ".html") || strings.Contains(text, ".js") ||
+			strings.Contains(text, ".css") || strings.Contains(text, "static") ||
+			strings.Contains(text, "web") || strings.Contains(text, "ui/") {
 			return true
 		}
 	}
