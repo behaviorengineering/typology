@@ -47,9 +47,11 @@ func TestDiscover_tinyModule(t *testing.T) {
 		for _, p := range s.Docs.Pages {
 			kinds[p.Kind] = true
 		}
-		if !kinds[catalog.DocOverview] || !kinds[catalog.DocComponents] || !kinds[catalog.DocContracts] {
+		if !kinds[catalog.DocOverview] || !kinds[catalog.DocComponents] {
 			t.Fatalf("billing docs missing core pages: %+v", s.Docs.Pages)
 		}
+		// Contracts/CLI/UI pages only appear when observed roles place an API/CLI/UI surface.
+		// billing/httpapi has no net/http or handler idents, so it stays domain owns.
 		if kinds[catalog.DocCLI] || kinds[catalog.DocPresentation] {
 			t.Fatalf("billing docs should omit empty CLI/UI pages: %+v", s.Docs.Pages)
 		}
