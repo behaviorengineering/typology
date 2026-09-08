@@ -64,6 +64,14 @@ slices:
           path: docs/develop/ledger/overview.md
         - kind: components
           path: docs/develop/ledger/components.md
+  - id: delivery
+    objective: HTTP delivery fixture that serves an embedded UI surface.
+    surfaces:
+      - id: delivery-ui
+        kind: ui
+        components:
+          - id: server
+            path: internal/server
 sliceBindings:
   - from: billing
     to: ledger
@@ -80,6 +88,12 @@ libraries:
     owns:
       - id: config
         path: internal/config
+        layer: domain
+  - id: board
+    purpose: JSON data types for board payloads with no domain logic
+    owns:
+      - id: board
+        path: internal/board
         layer: domain
 componentBindings:
   - from: billing-http
