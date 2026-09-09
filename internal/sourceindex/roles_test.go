@@ -131,6 +131,22 @@ func TestWriteEvidenceFiles_tinyModule(t *testing.T) {
 	}
 }
 
+func TestClassifyStage1_httpSurfaceBeatsOTel(t *testing.T) {
+	t.Parallel()
+	ev := sourceindex.PackageEvidence{
+		Path:         "internal/server",
+		GoEmbed:      true,
+		EmbedsStatic: true,
+		ImportsOTel:  true,
+	}
+	topo := sourceindex.BuildRoleTopology(sourceindex.Index{
+		Packages: map[string]sourceindex.PackageEvidence{"internal/server": ev},
+	}, nil)
+	if len(topo.Packages) != 1 || topo.Packages[0].Role != sourceindex.RoleHTTPSurface {
+		t.Fatalf("got %+v; embed delivery must beat incidental otel import", topo.Packages)
+	}
+}
+
 func TestClassifyPackage_noPathNameHeuristic(t *testing.T) {
 	t.Parallel()
 	// A package whose folder looks like "dashboard" but code is JSON-only is a dto.

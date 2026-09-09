@@ -203,19 +203,7 @@ func classifyStage1(ev PackageEvidence) (RoleNode, bool) {
 			Evidence: []string{"has_main"}, InspectedStage: 1,
 		}, true
 	}
-	if ev.ImportsOTel || ev.ImportsPrometheus {
-		evidence := []string{}
-		if ev.ImportsOTel {
-			evidence = append(evidence, "imports_otel")
-		}
-		if ev.ImportsPrometheus {
-			evidence = append(evidence, "imports_prometheus")
-		}
-		return RoleNode{
-			Path: path, Role: RoleObservability, Confidence: confidenceStage1,
-			Evidence: evidence, InspectedStage: 1,
-		}, true
-	}
+	// HTTP delivery wins over incidental otel instrumentation on the same package.
 	if ev.GoEmbed || (ev.ImportsNetHTTP && ev.HTTPSurfaceIdent) {
 		evidence := []string{}
 		if ev.GoEmbed {
@@ -232,6 +220,19 @@ func classifyStage1(ev PackageEvidence) (RoleNode, bool) {
 		}
 		return RoleNode{
 			Path: path, Role: RoleHTTPSurface, Confidence: confidenceStage1,
+			Evidence: evidence, InspectedStage: 1,
+		}, true
+	}
+	if ev.ImportsOTel || ev.ImportsPrometheus {
+		evidence := []string{}
+		if ev.ImportsOTel {
+			evidence = append(evidence, "imports_otel")
+		}
+		if ev.ImportsPrometheus {
+			evidence = append(evidence, "imports_prometheus")
+		}
+		return RoleNode{
+			Path: path, Role: RoleObservability, Confidence: confidenceStage1,
 			Evidence: evidence, InspectedStage: 1,
 		}, true
 	}
