@@ -14,14 +14,15 @@ import (
 
 // Observed package roles from code evidence (never from folder names).
 const (
-	RoleEntrypoint  = "entrypoint"
-	RoleHTTPSurface = "http_surface"
-	RoleDTO         = "dto"
-	RoleExecRunner  = "exec_runner"
-	RoleAggregator  = "aggregator"
-	RoleAdapter     = "adapter"
-	RoleConfig      = "config"
-	RoleUnknown     = "unknown"
+	RoleEntrypoint    = "entrypoint"
+	RoleHTTPSurface   = "http_surface"
+	RoleDTO           = "dto"
+	RoleExecRunner    = "exec_runner"
+	RoleAggregator    = "aggregator"
+	RoleAdapter       = "adapter"
+	RoleConfig        = "config"
+	RoleObservability = "observability"
+	RoleUnknown       = "unknown"
 )
 
 // Edge kinds after role revisit.
@@ -72,8 +73,8 @@ type roleCandidate struct {
 }
 
 // BuildRoleTopology classifies packages from AST evidence and the import graph.
-// Stage 1 uses delivery hints; Stage 2 uses imports/interfaces; revisit labels edges.
-// Folder/path names are never used as evidence.
+// Stage 1 uses isolated AST/import-prefix facts; Stage 2 uses graph math.
+// Folder/path names and English function names are never used as evidence.
 func BuildRoleTopology(idx Index, importGraph map[string][]string) RoleTopology {
 	paths := make([]string, 0, len(idx.Packages))
 	for p := range idx.Packages {
@@ -81,14 +82,100 @@ func BuildRoleTopology(idx Index, importGraph map[string][]string) RoleTopology 
 	}
 	sort.Strings(paths)
 
-	nodes := make([]RoleNode, 0, len(paths))
 	byPath := make(map[string]RoleNode, len(paths))
+
+	// Pass 1: Stage 1 unique isolated facts.
 	for _, p := range paths {
+		if node, ok := classifyStage1(idx.Packages[p]); ok {
+			byPath[p] = node
+		}
+	}
+
+	// Pass 2a: exec_runner (direct os/exec only).
+	for _, p := range paths {
+		if _, labeled := byPath[p]; labeled {
+			continue
+		}
 		ev := idx.Packages[p]
-		internalOut := countInternalImports(p, importGraph)
-		node := classifyPackage(ev, internalOut)
-		nodes = append(nodes, node)
-		byPath[p] = node
+		if !ev.ImportsOsExec {
+			continue
+		}
+		byPath[p] = RoleNode{
+			Path: normalizePath(p), Role: RoleExecRunner, Confidence: confidenceStage2,
+			Evidence: []string{"imports_os_exec"}, InspectedStage: 2,
+		}
+	}
+
+	// Pass 2b: config (yaml/json codec + tags, no domain internals, not observability).
+	for _, p := range paths {
+		if _, labeled := byPath[p]; labeled {
+			continue
+		}
+		ev := idx.Packages[p]
+		if !isConfigEvidence(ev) {
+			continue
+		}
+		if domainImportCount(p, importGraph, byPath) != 0 {
+			continue
+		}
+		evidence := []string{}
+		if ev.ImportsYAML {
+			evidence = append(evidence, "imports_yaml")
+		}
+		if ev.ImportsEncodingJSON {
+			evidence = append(evidence, "imports_encoding_json")
+		}
+		if ev.YAMLTags {
+			evidence = append(evidence, "yaml_tags")
+		}
+		if ev.JSONTags {
+			evidence = append(evidence, "json_tags")
+		}
+		byPath[p] = RoleNode{
+			Path: normalizePath(p), Role: RoleConfig, Confidence: confidenceStage2,
+			Evidence: evidence, InspectedStage: 2,
+		}
+	}
+
+	// Pass 2c: adapter vs aggregator from graph remaining after subtract.
+	for _, p := range paths {
+		if _, labeled := byPath[p]; labeled {
+			continue
+		}
+		ev := idx.Packages[p]
+		remaining := domainImportCount(p, importGraph, byPath)
+		importsRunner := importsRole(p, importGraph, byPath, RoleExecRunner)
+		candidates := make([]roleCandidate, 0, 2)
+
+		adapterSignal := (ev.ImportsNetHTTP && !ev.GoEmbed && !ev.HTTPSurfaceIdent) || importsRunner
+		if adapterSignal && remaining == 0 {
+			evidence := []string{}
+			if ev.ImportsNetHTTP {
+				evidence = append(evidence, "imports_net_http", "not_http_surface")
+			}
+			if importsRunner {
+				evidence = append(evidence, "imports_exec_runner")
+			}
+			evidence = append(evidence, "domain_imports_eq_0")
+			candidates = append(candidates, roleCandidate{
+				Role: RoleAdapter, Stage: 2, Confidence: confidenceStage2, Evidence: evidence,
+			})
+		}
+
+		hasLogic := len(ev.ExportedFuncs) > 0 || len(ev.ExportedMethods) > 0
+		if hasLogic && remaining >= 1 {
+			candidates = append(candidates, roleCandidate{
+				Role: RoleAggregator, Stage: 2, Confidence: confidenceStage2,
+				Evidence: []string{"exported_logic", "domain_imports_ge_1"},
+			})
+		}
+
+		byPath[p] = publishNode(normalizePath(p), candidates)
+	}
+
+	nodes := make([]RoleNode, 0, len(paths))
+	for _, p := range paths {
+		nodes = append(nodes, byPath[p])
 	}
 
 	edges := labelEdges(importGraph, byPath)
@@ -108,15 +195,26 @@ func BuildRoleTopology(idx Index, importGraph map[string][]string) RoleTopology 
 	return RoleTopology{Packages: nodes, Edges: edges}
 }
 
-func classifyPackage(ev PackageEvidence, internalOut int) RoleNode {
+func classifyStage1(ev PackageEvidence) (RoleNode, bool) {
 	path := normalizePath(ev.Path)
-
-	// Stage 1: unique delivery hints take priority and do not compete.
 	if ev.HasMain {
 		return RoleNode{
 			Path: path, Role: RoleEntrypoint, Confidence: confidenceStage1,
 			Evidence: []string{"has_main"}, InspectedStage: 1,
+		}, true
+	}
+	if ev.ImportsOTel || ev.ImportsPrometheus {
+		evidence := []string{}
+		if ev.ImportsOTel {
+			evidence = append(evidence, "imports_otel")
 		}
+		if ev.ImportsPrometheus {
+			evidence = append(evidence, "imports_prometheus")
+		}
+		return RoleNode{
+			Path: path, Role: RoleObservability, Confidence: confidenceStage1,
+			Evidence: evidence, InspectedStage: 1,
+		}, true
 	}
 	if ev.GoEmbed || (ev.ImportsNetHTTP && ev.HTTPSurfaceIdent) {
 		evidence := []string{}
@@ -130,48 +228,30 @@ func classifyPackage(ev PackageEvidence, internalOut int) RoleNode {
 			evidence = append(evidence, "imports_net_http")
 		}
 		if ev.HTTPSurfaceIdent {
-			evidence = append(evidence, "http_surface_ident")
+			evidence = append(evidence, "serve_http")
 		}
 		return RoleNode{
 			Path: path, Role: RoleHTTPSurface, Confidence: confidenceStage1,
 			Evidence: evidence, InspectedStage: 1,
-		}
+		}, true
 	}
 	if ev.JSONTags && len(ev.ExportedFuncs) == 0 && len(ev.ExportedMethods) == 0 {
 		return RoleNode{
 			Path: path, Role: RoleDTO, Confidence: confidenceStage1,
 			Evidence: []string{"json_tags", "no_exported_funcs", "no_exported_methods"},
 			InspectedStage: 1,
-		}
+		}, true
 	}
+	return RoleNode{}, false
+}
 
-	candidates := make([]roleCandidate, 0, 4)
-	if ev.ImportsOsExec && exportsRunnerSurface(ev) {
-		candidates = append(candidates, roleCandidate{
-			Role: RoleExecRunner, Stage: 2, Confidence: confidenceStage2,
-			Evidence: []string{"imports_os_exec", "exports_run_surface"},
-		})
+func isConfigEvidence(ev PackageEvidence) bool {
+	if ev.ImportsOTel || ev.ImportsPrometheus {
+		return false
 	}
-	if internalOut >= 2 && exportsOrchestration(ev) {
-		candidates = append(candidates, roleCandidate{
-			Role: RoleAggregator, Stage: 2, Confidence: confidenceStage2,
-			Evidence: []string{"orchestration_export", "internal_imports_ge_2"},
-		})
-	}
-	if looksLikeConfig(ev) && internalOut <= 1 {
-		candidates = append(candidates, roleCandidate{
-			Role: RoleConfig, Stage: 2, Confidence: confidenceStage2,
-			Evidence: []string{"load_save_exports"},
-		})
-	}
-	if !ev.GoEmbed && !ev.HTTPSurfaceIdent && ev.ImportsNetHTTP && exportsClientSurface(ev) {
-		candidates = append(candidates, roleCandidate{
-			Role: RoleAdapter, Stage: 2, Confidence: confidenceStage2,
-			Evidence: []string{"imports_net_http", "exports_client_surface", "not_http_surface"},
-		})
-	}
-
-	return publishNode(path, candidates)
+	codec := ev.ImportsYAML || ev.ImportsEncodingJSON
+	tags := ev.YAMLTags || ev.JSONTags
+	return codec && tags
 }
 
 func publishNode(path string, candidates []roleCandidate) RoleNode {
@@ -237,92 +317,48 @@ func mergeEvidence(cands []roleCandidate) []string {
 	return out
 }
 
-func exportsRunnerSurface(ev PackageEvidence) bool {
-	for _, name := range ev.ExportedDecls {
-		if name == "Runner" || name == "Exec" {
-			return true
-		}
-	}
-	hasRunOrCommand := false
-	for _, name := range ev.ExportedFuncs {
-		if name == "Run" || name == "Command" {
-			hasRunOrCommand = true
-		}
-	}
-	for _, name := range ev.ExportedMethods {
-		base := methodBase(name)
-		if base == "Run" || base == "Command" || base == "LookPath" {
-			hasRunOrCommand = true
-		}
-	}
-	return hasRunOrCommand
-}
-
-func exportsOrchestration(ev PackageEvidence) bool {
-	for _, name := range ev.ExportedFuncs {
-		if name == "Collect" || name == "Build" || name == "Assemble" {
-			return true
-		}
-	}
-	for _, name := range ev.ExportedMethods {
-		base := methodBase(name)
-		if base == "Collect" || base == "Build" || base == "Assemble" {
-			return true
-		}
-	}
-	return false
-}
-
-func looksLikeConfig(ev PackageEvidence) bool {
-	hasLoad, hasSave := false, false
-	for _, name := range ev.ExportedFuncs {
-		switch name {
-		case "Load", "Init":
-			hasLoad = true
-		case "Save":
-			hasSave = true
-		}
-	}
-	return hasLoad && (hasSave || ev.JSONTags)
-}
-
-func exportsClientSurface(ev PackageEvidence) bool {
-	for _, name := range ev.ExportedDecls {
-		if name == "Client" || strings.HasSuffix(name, "Client") {
-			return true
-		}
-	}
-	for _, name := range ev.ExportedFuncs {
-		if name == "New" || strings.HasPrefix(name, "New") {
-			return true
-		}
-	}
-	return false
-}
-
-func methodBase(name string) string {
-	if i := strings.LastIndex(name, "."); i >= 0 {
-		return name[i+1:]
-	}
-	return name
-}
-
-func countInternalImports(path string, graph map[string][]string) int {
+func graphOuts(path string, graph map[string][]string) []string {
 	want := normalizePath(path)
 	for key, outs := range graph {
 		keyNorm := normalizePath(strings.TrimPrefix(key, "./"))
 		if keyNorm != want {
 			continue
 		}
-		n := 0
+		var cleaned []string
 		for _, out := range outs {
-			if strings.TrimSpace(out) != "" {
-				n++
+			out = normalizePath(strings.TrimSpace(out))
+			if out == "" {
+				continue
 			}
+			cleaned = append(cleaned, out)
 		}
-		return n
+		return cleaned
 	}
-	return 0
+	return nil
+}
+
+// domainImportCount counts internal imports that are not dto/config/observability/exec_runner.
+func domainImportCount(path string, graph map[string][]string, byPath map[string]RoleNode) int {
+	n := 0
+	for _, to := range graphOuts(path, graph) {
+		role := byPath[normalizePath(to)].Role
+		switch role {
+		case RoleDTO, RoleConfig, RoleObservability, RoleExecRunner:
+			continue
+		default:
+			n++
+		}
+	}
+	return n
+}
+
+func importsRole(path string, graph map[string][]string, byPath map[string]RoleNode, role string) bool {
+	for _, to := range graphOuts(path, graph) {
+		if byPath[normalizePath(to)].Role == role {
+			return true
+		}
+	}
+	return false
 }
 
 func labelEdges(graph map[string][]string, byPath map[string]RoleNode) []RoleEdge {

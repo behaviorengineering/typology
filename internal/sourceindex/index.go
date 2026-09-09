@@ -36,13 +36,18 @@ type PackageEvidence struct {
 	ExportedFuncs   []string `json:"exportedFuncs,omitempty"`
 	ExportedMethods []string `json:"exportedMethods,omitempty"`
 	HasMain         bool     `json:"hasMain,omitempty"`
-	JSONTags        bool     `json:"jsonTags,omitempty"`
-	GoEmbed         bool     `json:"goEmbed,omitempty"`
-	EmbedsStatic    bool     `json:"embedsStatic,omitempty"`
-	ImportsNetHTTP  bool     `json:"importsNetHTTP,omitempty"`
-	ImportsOsExec   bool     `json:"importsOsExec,omitempty"`
-	HTTPSurfaceIdent bool    `json:"httpSurfaceIdent,omitempty"`
-	DeliveryHint    string   `json:"deliveryHint,omitempty"`
+	JSONTags             bool   `json:"jsonTags,omitempty"`
+	YAMLTags             bool   `json:"yamlTags,omitempty"`
+	GoEmbed              bool   `json:"goEmbed,omitempty"`
+	EmbedsStatic         bool   `json:"embedsStatic,omitempty"`
+	ImportsNetHTTP       bool   `json:"importsNetHTTP,omitempty"`
+	ImportsOsExec        bool   `json:"importsOsExec,omitempty"`
+	ImportsYAML          bool   `json:"importsYaml,omitempty"`
+	ImportsEncodingJSON  bool   `json:"importsEncodingJson,omitempty"`
+	ImportsOTel          bool   `json:"importsOtel,omitempty"`
+	ImportsPrometheus    bool   `json:"importsPrometheus,omitempty"`
+	HTTPSurfaceIdent     bool   `json:"httpSurfaceIdent,omitempty"`
+	DeliveryHint         string `json:"deliveryHint,omitempty"`
 }
 
 // HasStaticAnchor reports whether the package has at least one exported symbol
@@ -245,6 +250,16 @@ func scanPackage(repoRoot string, pkg listPackage) (PackageEvidence, error) {
 				ev.ImportsNetHTTP = true
 			case "os/exec":
 				ev.ImportsOsExec = true
+			case "gopkg.in/yaml.v3", "gopkg.in/yaml.v2":
+				ev.ImportsYAML = true
+			case "encoding/json":
+				ev.ImportsEncodingJSON = true
+			}
+			if strings.HasPrefix(path, "go.opentelemetry.io/") {
+				ev.ImportsOTel = true
+			}
+			if strings.HasPrefix(path, "github.com/prometheus/client_golang") {
+				ev.ImportsPrometheus = true
 			}
 		}
 		for _, decl := range parsed.Decls {
@@ -263,15 +278,12 @@ func scanPackage(repoRoot string, pkg listPackage) (PackageEvidence, error) {
 					}
 					key := recvType + "." + d.Name.Name
 					exportedMethods[key] = struct{}{}
-					if isHTTPSurfaceIdent(d.Name.Name) {
+					if d.Name.Name == "ServeHTTP" {
 						httpSurfaceIdent = true
 					}
 					continue
 				}
 				exportedFuncs[d.Name.Name] = struct{}{}
-				if isHTTPSurfaceIdent(d.Name.Name) {
-					httpSurfaceIdent = true
-				}
 			case *ast.GenDecl:
 				if hasGoEmbed(d.Doc) {
 					ev.GoEmbed = true
@@ -284,12 +296,12 @@ func scanPackage(repoRoot string, pkg listPackage) (PackageEvidence, error) {
 					case *ast.TypeSpec:
 						if ast.IsExported(s.Name.Name) {
 							exportedDecls[s.Name.Name] = struct{}{}
-							if isHTTPSurfaceIdent(s.Name.Name) {
-								httpSurfaceIdent = true
-							}
 						}
 						if structHasJSONTag(s.Type) {
 							ev.JSONTags = true
+						}
+						if structHasYAMLTag(s.Type) {
+							ev.YAMLTags = true
 						}
 					case *ast.ValueSpec:
 						if hasGoEmbed(s.Doc) || hasGoEmbed(d.Doc) {
@@ -301,9 +313,6 @@ func scanPackage(repoRoot string, pkg listPackage) (PackageEvidence, error) {
 						for _, name := range s.Names {
 							if ast.IsExported(name.Name) {
 								exportedDecls[name.Name] = struct{}{}
-								if isHTTPSurfaceIdent(name.Name) {
-									httpSurfaceIdent = true
-								}
 							}
 						}
 					}
@@ -332,15 +341,6 @@ func deliveryHint(ev PackageEvidence, httpSurfaceIdent bool) string {
 	return ""
 }
 
-func isHTTPSurfaceIdent(name string) bool {
-	switch name {
-	case "NewMux", "NewHandler", "Handler", "ServeHTTP":
-		return true
-	default:
-		return false
-	}
-}
-
 func receiverTypeName(fields *ast.FieldList) string {
 	if fields == nil || len(fields.List) == 0 {
 		return ""
@@ -357,6 +357,14 @@ func receiverTypeName(fields *ast.FieldList) string {
 }
 
 func structHasJSONTag(expr ast.Expr) bool {
+	return structHasTag(expr, `json:"`)
+}
+
+func structHasYAMLTag(expr ast.Expr) bool {
+	return structHasTag(expr, `yaml:"`)
+}
+
+func structHasTag(expr ast.Expr, prefix string) bool {
 	st, ok := expr.(*ast.StructType)
 	if !ok || st.Fields == nil {
 		return false
@@ -365,8 +373,7 @@ func structHasJSONTag(expr ast.Expr) bool {
 		if field.Tag == nil {
 			continue
 		}
-		tag := field.Tag.Value
-		if strings.Contains(tag, `json:"`) {
+		if strings.Contains(field.Tag.Value, prefix) {
 			return true
 		}
 	}
