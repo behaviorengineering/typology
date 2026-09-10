@@ -94,6 +94,10 @@ func defaultPackageRolesPath(repo string) string {
 	return filepath.Join(repo, filepath.FromSlash(catalog.DefaultPackageRolesRel))
 }
 
+func defaultPackageRLMContextPath(repo string) string {
+	return filepath.Join(repo, filepath.FromSlash(catalog.DefaultPackageRLMContextRel))
+}
+
 func runInit(args []string, stdout, stderr io.Writer) int {
 	repo, rest, ok := firstArg(args)
 	if !ok {
@@ -242,6 +246,7 @@ func runContracts(args []string, stdout, stderr io.Writer) int {
 	}
 	_, _ = fmt.Fprintf(stdout, "contracts: wrote package contracts -> %s\n", out)
 	_, _ = fmt.Fprintf(stdout, "contracts: wrote package roles -> %s\n", defaultPackageRolesPath(repo))
+	_, _ = fmt.Fprintf(stdout, "contracts: wrote package RLM context -> %s\n", defaultPackageRLMContextPath(repo))
 	return 0
 }
 
@@ -254,7 +259,8 @@ func writePackageEvidence(repo, module, contractsOut, rolesOut string) error {
 	if err != nil {
 		return err
 	}
-	return sourceindex.WriteEvidenceFiles(repo, modules, contractsOut, rolesOut, graph)
+	rlmOut := filepath.Join(filepath.Dir(rolesOut), "package_rlm_context.md")
+	return sourceindex.WriteEvidenceFilesWithRLM(repo, modules, contractsOut, rolesOut, rlmOut, graph)
 }
 
 func writePackageContracts(repo, module, outPath string) error {

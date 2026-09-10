@@ -28,27 +28,40 @@ const (
 	DeliveryDTO        = "dto"
 )
 
+// SymbolBody is one AST-extracted source fragment for RLM progressive context.
+type SymbolBody struct {
+	Name   string `json:"name" yaml:"name"`
+	Kind   string `json:"kind" yaml:"kind"` // type, func, method, value, error
+	Source string `json:"source" yaml:"source"`
+}
+
 // PackageEvidence summarizes static source evidence for one Go package.
 type PackageEvidence struct {
-	Path             string   `json:"path"`
-	Name             string   `json:"name"`
-	Files            []string `json:"files,omitempty"`
-	PackageDoc       string   `json:"packageDoc,omitempty"`
-	ExportedDecls    []string `json:"exportedDecls,omitempty"`
-	ExportedFuncs    []string `json:"exportedFuncs,omitempty"`
-	ExportedMethods  []string `json:"exportedMethods,omitempty"`
-	HasMain          bool     `json:"hasMain,omitempty"`
-	JSONTags         bool     `json:"jsonTags,omitempty"`
-	GoEmbed          bool     `json:"goEmbed,omitempty"`
-	EmbedsStatic     bool     `json:"embedsStatic,omitempty"`
-	ImportsNetHTTP       bool   `json:"importsNetHTTP,omitempty"`
-	ImportsOsExec        bool   `json:"importsOsExec,omitempty"`
-	ImportsGRPC          bool   `json:"importsGrpc,omitempty"`
-	ImportsOTel          bool   `json:"importsOtel,omitempty"`
-	ImportsPrometheus    bool   `json:"importsPrometheus,omitempty"`
-	HTTPSurfaceIdent     bool   `json:"httpSurfaceIdent,omitempty"`
-	GRPCServerIdent      bool   `json:"grpcServerIdent,omitempty"`
-	DeliveryHint         string `json:"deliveryHint,omitempty"`
+	Path                string       `json:"path"`
+	Name                string       `json:"name"`
+	Files               []string     `json:"files,omitempty"`
+	PackageDoc          string       `json:"packageDoc,omitempty"`
+	ExportedDecls       []string     `json:"exportedDecls,omitempty"`
+	ExportedFuncs       []string     `json:"exportedFuncs,omitempty"`
+	ExportedMethods     []string     `json:"exportedMethods,omitempty"`
+	UnexportedDecls     []string     `json:"unexportedDecls,omitempty"`
+	UnexportedFuncs     []string     `json:"unexportedFuncs,omitempty"`
+	UnexportedMethods   []string     `json:"unexportedMethods,omitempty"`
+	ErrorTypes          []string     `json:"errorTypes,omitempty"`
+	ExportedBodies      []SymbolBody `json:"exportedBodies,omitempty"`
+	PrivateOneHopBodies []SymbolBody `json:"privateOneHopBodies,omitempty"`
+	HasMain             bool         `json:"hasMain,omitempty"`
+	JSONTags            bool         `json:"jsonTags,omitempty"`
+	GoEmbed             bool         `json:"goEmbed,omitempty"`
+	EmbedsStatic        bool         `json:"embedsStatic,omitempty"`
+	ImportsNetHTTP      bool         `json:"importsNetHTTP,omitempty"`
+	ImportsOsExec       bool         `json:"importsOsExec,omitempty"`
+	ImportsGRPC         bool         `json:"importsGrpc,omitempty"`
+	ImportsOTel         bool         `json:"importsOtel,omitempty"`
+	ImportsPrometheus   bool         `json:"importsPrometheus,omitempty"`
+	HTTPSurfaceIdent    bool         `json:"httpSurfaceIdent,omitempty"`
+	GRPCServerIdent     bool         `json:"grpcServerIdent,omitempty"`
+	DeliveryHint        string       `json:"deliveryHint,omitempty"`
 }
 
 // HasStaticAnchor reports whether the package has at least one exported symbol
@@ -227,6 +240,12 @@ func scanPackage(repoRoot string, pkg listPackage) (PackageEvidence, error) {
 	exportedDecls := map[string]struct{}{}
 	exportedFuncs := map[string]struct{}{}
 	exportedMethods := map[string]struct{}{}
+	unexportedDecls := map[string]struct{}{}
+	unexportedFuncs := map[string]struct{}{}
+	unexportedMethods := map[string]struct{}{}
+	errorTypes := map[string]struct{}{}
+	privateBodies := map[string]SymbolBody{} // keyed by symbol name/method key
+	var exportedBodies []SymbolBody
 	httpSurfaceIdent := false
 	grpcServerIdent := false
 	for _, file := range files {
@@ -237,7 +256,12 @@ func scanPackage(repoRoot string, pkg listPackage) (PackageEvidence, error) {
 				With("file", abs)
 		}
 		ev.Files = append(ev.Files, normalizePath(rel))
-		parsed, err := parser.ParseFile(fset, abs, nil, parser.ParseComments)
+		src, err := os.ReadFile(abs)
+		if err != nil {
+			return PackageEvidence{}, terrors.Wrap(err, terrors.CodeUnavailable, "sourceindex.scanPackage", "read file").
+				With("file", abs)
+		}
+		parsed, err := parser.ParseFile(fset, abs, src, parser.ParseComments)
 		if err != nil {
 			return PackageEvidence{}, terrors.Wrap(err, terrors.CodeInvalid, "sourceindex.scanPackage", "parse file").
 				With("file", abs)
@@ -268,27 +292,40 @@ func scanPackage(repoRoot string, pkg listPackage) (PackageEvidence, error) {
 				if d.Name.Name == "main" && pkg.Name == "main" && d.Recv == nil {
 					ev.HasMain = true
 				}
-				if !ast.IsExported(d.Name.Name) {
-					continue
-				}
-				if isGRPCServerIdent(d.Name.Name) {
-					grpcServerIdent = true
-				}
+				body := nodeSource(fset, src, d)
 				if d.Recv != nil {
 					recvType := receiverTypeName(d.Recv)
 					if recvType == "" {
 						continue
 					}
 					key := recvType + "." + d.Name.Name
-					exportedMethods[key] = struct{}{}
-					if isHTTPSurfaceIdent(d.Name.Name) {
-						httpSurfaceIdent = true
+					if ast.IsExported(d.Name.Name) {
+						exportedMethods[key] = struct{}{}
+						exportedBodies = append(exportedBodies, SymbolBody{Name: key, Kind: "method", Source: truncateBody(body)})
+						if isHTTPSurfaceIdent(d.Name.Name) {
+							httpSurfaceIdent = true
+						}
+						if isGRPCServerIdent(d.Name.Name) {
+							grpcServerIdent = true
+						}
+					} else {
+						unexportedMethods[key] = struct{}{}
+						privateBodies[key] = SymbolBody{Name: key, Kind: "method", Source: truncateBody(body)}
 					}
 					continue
 				}
-				exportedFuncs[d.Name.Name] = struct{}{}
-				if isHTTPSurfaceIdent(d.Name.Name) {
-					httpSurfaceIdent = true
+				if ast.IsExported(d.Name.Name) {
+					exportedFuncs[d.Name.Name] = struct{}{}
+					exportedBodies = append(exportedBodies, SymbolBody{Name: d.Name.Name, Kind: "func", Source: truncateBody(body)})
+					if isHTTPSurfaceIdent(d.Name.Name) {
+						httpSurfaceIdent = true
+					}
+					if isGRPCServerIdent(d.Name.Name) {
+						grpcServerIdent = true
+					}
+				} else {
+					unexportedFuncs[d.Name.Name] = struct{}{}
+					privateBodies[d.Name.Name] = SymbolBody{Name: d.Name.Name, Kind: "func", Source: truncateBody(body)}
 				}
 			case *ast.GenDecl:
 				if hasGoEmbed(d.Doc) {
@@ -300,14 +337,29 @@ func scanPackage(repoRoot string, pkg listPackage) (PackageEvidence, error) {
 				for _, spec := range d.Specs {
 					switch s := spec.(type) {
 					case *ast.TypeSpec:
+						body := typeSpecSource(fset, src, d, s)
 						if ast.IsExported(s.Name.Name) {
 							exportedDecls[s.Name.Name] = struct{}{}
+							kind := "type"
+							if looksLikeErrorType(s.Name.Name, s.Type) {
+								errorTypes[s.Name.Name] = struct{}{}
+								kind = "error"
+							}
+							exportedBodies = append(exportedBodies, SymbolBody{Name: s.Name.Name, Kind: kind, Source: truncateBody(body)})
 							if isHTTPSurfaceIdent(s.Name.Name) {
 								httpSurfaceIdent = true
 							}
 							if isGRPCServerIdent(s.Name.Name) {
 								grpcServerIdent = true
 							}
+						} else {
+							unexportedDecls[s.Name.Name] = struct{}{}
+							kind := "type"
+							if looksLikeErrorType(s.Name.Name, s.Type) {
+								errorTypes[s.Name.Name] = struct{}{}
+								kind = "error"
+							}
+							privateBodies[s.Name.Name] = SymbolBody{Name: s.Name.Name, Kind: kind, Source: truncateBody(body)}
 						}
 						if structHasJSONTag(s.Type) {
 							ev.JSONTags = true
@@ -320,6 +372,9 @@ func scanPackage(repoRoot string, pkg listPackage) (PackageEvidence, error) {
 							}
 						}
 						for _, name := range s.Names {
+							if strings.HasPrefix(name.Name, "Err") && ast.IsExported(name.Name) {
+								errorTypes[name.Name] = struct{}{}
+							}
 							if ast.IsExported(name.Name) {
 								exportedDecls[name.Name] = struct{}{}
 								if isHTTPSurfaceIdent(name.Name) {
@@ -328,6 +383,8 @@ func scanPackage(repoRoot string, pkg listPackage) (PackageEvidence, error) {
 								if isGRPCServerIdent(name.Name) {
 									grpcServerIdent = true
 								}
+							} else {
+								unexportedDecls[name.Name] = struct{}{}
 							}
 						}
 					}
@@ -338,10 +395,74 @@ func scanPackage(repoRoot string, pkg listPackage) (PackageEvidence, error) {
 	ev.ExportedDecls = sortedKeys(exportedDecls)
 	ev.ExportedFuncs = sortedKeys(exportedFuncs)
 	ev.ExportedMethods = sortedKeys(exportedMethods)
+	ev.UnexportedDecls = sortedKeys(unexportedDecls)
+	ev.UnexportedFuncs = sortedKeys(unexportedFuncs)
+	ev.UnexportedMethods = sortedKeys(unexportedMethods)
+	ev.ErrorTypes = sortedKeys(errorTypes)
+	ev.ExportedBodies = exportedBodies
+	ev.PrivateOneHopBodies = oneHopPrivateBodies(exportedBodies, privateBodies)
 	ev.HTTPSurfaceIdent = httpSurfaceIdent
 	ev.GRPCServerIdent = grpcServerIdent
 	ev.DeliveryHint = deliveryHint(ev, httpSurfaceIdent)
 	return ev, nil
+}
+
+const maxSymbolBodyBytes = 4000
+
+func truncateBody(s string) string {
+	s = strings.TrimSpace(s)
+	if len(s) <= maxSymbolBodyBytes {
+		return s
+	}
+	return s[:maxSymbolBodyBytes] + "\n// ... truncated"
+}
+
+func nodeSource(fset *token.FileSet, src []byte, node ast.Node) string {
+	if node == nil {
+		return ""
+	}
+	start := fset.Position(node.Pos()).Offset
+	end := fset.Position(node.End()).Offset
+	if start < 0 || end > len(src) || start >= end {
+		return ""
+	}
+	return string(src[start:end])
+}
+
+func typeSpecSource(fset *token.FileSet, src []byte, decl *ast.GenDecl, spec *ast.TypeSpec) string {
+	if decl != nil && len(decl.Specs) == 1 {
+		return nodeSource(fset, src, decl)
+	}
+	return nodeSource(fset, src, spec)
+}
+
+func looksLikeErrorType(name string, typ ast.Expr) bool {
+	if strings.HasPrefix(name, "Err") || strings.HasSuffix(name, "Error") {
+		return true
+	}
+	ident, ok := typ.(*ast.Ident)
+	return ok && ident.Name == "error"
+}
+
+func oneHopPrivateBodies(exported []SymbolBody, private map[string]SymbolBody) []SymbolBody {
+	needed := map[string]struct{}{}
+	for _, b := range exported {
+		for name := range private {
+			base := name
+			if i := strings.LastIndex(name, "."); i >= 0 {
+				base = name[i+1:]
+			}
+			if strings.Contains(b.Source, base) {
+				needed[name] = struct{}{}
+			}
+		}
+	}
+	out := make([]SymbolBody, 0, len(needed))
+	for name := range needed {
+		out = append(out, private[name])
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out
 }
 
 func deliveryHint(ev PackageEvidence, httpSurfaceIdent bool) string {

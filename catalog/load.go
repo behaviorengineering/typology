@@ -24,6 +24,10 @@ const DefaultPackageContractsRel = "tmp/typology/package_contracts.md"
 // written next to the discover draft under tmp/typology/.
 const DefaultPackageRolesRel = "tmp/typology/package_roles.yaml"
 
+// DefaultPackageRLMContextRel is the default AST RLM context index path
+// written next to contracts and roles under tmp/typology/.
+const DefaultPackageRLMContextRel = "tmp/typology/package_rlm_context.md"
+
 // DefaultDocsRoot is the usual per-slice docs prefix under a repo root.
 const DefaultDocsRoot = "docs/develop"
 

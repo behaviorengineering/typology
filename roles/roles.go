@@ -24,6 +24,10 @@ type Node struct {
 	Evidence       []string `yaml:"evidence,omitempty" json:"evidence,omitempty"`
 	InspectedStage int      `yaml:"inspected_stage" json:"inspected_stage"`
 	CandidateRole  string   `yaml:"candidate_role,omitempty" json:"candidate_role,omitempty"`
+	MechanicalRole string   `yaml:"mechanical_role,omitempty" json:"mechanical_role,omitempty"`
+	LLMRole        string   `yaml:"llm_role,omitempty" json:"llm_role,omitempty"`
+	Agreement      string   `yaml:"agreement,omitempty" json:"agreement,omitempty"`
+	RLMIterations  int      `yaml:"rlm_iterations,omitempty" json:"rlm_iterations,omitempty"`
 }
 
 // Edge is a labeled import between observed packages.
@@ -67,6 +71,35 @@ func FormatGroupingMarkdown(g Grouping) string {
 	return sourceindex.FormatMechanicalGroupingMarkdown(g)
 }
 
+// DefaultRLMContextRel is the evidence path written by typology contracts/discover.
+const DefaultRLMContextRel = "tmp/typology/package_rlm_context.md"
+
+// BuildRLMContextMarkdown scans repoRoot and returns the AST RLM context index.
+func BuildRLMContextMarkdown(repoRoot string, importGraph map[string][]string) (string, error) {
+	idx, err := sourceindex.Build(repoRoot)
+	if err != nil {
+		return "", err
+	}
+	topo := sourceindex.RoleTopology{}
+	if importGraph != nil {
+		topo = sourceindex.BuildRoleTopology(idx, importGraph)
+	}
+	return sourceindex.FormatPackageRLMContextMarkdown(idx, topo), nil
+}
+
+// FormatPackageRLMContextForPath returns RLM context for one package path.
+func FormatPackageRLMContextForPath(repoRoot, pkgPath string, importGraph map[string][]string) (string, error) {
+	idx, err := sourceindex.Build(repoRoot)
+	if err != nil {
+		return "", err
+	}
+	topo := sourceindex.RoleTopology{}
+	if importGraph != nil {
+		topo = sourceindex.BuildRoleTopology(idx, importGraph)
+	}
+	return sourceindex.FormatPackageRLMContextForPath(idx, topo, pkgPath), nil
+}
+
 func toInternal(topo Topology) sourceindex.RoleTopology {
 	out := sourceindex.RoleTopology{
 		Packages: make([]sourceindex.RoleNode, 0, len(topo.Packages)),
@@ -80,6 +113,10 @@ func toInternal(topo Topology) sourceindex.RoleTopology {
 			Evidence:       n.Evidence,
 			InspectedStage: n.InspectedStage,
 			CandidateRole:  n.CandidateRole,
+			MechanicalRole: n.MechanicalRole,
+			LLMRole:        n.LLMRole,
+			Agreement:      n.Agreement,
+			RLMIterations:  n.RLMIterations,
 		})
 	}
 	for _, e := range topo.Edges {

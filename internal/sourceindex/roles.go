@@ -44,12 +44,16 @@ const (
 
 // RoleNode is one package in the observed topology.
 type RoleNode struct {
-	Path           string   `yaml:"path" json:"path"`
-	Role           string   `yaml:"role" json:"role"`
-	Confidence     float64  `yaml:"confidence" json:"confidence"`
-	Evidence       []string `yaml:"evidence,omitempty" json:"evidence,omitempty"`
-	InspectedStage int      `yaml:"inspected_stage" json:"inspected_stage"`
-	CandidateRole  string   `yaml:"candidate_role,omitempty" json:"candidate_role,omitempty"`
+	Path             string   `yaml:"path" json:"path"`
+	Role             string   `yaml:"role" json:"role"`
+	Confidence       float64  `yaml:"confidence" json:"confidence"`
+	Evidence         []string `yaml:"evidence,omitempty" json:"evidence,omitempty"`
+	InspectedStage   int      `yaml:"inspected_stage" json:"inspected_stage"`
+	CandidateRole    string   `yaml:"candidate_role,omitempty" json:"candidate_role,omitempty"`
+	MechanicalRole   string   `yaml:"mechanical_role,omitempty" json:"mechanical_role,omitempty"`
+	LLMRole          string   `yaml:"llm_role,omitempty" json:"llm_role,omitempty"`
+	Agreement        string   `yaml:"agreement,omitempty" json:"agreement,omitempty"`
+	RLMIterations    int      `yaml:"rlm_iterations,omitempty" json:"rlm_iterations,omitempty"`
 }
 
 // RoleEdge is a labeled import between packages after revisit.
