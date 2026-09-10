@@ -201,6 +201,7 @@ func runDiscover(args []string, stdout, stderr io.Writer) int {
 		len(result.Typology.Slices), len(result.Packages), out)
 	_, _ = fmt.Fprintf(stdout, "discover: wrote package contracts -> %s\n", contractsOut)
 	_, _ = fmt.Fprintf(stdout, "discover: wrote package roles -> %s\n", rolesOut)
+	_, _ = fmt.Fprintf(stdout, "discover: wrote package RLM context -> %s\n", defaultPackageRLMContextPath(repo))
 	if suggestMerges && len(result.Graph.MergeSuggestions) > 0 {
 		_, _ = fmt.Fprintln(stdout, "\nMerge candidates (sole importer / companion heuristics):")
 		for _, m := range result.Graph.MergeSuggestions {
