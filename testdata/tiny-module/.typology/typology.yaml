@@ -65,7 +65,7 @@ slices:
         - kind: components
           path: docs/develop/ledger/components.md
   - id: delivery
-    objective: HTTP delivery fixture that serves an embedded UI surface.
+    objective: HTTP, gRPC, and UI delivery fixture for the test module.
     owns:
       - id: kitchen
         path: internal/kitchen
@@ -82,6 +82,11 @@ slices:
         components:
           - id: server
             path: internal/server
+      - id: delivery-api
+        kind: api
+        components:
+          - id: grpcserver
+            path: internal/grpcserver
 sliceBindings:
   - from: billing
     to: ledger

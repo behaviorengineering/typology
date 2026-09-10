@@ -496,7 +496,7 @@ func layerFromRole(node sourceindex.RoleNode) (catalog.Layer, catalog.Interactio
 		return catalog.LayerInteraction, catalog.InteractionCLI
 	case sourceindex.RoleHTTPSurface:
 		for _, e := range node.Evidence {
-			if e == "embeds_static" {
+			if e == "embeds_static" || e == "delivery:ui" {
 				return catalog.LayerInteraction, catalog.InteractionUI
 			}
 		}

@@ -21,33 +21,37 @@ import (
 
 // Delivery hint values for fail-closed package classification.
 const (
-	DeliveryCLI         = "cli"
-	DeliveryHTTPSurface = "http-surface"
-	DeliveryDTO         = "dto"
+	DeliveryCLI        = "cli"
+	DeliveryServerHTTP = "server-http"
+	DeliveryServerUI   = "server-ui"
+	DeliveryServerGRPC = "server-grpc"
+	DeliveryDTO        = "dto"
 )
 
 // PackageEvidence summarizes static source evidence for one Go package.
 type PackageEvidence struct {
-	Path            string   `json:"path"`
-	Name            string   `json:"name"`
-	Files           []string `json:"files,omitempty"`
-	PackageDoc      string   `json:"packageDoc,omitempty"`
-	ExportedDecls   []string `json:"exportedDecls,omitempty"`
-	ExportedFuncs   []string `json:"exportedFuncs,omitempty"`
-	ExportedMethods []string `json:"exportedMethods,omitempty"`
-	HasMain         bool     `json:"hasMain,omitempty"`
-	JSONTags             bool   `json:"jsonTags,omitempty"`
-	YAMLTags             bool   `json:"yamlTags,omitempty"`
-	GoEmbed              bool   `json:"goEmbed,omitempty"`
-	EmbedsStatic         bool   `json:"embedsStatic,omitempty"`
-	ImportsNetHTTP       bool   `json:"importsNetHTTP,omitempty"`
-	ImportsOsExec        bool   `json:"importsOsExec,omitempty"`
-	ImportsYAML          bool   `json:"importsYaml,omitempty"`
-	ImportsEncodingJSON  bool   `json:"importsEncodingJson,omitempty"`
-	ImportsOTel          bool   `json:"importsOtel,omitempty"`
-	ImportsPrometheus    bool   `json:"importsPrometheus,omitempty"`
-	HTTPSurfaceIdent     bool   `json:"httpSurfaceIdent,omitempty"`
-	DeliveryHint         string `json:"deliveryHint,omitempty"`
+	Path                string   `json:"path"`
+	Name                string   `json:"name"`
+	Files               []string `json:"files,omitempty"`
+	PackageDoc          string   `json:"packageDoc,omitempty"`
+	ExportedDecls       []string `json:"exportedDecls,omitempty"`
+	ExportedFuncs       []string `json:"exportedFuncs,omitempty"`
+	ExportedMethods     []string `json:"exportedMethods,omitempty"`
+	HasMain             bool     `json:"hasMain,omitempty"`
+	JSONTags            bool     `json:"jsonTags,omitempty"`
+	YAMLTags            bool     `json:"yamlTags,omitempty"`
+	GoEmbed             bool     `json:"goEmbed,omitempty"`
+	EmbedsStatic        bool     `json:"embedsStatic,omitempty"`
+	ImportsNetHTTP      bool     `json:"importsNetHTTP,omitempty"`
+	ImportsOsExec       bool     `json:"importsOsExec,omitempty"`
+	ImportsGRPC         bool     `json:"importsGrpc,omitempty"`
+	ImportsYAML         bool     `json:"importsYaml,omitempty"`
+	ImportsEncodingJSON bool     `json:"importsEncodingJson,omitempty"`
+	ImportsOTel         bool     `json:"importsOtel,omitempty"`
+	ImportsPrometheus   bool     `json:"importsPrometheus,omitempty"`
+	HTTPSurfaceIdent    bool     `json:"httpSurfaceIdent,omitempty"`
+	GRPCServerIdent     bool     `json:"grpcServerIdent,omitempty"`
+	DeliveryHint        string   `json:"deliveryHint,omitempty"`
 }
 
 // HasStaticAnchor reports whether the package has at least one exported symbol
@@ -227,6 +231,7 @@ func scanPackage(repoRoot string, pkg listPackage) (PackageEvidence, error) {
 	exportedFuncs := map[string]struct{}{}
 	exportedMethods := map[string]struct{}{}
 	httpSurfaceIdent := false
+	grpcServerIdent := false
 	for _, file := range files {
 		abs := filepath.Join(absDir, file)
 		rel, err := filepath.Rel(repoRoot, abs)
@@ -250,6 +255,8 @@ func scanPackage(repoRoot string, pkg listPackage) (PackageEvidence, error) {
 				ev.ImportsNetHTTP = true
 			case "os/exec":
 				ev.ImportsOsExec = true
+			case "google.golang.org/grpc":
+				ev.ImportsGRPC = true
 			case "gopkg.in/yaml.v3", "gopkg.in/yaml.v2":
 				ev.ImportsYAML = true
 			case "encoding/json":
@@ -270,6 +277,9 @@ func scanPackage(repoRoot string, pkg listPackage) (PackageEvidence, error) {
 				}
 				if !ast.IsExported(d.Name.Name) {
 					continue
+				}
+				if isGRPCServerIdent(d.Name.Name) {
+					grpcServerIdent = true
 				}
 				if d.Recv != nil {
 					recvType := receiverTypeName(d.Recv)
@@ -296,6 +306,9 @@ func scanPackage(repoRoot string, pkg listPackage) (PackageEvidence, error) {
 					case *ast.TypeSpec:
 						if ast.IsExported(s.Name.Name) {
 							exportedDecls[s.Name.Name] = struct{}{}
+							if isGRPCServerIdent(s.Name.Name) {
+								grpcServerIdent = true
+							}
 						}
 						if structHasJSONTag(s.Type) {
 							ev.JSONTags = true
@@ -313,6 +326,9 @@ func scanPackage(repoRoot string, pkg listPackage) (PackageEvidence, error) {
 						for _, name := range s.Names {
 							if ast.IsExported(name.Name) {
 								exportedDecls[name.Name] = struct{}{}
+								if isGRPCServerIdent(name.Name) {
+									grpcServerIdent = true
+								}
 							}
 						}
 					}
@@ -324,6 +340,7 @@ func scanPackage(repoRoot string, pkg listPackage) (PackageEvidence, error) {
 	ev.ExportedFuncs = sortedKeys(exportedFuncs)
 	ev.ExportedMethods = sortedKeys(exportedMethods)
 	ev.HTTPSurfaceIdent = httpSurfaceIdent
+	ev.GRPCServerIdent = grpcServerIdent
 	ev.DeliveryHint = deliveryHint(ev, httpSurfaceIdent)
 	return ev, nil
 }
@@ -332,13 +349,30 @@ func deliveryHint(ev PackageEvidence, httpSurfaceIdent bool) string {
 	if ev.HasMain {
 		return DeliveryCLI
 	}
+	if ev.GoEmbed && ev.EmbedsStatic {
+		return DeliveryServerUI
+	}
 	if ev.GoEmbed || (ev.ImportsNetHTTP && httpSurfaceIdent) {
-		return DeliveryHTTPSurface
+		return DeliveryServerHTTP
+	}
+	if ev.ImportsGRPC && ev.GRPCServerIdent {
+		return DeliveryServerGRPC
 	}
 	if ev.JSONTags && len(ev.ExportedFuncs) == 0 && len(ev.ExportedMethods) == 0 {
 		return DeliveryDTO
 	}
 	return ""
+}
+
+func isGRPCServerIdent(name string) bool {
+	switch {
+	case name == "Server":
+		return true
+	case strings.HasPrefix(name, "Register") && strings.HasSuffix(name, "Server"):
+		return true
+	default:
+		return false
+	}
 }
 
 func receiverTypeName(fields *ast.FieldList) string {
