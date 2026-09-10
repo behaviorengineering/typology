@@ -53,6 +53,8 @@ func FormatPackageContractsMarkdownWithRoles(idx Index, topo RoleTopology) strin
 		fmt.Fprintf(&b, "- goEmbed: %t\n", ev.GoEmbed)
 		fmt.Fprintf(&b, "- importsNetHTTP: %t\n", ev.ImportsNetHTTP)
 		fmt.Fprintf(&b, "- importsOsExec: %t\n", ev.ImportsOsExec)
+		fmt.Fprintf(&b, "- importsOtel: %t\n", ev.ImportsOTel)
+		fmt.Fprintf(&b, "- importsPrometheus: %t\n", ev.ImportsPrometheus)
 		if hint := strings.TrimSpace(ev.DeliveryHint); hint != "" {
 			fmt.Fprintf(&b, "- deliveryHint: %s\n", hint)
 		}

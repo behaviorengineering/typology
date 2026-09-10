@@ -32,7 +32,7 @@ func BuildMechanicalGrouping(topo RoleTopology) MechanicalGrouping {
 	}
 	out.DeliveryPaths = pathsForRoleTopo(topo, RoleServer)
 	out.EntrypointPaths = pathsForRoleTopo(topo, RoleEntrypoint)
-	for _, role := range []string{RoleDTO, RoleConfig, RoleExecRunner} {
+	for _, role := range []string{RoleDTO, RoleConfig, RoleExecRunner, RoleObservability} {
 		paths := pathsForRoleTopo(topo, role)
 		if len(paths) == 0 {
 			continue
@@ -199,7 +199,7 @@ func mechanicalGroupingNotes(topo RoleTopology, byPath map[string]RoleNode, seed
 	if len(pathsForRoleTopo(topo, RoleEntrypoint)) > 0 && len(pathsForRoleTopo(topo, RoleServer)) > 0 {
 		notes = append(notes, "`entrypoint` and `server` are distinct delivery roles; do not merge them by path words.")
 	}
-	for _, role := range []string{RoleDTO, RoleConfig, RoleExecRunner} {
+	for _, role := range []string{RoleDTO, RoleConfig, RoleExecRunner, RoleObservability} {
 		if len(pathsForRoleTopo(topo, role)) == 0 {
 			continue
 		}
