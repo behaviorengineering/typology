@@ -1,3 +1,0 @@
-module go.opentelemetry.io/otel
-
-go 1.26.5

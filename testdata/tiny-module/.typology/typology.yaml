@@ -70,12 +70,6 @@ slices:
       - id: kitchen
         path: internal/kitchen
         layer: domain
-      - id: agent
-        path: internal/agent
-        layer: domain
-      - id: analyze
-        path: internal/analyze
-        layer: domain
     surfaces:
       - id: delivery-ui
         kind: ui
@@ -103,12 +97,6 @@ sliceBindings:
   - from: delivery
     to: config
     kind: reads
-  - from: delivery
-    to: ledger
-    kind: reads
-  - from: delivery
-    to: runner
-    kind: reads
 libraries:
   - id: config
     purpose: Load process settings without domain knowledge
@@ -127,12 +115,6 @@ libraries:
     owns:
       - id: runner
         path: internal/runner
-        layer: domain
-  - id: traceboot
-    purpose: Process tracing bootstrap without product knowledge
-    owns:
-      - id: traceboot
-        path: internal/traceboot
         layer: domain
 componentBindings:
   - from: billing-http

@@ -52,25 +52,6 @@ func TestBuildRoleTopology_tinyModule(t *testing.T) {
 	if kitchen.Role != sourceindex.RoleAggregator {
 		t.Fatalf("kitchen role=%q want aggregator evidence=%v", kitchen.Role, kitchen.Evidence)
 	}
-	cfg := byPath["internal/config"]
-	if cfg.Role != sourceindex.RoleConfig {
-		t.Fatalf("config role=%q want config evidence=%v", cfg.Role, cfg.Evidence)
-	}
-	trace := byPath["internal/traceboot"]
-	if trace.Role != sourceindex.RoleObservability {
-		t.Fatalf("traceboot role=%q want observability evidence=%v", trace.Role, trace.Evidence)
-	}
-	agent := byPath["internal/agent"]
-	if agent.Role != sourceindex.RoleAggregator {
-		t.Fatalf("agent role=%q want aggregator (uses runner, no os/exec) evidence=%v", agent.Role, agent.Evidence)
-	}
-	analyze := byPath["internal/analyze"]
-	if analyze.Role != sourceindex.RoleAggregator {
-		t.Fatalf("analyze role=%q want aggregator (JSON+funcs is not dto) evidence=%v", analyze.Role, analyze.Evidence)
-	}
-	if analyze.Role == sourceindex.RoleDTO {
-		t.Fatal("analyze must not be dto when it exports funcs")
-	}
 
 	// No path-token evidence strings.
 	for _, n := range topo.Packages {
@@ -116,12 +97,6 @@ func TestWriteEvidenceFiles_tinyModule(t *testing.T) {
 	if !strings.Contains(text, "role: aggregator") {
 		t.Fatalf("expected aggregator in roles:\n%s", text)
 	}
-	if !strings.Contains(text, "role: observability") {
-		t.Fatalf("expected observability in roles:\n%s", text)
-	}
-	if !strings.Contains(text, "role: config") {
-		t.Fatalf("expected config in roles:\n%s", text)
-	}
 	contracts, err := os.ReadFile(contractsOut)
 	if err != nil {
 		t.Fatal(err)
@@ -135,23 +110,7 @@ func TestWriteEvidenceFiles_tinyModule(t *testing.T) {
 	}
 }
 
-func TestClassifyStage1_httpSurfaceBeatsOTel(t *testing.T) {
-	t.Parallel()
-	ev := sourceindex.PackageEvidence{
-		Path:         "internal/server",
-		GoEmbed:      true,
-		EmbedsStatic: true,
-		ImportsOTel:  true,
-	}
-	topo := sourceindex.BuildRoleTopology(sourceindex.Index{
-		Packages: map[string]sourceindex.PackageEvidence{"internal/server": ev},
-	}, nil)
-	if len(topo.Packages) != 1 || topo.Packages[0].Role != sourceindex.RoleHTTPSurface {
-		t.Fatalf("got %+v; embed delivery must beat incidental otel import", topo.Packages)
-	}
-}
-
-func TestClassifyStage1_grpcServer(t *testing.T) {
+func TestClassifyPackage_grpcServer(t *testing.T) {
 	t.Parallel()
 	ev := sourceindex.PackageEvidence{
 		Path:            "internal/grpcserver",

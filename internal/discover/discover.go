@@ -501,8 +501,6 @@ func layerFromRole(node sourceindex.RoleNode) (catalog.Layer, catalog.Interactio
 			}
 		}
 		return catalog.LayerInteraction, catalog.InteractionAPI
-	case sourceindex.RoleObservability:
-		return catalog.LayerDomain, ""
 	default:
 		return catalog.LayerDomain, ""
 	}
