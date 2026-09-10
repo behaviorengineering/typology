@@ -38,7 +38,11 @@ func TestBuildRoleTopology_tinyModule(t *testing.T) {
 	}
 	server := byPath["internal/server"]
 	if server.Role != sourceindex.RoleHTTPSurface {
-		t.Fatalf("server role=%q want http_surface", server.Role)
+		t.Fatalf("server role=%q want server", server.Role)
+	}
+	grpcServer := byPath["internal/grpcserver"]
+	if grpcServer.Role != sourceindex.RoleHTTPSurface {
+		t.Fatalf("grpcserver role=%q want server evidence=%v", grpcServer.Role, grpcServer.Evidence)
 	}
 	runner := byPath["internal/runner"]
 	if runner.Role != sourceindex.RoleExecRunner {
@@ -103,8 +107,8 @@ func TestWriteEvidenceFiles_tinyModule(t *testing.T) {
 	if !strings.Contains(text, "role: dto") {
 		t.Fatalf("expected dto in roles:\n%s", text)
 	}
-	if !strings.Contains(text, "role: http_surface") {
-		t.Fatalf("expected http_surface in roles:\n%s", text)
+	if !strings.Contains(text, "role: server") {
+		t.Fatalf("expected server in roles:\n%s", text)
 	}
 	if !strings.Contains(text, "role: exec_runner") {
 		t.Fatalf("expected exec_runner in roles:\n%s", text)
@@ -144,6 +148,24 @@ func TestClassifyStage1_httpSurfaceBeatsOTel(t *testing.T) {
 	}, nil)
 	if len(topo.Packages) != 1 || topo.Packages[0].Role != sourceindex.RoleHTTPSurface {
 		t.Fatalf("got %+v; embed delivery must beat incidental otel import", topo.Packages)
+	}
+}
+
+func TestClassifyStage1_grpcServer(t *testing.T) {
+	t.Parallel()
+	ev := sourceindex.PackageEvidence{
+		Path:            "internal/grpcserver",
+		ImportsGRPC:     true,
+		GRPCServerIdent: true,
+	}
+	topo := sourceindex.BuildRoleTopology(sourceindex.Index{
+		Packages: map[string]sourceindex.PackageEvidence{"internal/grpcserver": ev},
+	}, nil)
+	if len(topo.Packages) != 1 || topo.Packages[0].Role != sourceindex.RoleHTTPSurface {
+		t.Fatalf("got %+v; grpc server must be classified as server", topo.Packages)
+	}
+	if !strings.Contains(strings.Join(topo.Packages[0].Evidence, ","), "imports_grpc") {
+		t.Fatalf("missing grpc evidence: %+v", topo.Packages[0].Evidence)
 	}
 }
 

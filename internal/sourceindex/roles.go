@@ -15,7 +15,7 @@ import (
 // Observed package roles from code evidence (never from folder names).
 const (
 	RoleEntrypoint    = "entrypoint"
-	RoleHTTPSurface   = "http_surface"
+	RoleHTTPSurface   = "server"
 	RoleDTO           = "dto"
 	RoleExecRunner    = "exec_runner"
 	RoleAggregator    = "aggregator"
@@ -27,12 +27,12 @@ const (
 
 // Edge kinds after role revisit.
 const (
-	EdgeFillsDTO    = "fills_dto"
-	EdgeUsesRunner  = "uses_runner"
-	EdgeServesHTTP  = "serves_http"
-	EdgeComposes    = "composes"
-	EdgeReadsConfig = "reads_config"
-	EdgeImports     = "imports"
+	EdgeFillsDTO     = "fills_dto"
+	EdgeUsesRunner   = "uses_runner"
+	EdgeServesServer = "serves_server"
+	EdgeComposes     = "composes"
+	EdgeReadsConfig  = "reads_config"
+	EdgeImports      = "imports"
 )
 
 const (
@@ -151,7 +151,7 @@ func BuildRoleTopology(idx Index, importGraph map[string][]string) RoleTopology 
 		if adapterSignal && remaining == 0 {
 			evidence := []string{}
 			if ev.ImportsNetHTTP {
-				evidence = append(evidence, "imports_net_http", "not_http_surface")
+				evidence = append(evidence, "imports_net_http", "not_server")
 			}
 			if importsRunner {
 				evidence = append(evidence, "imports_exec_runner")
@@ -205,12 +205,12 @@ func classifyStage1(ev PackageEvidence) (RoleNode, bool) {
 	}
 	// HTTP delivery wins over incidental otel instrumentation on the same package.
 	if ev.GoEmbed || (ev.ImportsNetHTTP && ev.HTTPSurfaceIdent) {
-		evidence := []string{}
+		evidence := []string{"delivery:http"}
 		if ev.GoEmbed {
 			evidence = append(evidence, "go_embed")
 		}
 		if ev.EmbedsStatic {
-			evidence = append(evidence, "embeds_static")
+			evidence = append(evidence, "delivery:ui", "embeds_static")
 		}
 		if ev.ImportsNetHTTP {
 			evidence = append(evidence, "imports_net_http")
@@ -218,6 +218,13 @@ func classifyStage1(ev PackageEvidence) (RoleNode, bool) {
 		if ev.HTTPSurfaceIdent {
 			evidence = append(evidence, "serve_http")
 		}
+		return RoleNode{
+			Path: path, Role: RoleHTTPSurface, Confidence: confidenceStage1,
+			Evidence: evidence, InspectedStage: 1,
+		}, true
+	}
+	if ev.ImportsGRPC && ev.GRPCServerIdent {
+		evidence := []string{"delivery:grpc", "imports_grpc", "grpc_service"}
 		return RoleNode{
 			Path: path, Role: RoleHTTPSurface, Confidence: confidenceStage1,
 			Evidence: evidence, InspectedStage: 1,
@@ -239,7 +246,7 @@ func classifyStage1(ev PackageEvidence) (RoleNode, bool) {
 	if ev.JSONTags && len(ev.ExportedFuncs) == 0 && len(ev.ExportedMethods) == 0 {
 		return RoleNode{
 			Path: path, Role: RoleDTO, Confidence: confidenceStage1,
-			Evidence: []string{"json_tags", "no_exported_funcs", "no_exported_methods"},
+			Evidence:       []string{"json_tags", "no_exported_funcs", "no_exported_methods"},
 			InspectedStage: 1,
 		}, true
 	}
@@ -344,7 +351,7 @@ func domainImportCount(path string, graph map[string][]string, byPath map[string
 	for _, to := range graphOuts(path, graph) {
 		role := byPath[normalizePath(to)].Role
 		switch role {
-		case RoleDTO, RoleConfig, RoleObservability, RoleExecRunner:
+		case RoleDTO, RoleConfig, RoleObservability, RoleExecRunner, RoleHTTPSurface, RoleEntrypoint:
 			continue
 		default:
 			n++
@@ -385,11 +392,11 @@ func labelEdges(graph map[string][]string, byPath map[string]RoleNode) []RoleEdg
 			case toNode.Role == RoleConfig:
 				kind = EdgeReadsConfig
 			case fromNode.Role == RoleHTTPSurface && (toNode.Role == RoleAggregator || toNode.Role == RoleAdapter):
-				kind = EdgeServesHTTP
+				kind = EdgeServesServer
 			case fromNode.Role == RoleAggregator:
 				kind = EdgeComposes
 			case fromNode.Role == RoleEntrypoint && toNode.Role == RoleHTTPSurface:
-				kind = EdgeServesHTTP
+				kind = EdgeServesServer
 			}
 			edges = append(edges, RoleEdge{From: fromPath, To: toPath, Kind: kind})
 		}

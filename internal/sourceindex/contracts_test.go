@@ -26,12 +26,12 @@ func TestFormatPackageContractsMarkdown(t *testing.T) {
 				DeliveryHint: sourceindex.DeliveryCLI,
 			},
 			"internal/board": {
-				Path:         "internal/board",
-				Name:         "board",
-				PackageDoc:   "Package board holds JSON data types for the board.",
+				Path:          "internal/board",
+				Name:          "board",
+				PackageDoc:    "Package board holds JSON data types for the board.",
 				ExportedDecls: []string{"Item"},
-				JSONTags:     true,
-				DeliveryHint: sourceindex.DeliveryDTO,
+				JSONTags:      true,
+				DeliveryHint:  sourceindex.DeliveryDTO,
 			},
 		},
 	}
@@ -105,7 +105,13 @@ func TestWritePackageContractsFile_tinyModule(t *testing.T) {
 	if !strings.Contains(text, "Mux.ServeHTTP") {
 		t.Fatalf("expected exported method Mux.ServeHTTP:\n%s", text)
 	}
-	if !strings.Contains(text, "deliveryHint: http-surface") {
-		t.Fatalf("expected http-surface for server:\n%s", text)
+	if !strings.Contains(text, "deliveryHint: server-ui") {
+		t.Fatalf("expected server-ui for server:\n%s", text)
+	}
+	if !strings.Contains(text, "internal/grpcserver") {
+		t.Fatalf("expected grpcserver path:\n%s", text)
+	}
+	if !strings.Contains(text, "deliveryHint: server-grpc") {
+		t.Fatalf("expected server-grpc for grpcserver:\n%s", text)
 	}
 }
