@@ -41,12 +41,14 @@ type PackageEvidence struct {
 	JSONTags         bool     `json:"jsonTags,omitempty"`
 	GoEmbed          bool     `json:"goEmbed,omitempty"`
 	EmbedsStatic     bool     `json:"embedsStatic,omitempty"`
-	ImportsNetHTTP   bool     `json:"importsNetHTTP,omitempty"`
-	ImportsOsExec    bool     `json:"importsOsExec,omitempty"`
-	ImportsGRPC      bool     `json:"importsGrpc,omitempty"`
-	HTTPSurfaceIdent bool     `json:"httpSurfaceIdent,omitempty"`
-	GRPCServerIdent  bool     `json:"grpcServerIdent,omitempty"`
-	DeliveryHint     string   `json:"deliveryHint,omitempty"`
+	ImportsNetHTTP       bool   `json:"importsNetHTTP,omitempty"`
+	ImportsOsExec        bool   `json:"importsOsExec,omitempty"`
+	ImportsGRPC          bool   `json:"importsGrpc,omitempty"`
+	ImportsOTel          bool   `json:"importsOtel,omitempty"`
+	ImportsPrometheus    bool   `json:"importsPrometheus,omitempty"`
+	HTTPSurfaceIdent     bool   `json:"httpSurfaceIdent,omitempty"`
+	GRPCServerIdent      bool   `json:"grpcServerIdent,omitempty"`
+	DeliveryHint         string `json:"deliveryHint,omitempty"`
 }
 
 // HasStaticAnchor reports whether the package has at least one exported symbol
@@ -252,6 +254,12 @@ func scanPackage(repoRoot string, pkg listPackage) (PackageEvidence, error) {
 				ev.ImportsOsExec = true
 			case "google.golang.org/grpc":
 				ev.ImportsGRPC = true
+			}
+			if strings.HasPrefix(path, "go.opentelemetry.io/") {
+				ev.ImportsOTel = true
+			}
+			if strings.HasPrefix(path, "github.com/prometheus/client_golang") {
+				ev.ImportsPrometheus = true
 			}
 		}
 		for _, decl := range parsed.Decls {

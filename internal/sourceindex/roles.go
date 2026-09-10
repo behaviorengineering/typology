@@ -14,14 +14,15 @@ import (
 
 // Observed package roles from code evidence (never from folder names).
 const (
-	RoleEntrypoint  = "entrypoint"
-	RoleHTTPSurface = "server"
-	RoleDTO         = "dto"
-	RoleExecRunner  = "exec_runner"
-	RoleAggregator  = "aggregator"
-	RoleAdapter     = "adapter"
-	RoleConfig      = "config"
-	RoleUnknown     = "unknown"
+	RoleEntrypoint     = "entrypoint"
+	RoleHTTPSurface    = "server"
+	RoleDTO            = "dto"
+	RoleExecRunner     = "exec_runner"
+	RoleAggregator     = "aggregator"
+	RoleAdapter        = "adapter"
+	RoleConfig         = "config"
+	RoleObservability  = "observability"
+	RoleUnknown        = "unknown"
 )
 
 // Edge kinds after role revisit.
@@ -141,6 +142,21 @@ func classifyPackage(ev PackageEvidence, internalOut int) RoleNode {
 		evidence := []string{"delivery:grpc", "imports_grpc", "grpc_service"}
 		return RoleNode{
 			Path: path, Role: RoleHTTPSurface, Confidence: confidenceStage1,
+			Evidence: evidence, InspectedStage: 1,
+		}
+	}
+	// After delivery surfaces: otel/prometheus boot packages are observability.
+	// HTTP/gRPC above already win when the same package also delivers.
+	if ev.ImportsOTel || ev.ImportsPrometheus {
+		evidence := []string{}
+		if ev.ImportsOTel {
+			evidence = append(evidence, "imports_otel")
+		}
+		if ev.ImportsPrometheus {
+			evidence = append(evidence, "imports_prometheus")
+		}
+		return RoleNode{
+			Path: path, Role: RoleObservability, Confidence: confidenceStage1,
 			Evidence: evidence, InspectedStage: 1,
 		}
 	}
@@ -281,6 +297,9 @@ func exportsOrchestration(ev PackageEvidence) bool {
 }
 
 func looksLikeConfig(ev PackageEvidence) bool {
+	if ev.ImportsOTel || ev.ImportsPrometheus {
+		return false
+	}
 	hasLoad, hasSave := false, false
 	for _, name := range ev.ExportedFuncs {
 		switch name {
