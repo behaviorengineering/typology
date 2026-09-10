@@ -133,8 +133,13 @@ func WritePackageContractsFileWithGraph(repoRoot string, modules []gorepo.Module
 	return nil
 }
 
-// WriteEvidenceFiles writes package_contracts.md and package_roles.yaml from one index build.
+// WriteEvidenceFiles writes package_contracts.md, package_roles.yaml, and package_rlm_context.md.
 func WriteEvidenceFiles(repoRoot string, modules []gorepo.Module, contractsOut, rolesOut string, importGraph map[string][]string) error {
+	return WriteEvidenceFilesWithRLM(repoRoot, modules, contractsOut, rolesOut, "", importGraph)
+}
+
+// WriteEvidenceFilesWithRLM writes contracts, roles, and optional RLM context markdown.
+func WriteEvidenceFilesWithRLM(repoRoot string, modules []gorepo.Module, contractsOut, rolesOut, rlmContextOut string, importGraph map[string][]string) error {
 	idx, err := BuildInModules(repoRoot, modules)
 	if err != nil {
 		return err
@@ -163,6 +168,20 @@ func WriteEvidenceFiles(repoRoot string, modules []gorepo.Module, contractsOut, 
 		if err := os.WriteFile(rolesOut, data, 0o644); err != nil {
 			return terrors.Wrap(err, terrors.CodeUnavailable, "sourceindex.WriteEvidenceFiles", "write roles").
 				With("path", rolesOut)
+		}
+	}
+	rlmOut := strings.TrimSpace(rlmContextOut)
+	if rlmOut == "" && strings.TrimSpace(rolesOut) != "" {
+		rlmOut = filepath.Join(filepath.Dir(rolesOut), "package_rlm_context.md")
+	}
+	if rlmOut != "" {
+		if err := os.MkdirAll(filepath.Dir(rlmOut), 0o755); err != nil {
+			return terrors.Wrap(err, terrors.CodeUnavailable, "sourceindex.WriteEvidenceFiles", "mkdir rlm context").
+				With("path", rlmOut)
+		}
+		if err := os.WriteFile(rlmOut, []byte(FormatPackageRLMContextMarkdown(idx, topo)), 0o644); err != nil {
+			return terrors.Wrap(err, terrors.CodeUnavailable, "sourceindex.WriteEvidenceFiles", "write rlm context").
+				With("path", rlmOut)
 		}
 	}
 	return nil
