@@ -49,12 +49,19 @@ type RoleNode struct {
 	Confidence       float64  `yaml:"confidence" json:"confidence"`
 	Evidence         []string `yaml:"evidence,omitempty" json:"evidence,omitempty"`
 	InspectedStage   int      `yaml:"inspected_stage" json:"inspected_stage"`
+	Language         string   `yaml:"language,omitempty" json:"language,omitempty"` // go|python
 	CandidateRole    string   `yaml:"candidate_role,omitempty" json:"candidate_role,omitempty"`
 	MechanicalRole   string   `yaml:"mechanical_role,omitempty" json:"mechanical_role,omitempty"`
 	LLMRole          string   `yaml:"llm_role,omitempty" json:"llm_role,omitempty"`
 	Agreement        string   `yaml:"agreement,omitempty" json:"agreement,omitempty"`
 	RLMIterations    int      `yaml:"rlm_iterations,omitempty" json:"rlm_iterations,omitempty"`
 }
+
+// Language identifiers for RoleNode.Language and PackageEvidence.Language.
+const (
+	LangGo     = "go"
+	LangPython = "python"
+)
 
 // RoleEdge is a labeled import between packages after revisit.
 type RoleEdge struct {
@@ -98,6 +105,15 @@ func BuildRoleTopology(idx Index, importGraph map[string][]string) RoleTopology 
 
 	edges := labelEdges(importGraph, byPath)
 	nodes = revisitNodes(nodes, edges, byPath)
+	for i := range nodes {
+		if strings.TrimSpace(nodes[i].Language) == "" {
+			lang := strings.TrimSpace(idx.Packages[nodes[i].Path].Language)
+			if lang == "" {
+				lang = LangGo
+			}
+			nodes[i].Language = lang
+		}
+	}
 
 	sort.Slice(nodes, func(i, j int) bool { return nodes[i].Path < nodes[j].Path })
 	sort.Slice(edges, func(i, j int) bool {
