@@ -23,6 +23,7 @@ type Node struct {
 	Confidence     float64  `yaml:"confidence" json:"confidence"`
 	Evidence       []string `yaml:"evidence,omitempty" json:"evidence,omitempty"`
 	InspectedStage int      `yaml:"inspected_stage" json:"inspected_stage"`
+	Language       string   `yaml:"language,omitempty" json:"language,omitempty"` // go|python
 	CandidateRole  string   `yaml:"candidate_role,omitempty" json:"candidate_role,omitempty"`
 	MechanicalRole string   `yaml:"mechanical_role,omitempty" json:"mechanical_role,omitempty"`
 	LLMRole        string   `yaml:"llm_role,omitempty" json:"llm_role,omitempty"`
@@ -112,6 +113,7 @@ func toInternal(topo Topology) sourceindex.RoleTopology {
 			Confidence:     n.Confidence,
 			Evidence:       n.Evidence,
 			InspectedStage: n.InspectedStage,
+			Language:       n.Language,
 			CandidateRole:  n.CandidateRole,
 			MechanicalRole: n.MechanicalRole,
 			LLMRole:        n.LLMRole,

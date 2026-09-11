@@ -10,7 +10,6 @@ import (
 
 	terrors "github.com/behaviorengineering/typology/errors"
 	"github.com/behaviorengineering/typology/internal/gorepo"
-	"gopkg.in/yaml.v3"
 )
 
 // FormatPackageContractsMarkdown renders a compact public-contract summary for LLMs.
@@ -34,13 +33,16 @@ func FormatPackageContractsMarkdownWithRoles(idx Index, topo RoleTopology) strin
 
 	var b strings.Builder
 	b.WriteString("# Package public contracts\n\n")
-	b.WriteString("Exported symbols and delivery facts from static Go analysis.\n")
+	b.WriteString("Exported symbols and delivery facts from static analysis.\n")
 	b.WriteString("Use packageDoc, methods, jsonTags, goEmbed, deliveryHint, and observed role (never folder names) to classify packages.\n\n")
 	for _, p := range paths {
 		ev := idx.Packages[p]
 		display := "./" + strings.TrimPrefix(filepath.ToSlash(ev.Path), "./")
 		fmt.Fprintf(&b, "## %s\n", display)
 		fmt.Fprintf(&b, "- package: `%s`\n", ev.Name)
+		if lang := strings.TrimSpace(ev.Language); lang != "" {
+			fmt.Fprintf(&b, "- language: %s\n", lang)
+		}
 		if strings.TrimSpace(ev.PackageDoc) != "" {
 			fmt.Fprintf(&b, "- packageDoc: %s\n", strings.TrimSpace(ev.PackageDoc))
 		}
@@ -136,53 +138,4 @@ func WritePackageContractsFileWithGraph(repoRoot string, modules []gorepo.Module
 // WriteEvidenceFiles writes package_contracts.md, package_roles.yaml, and package_rlm_context.md.
 func WriteEvidenceFiles(repoRoot string, modules []gorepo.Module, contractsOut, rolesOut string, importGraph map[string][]string) error {
 	return WriteEvidenceFilesWithRLM(repoRoot, modules, contractsOut, rolesOut, "", importGraph)
-}
-
-// WriteEvidenceFilesWithRLM writes contracts, roles, and optional RLM context markdown.
-func WriteEvidenceFilesWithRLM(repoRoot string, modules []gorepo.Module, contractsOut, rolesOut, rlmContextOut string, importGraph map[string][]string) error {
-	idx, err := BuildInModules(repoRoot, modules)
-	if err != nil {
-		return err
-	}
-	topo := BuildRoleTopology(idx, importGraph)
-
-	if strings.TrimSpace(contractsOut) != "" {
-		if err := os.MkdirAll(filepath.Dir(contractsOut), 0o755); err != nil {
-			return terrors.Wrap(err, terrors.CodeUnavailable, "sourceindex.WriteEvidenceFiles", "mkdir contracts").
-				With("path", contractsOut)
-		}
-		if err := os.WriteFile(contractsOut, []byte(FormatPackageContractsMarkdownWithRoles(idx, topo)), 0o644); err != nil {
-			return terrors.Wrap(err, terrors.CodeUnavailable, "sourceindex.WriteEvidenceFiles", "write contracts").
-				With("path", contractsOut)
-		}
-	}
-	if strings.TrimSpace(rolesOut) != "" {
-		if err := os.MkdirAll(filepath.Dir(rolesOut), 0o755); err != nil {
-			return terrors.Wrap(err, terrors.CodeUnavailable, "sourceindex.WriteEvidenceFiles", "mkdir roles").
-				With("path", rolesOut)
-		}
-		data, err := yaml.Marshal(topo)
-		if err != nil {
-			return terrors.Wrap(err, terrors.CodeInternal, "sourceindex.WriteEvidenceFiles", "marshal roles")
-		}
-		if err := os.WriteFile(rolesOut, data, 0o644); err != nil {
-			return terrors.Wrap(err, terrors.CodeUnavailable, "sourceindex.WriteEvidenceFiles", "write roles").
-				With("path", rolesOut)
-		}
-	}
-	rlmOut := strings.TrimSpace(rlmContextOut)
-	if rlmOut == "" && strings.TrimSpace(rolesOut) != "" {
-		rlmOut = filepath.Join(filepath.Dir(rolesOut), "package_rlm_context.md")
-	}
-	if rlmOut != "" {
-		if err := os.MkdirAll(filepath.Dir(rlmOut), 0o755); err != nil {
-			return terrors.Wrap(err, terrors.CodeUnavailable, "sourceindex.WriteEvidenceFiles", "mkdir rlm context").
-				With("path", rlmOut)
-		}
-		if err := os.WriteFile(rlmOut, []byte(FormatPackageRLMContextMarkdown(idx, topo)), 0o644); err != nil {
-			return terrors.Wrap(err, terrors.CodeUnavailable, "sourceindex.WriteEvidenceFiles", "write rlm context").
-				With("path", rlmOut)
-		}
-	}
-	return nil
 }

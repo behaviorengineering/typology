@@ -15,6 +15,7 @@ import (
 	"github.com/behaviorengineering/typology/internal/bootstrap"
 	"github.com/behaviorengineering/typology/internal/discover"
 	"github.com/behaviorengineering/typology/internal/emit"
+	"github.com/behaviorengineering/typology/internal/evidence"
 	"github.com/behaviorengineering/typology/internal/gorepo"
 	"github.com/behaviorengineering/typology/internal/remediate"
 	"github.com/behaviorengineering/typology/internal/sourceindex"
@@ -252,16 +253,12 @@ func runContracts(args []string, stdout, stderr io.Writer) int {
 }
 
 func writePackageEvidence(repo, module, contractsOut, rolesOut string) error {
-	modules, err := gorepo.ResolveModules(repo, nil, module)
-	if err != nil {
-		return err
-	}
-	graph, err := discover.ImportGraphInModules(repo, modules)
+	h, err := evidence.Harvest(repo, module)
 	if err != nil {
 		return err
 	}
 	rlmOut := filepath.Join(filepath.Dir(rolesOut), "package_rlm_context.md")
-	return sourceindex.WriteEvidenceFilesWithRLM(repo, modules, contractsOut, rolesOut, rlmOut, graph)
+	return evidence.WriteFiles(h, contractsOut, rolesOut, rlmOut)
 }
 
 func writePackageContracts(repo, module, outPath string) error {

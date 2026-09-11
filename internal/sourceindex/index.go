@@ -35,10 +35,11 @@ type SymbolBody struct {
 	Source string `json:"source" yaml:"source"`
 }
 
-// PackageEvidence summarizes static source evidence for one Go package.
+// PackageEvidence summarizes static source evidence for one package.
 type PackageEvidence struct {
 	Path                string       `json:"path"`
 	Name                string       `json:"name"`
+	Language            string       `json:"language,omitempty"` // go|python
 	Files               []string     `json:"files,omitempty"`
 	PackageDoc          string       `json:"packageDoc,omitempty"`
 	ExportedDecls       []string     `json:"exportedDecls,omitempty"`
@@ -51,7 +52,7 @@ type PackageEvidence struct {
 	ExportedBodies      []SymbolBody `json:"exportedBodies,omitempty"`
 	PrivateOneHopBodies []SymbolBody `json:"privateOneHopBodies,omitempty"`
 	HasMain             bool         `json:"hasMain,omitempty"`
-	JSONTags            bool         `json:"jsonTags,omitempty"`
+	JSONTags            bool         `json:"jsonTags,omitempty"` // Go tags or Python typed fields
 	GoEmbed             bool         `json:"goEmbed,omitempty"`
 	EmbedsStatic        bool         `json:"embedsStatic,omitempty"`
 	ImportsNetHTTP      bool         `json:"importsNetHTTP,omitempty"`
@@ -232,9 +233,10 @@ func scanPackage(repoRoot string, pkg listPackage) (PackageEvidence, error) {
 		files = pkg.CompiledGoFiles
 	}
 	ev := PackageEvidence{
-		Path:  normalizePath(pkg.Dir),
-		Name:  pkg.Name,
-		Files: make([]string, 0, len(files)),
+		Path:     normalizePath(pkg.Dir),
+		Name:     pkg.Name,
+		Language: LangGo,
+		Files:    make([]string, 0, len(files)),
 	}
 	fset := token.NewFileSet()
 	exportedDecls := map[string]struct{}{}

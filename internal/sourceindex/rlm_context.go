@@ -109,17 +109,28 @@ func writeOnePackageRLMContext(b *strings.Builder, ev PackageEvidence, role Role
 	}
 	if len(ev.ExportedBodies) > 0 {
 		b.WriteString("\n### Exported bodies\n\n")
+		fence := bodyFence(ev.Language)
 		for _, body := range ev.ExportedBodies {
-			fmt.Fprintf(b, "#### %s (%s)\n\n```go\n%s\n```\n\n", body.Name, body.Kind, body.Source)
+			fmt.Fprintf(b, "#### %s (%s)\n\n```%s\n%s\n```\n\n", body.Name, body.Kind, fence, body.Source)
 		}
 	}
 	if len(ev.PrivateOneHopBodies) > 0 {
 		b.WriteString("### Private one-hop bodies\n\n")
+		fence := bodyFence(ev.Language)
 		for _, body := range ev.PrivateOneHopBodies {
-			fmt.Fprintf(b, "#### %s (%s)\n\n```go\n%s\n```\n\n", body.Name, body.Kind, body.Source)
+			fmt.Fprintf(b, "#### %s (%s)\n\n```%s\n%s\n```\n\n", body.Name, body.Kind, fence, body.Source)
 		}
 	}
 	b.WriteByte('\n')
+}
+
+func bodyFence(language string) string {
+	switch strings.TrimSpace(language) {
+	case LangPython:
+		return "python"
+	default:
+		return "go"
+	}
 }
 
 func writeNameList(b *strings.Builder, label string, names []string) {
