@@ -572,7 +572,7 @@ Before you change this catalog or the code it describes, load these skills:
 - ` + "`typology-cli`" + ` — discover, emit, validate, remediate
 - ` + "`typology-docs`" + ` — fill and evaluate develop DocPages
 
-If your host does not have these skills, install the Typology module and symlink the skills from ` + "`$TYPOLOGY_ROOT/skills/`" + ` into your host skills directory (see the Typology module ` + "`AGENTS.md`" + `).
+If your host does not have these skills, install the Typology module and symlink the skills from ` + "`$TYPOLOGY_ROOT/ai-copilots/skills/`" + ` into your host skills directory (see the Typology module ` + "`AGENTS.md`" + ` and ` + "`ai-copilots/BOOTSTRAP.md`" + `).
 
 ## Consumer bootstrap
 

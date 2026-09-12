@@ -4,7 +4,7 @@ Portable Go library and CLI to **discover** bounded contexts, **write** the map 
 
 **Module:** [`github.com/behaviorengineering/typology`](https://github.com/behaviorengineering/typology)
 
-Agents: start at [AGENTS.md](AGENTS.md). Skills live in [skills/](skills/) (any agent; optional symlink into your host skill folder).
+Agents: start at [AGENTS.md](AGENTS.md). Skills live in [ai-copilots/skills/](ai-copilots/skills/) (any agent; wire with [ai-copilots/BOOTSTRAP.md](ai-copilots/BOOTSTRAP.md)).
 
 ## Install
 
@@ -69,7 +69,7 @@ Day-to-day in a consumer: update the catalog first, implement code to match it, 
 
 ## Workflow
 
-First map in a new repo: load [skills/journey/SKILL.md](skills/journey/SKILL.md) (plan file `.typology/typology-journey.md`, discover to a draft, walk slices, emit, then fill DocPages with [skills/docs/SKILL.md](skills/docs/SKILL.md)).
+First map in a new repo: load [ai-copilots/skills/journey/SKILL.md](ai-copilots/skills/journey/SKILL.md) (plan file `.typology/typology-journey.md`, discover to a draft, walk slices, emit, then fill DocPages with [ai-copilots/skills/docs/SKILL.md](ai-copilots/skills/docs/SKILL.md)).
 
 1. `typology discover` on a Go repo (draft; writes to `tmp/typology/typology.yaml` by default). Use `--module` when a multi-module workspace has no catalog scope yet.
 2. Human confirms slice names and bindings.
@@ -83,7 +83,7 @@ First map in a new repo: load [skills/journey/SKILL.md](skills/journey/SKILL.md)
 
 ```text
 AGENTS.md             Pointer for coding agents
-skills/               Portable agent skills (journey, docs, catalog, CLI)
+ai-copilots/          Portable agent pack (BOOTSTRAP + skills: journey, docs, catalog, CLI)
 catalog/              Typology model + YAML I/O
 architecture/         Human-readable catalog and topology reports
 validate/             Path + import + DocPage checks
