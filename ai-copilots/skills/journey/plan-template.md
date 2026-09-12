@@ -31,7 +31,7 @@ Phase order: `land` → `situation-draft` → `cluster-pass` → `slice-walk` �
 - [ ] **Skills:** journey, cli, catalog, and docs skills are loaded when that phase needs them
       Method: agent Read those SKILL.md files
       Pass: journey/cli/catalog at land; docs skill Read at phase `docs`
-      Fail: STOP, Read `skills/README.md` in the Typology module
+      Fail: STOP, Read `ai-copilots/skills/README.md` in the Typology module
 
 ## Situation draft
 

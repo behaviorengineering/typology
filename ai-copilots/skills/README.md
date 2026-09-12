@@ -1,6 +1,6 @@
 # Typology skills
 
-Portable instructions for any coding agent that builds with this library. Canonical path is this directory. Hosts MAY symlink `journey/`, `docs/`, `catalog/`, and `cli/` into their own skills folder; they MUST NOT treat a copy as source of truth.
+Portable instructions for any coding agent that builds with this library. Canonical path is this directory under `ai-copilots/skills/`. Hosts MAY symlink `journey/`, `docs/`, `catalog/`, and `cli/` into their own skills folder as `typology-*`; they MUST NOT treat a copy as source of truth.
 
 | Skill | Load when |
 |-------|-----------|
@@ -9,4 +9,4 @@ Portable instructions for any coding agent that builds with this library. Canoni
 | [catalog/SKILL.md](catalog/SKILL.md) | Authoring or changing `.typology/typology.yaml`, `catalog.Typology` in Go, subprograms, actuators, opRuns, or bindings |
 | [cli/SKILL.md](cli/SKILL.md) | Running `typology discover`, `emit`, `architecture`, `validate`, `show`, or `remediate` |
 
-Symlink recipe and consumer layout: [../AGENTS.md](../AGENTS.md). Human pitch: [../README.md](../README.md) (§ Consumer setup). Types: [../catalog/types.go](../catalog/types.go).
+Wire discovery: [../BOOTSTRAP.md](../BOOTSTRAP.md). Entry: [../../AGENTS.md](../../AGENTS.md). Human pitch: [../../README.md](../../README.md) (§ Consumer setup). Types: [../../catalog/types.go](../../catalog/types.go).
