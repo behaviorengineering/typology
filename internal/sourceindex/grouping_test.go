@@ -134,6 +134,21 @@ func TestBuildMechanicalGroupingDoorWalkPrivateShared(t *testing.T) {
 			t.Fatalf("markdown missing %q:\n%s", needle, md)
 		}
 	}
+	for _, note := range g.Notes {
+		if strings.Contains(strings.ToLower(note), "library-leaning") {
+			t.Fatalf("shared note must not say library-leaning: %q", note)
+		}
+	}
+	foundSharedNote := false
+	for _, note := range g.Notes {
+		if strings.Contains(note, "internal/board") && strings.Contains(note, "shared is not the same as library") {
+			foundSharedNote = true
+			break
+		}
+	}
+	if !foundSharedNote {
+		t.Fatalf("expected shared≠library note for board; notes=%v", g.Notes)
+	}
 }
 
 func containsPath(paths []string, want string) bool {
