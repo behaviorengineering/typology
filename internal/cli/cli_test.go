@@ -2,11 +2,13 @@ package cli_test
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/behaviorengineering/typology/catalog"
 	"github.com/behaviorengineering/typology/internal/cli"
 )
 
@@ -210,6 +212,161 @@ func TestCLI_contracts(t *testing.T) {
 	}
 	if !strings.Contains(text, "hasMain: false") {
 		t.Fatalf("expected hasMain false:\n%s", text)
+	}
+}
+
+func TestCLI_assemblyGraph_tinyModule(t *testing.T) {
+	t.Parallel()
+	repo, _ := filepath.Abs(filepath.Join("..", "..", "testdata", "tiny-module"))
+	out := filepath.Join(t.TempDir(), "assembly-graph.json")
+	var stdout, stderr bytes.Buffer
+	code := cli.Run([]string{"assembly-graph", repo, "--out", out}, nil, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("exit=%d stderr=%s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "assembly-graph: wrote") {
+		t.Fatalf("stdout=%q", stdout.String())
+	}
+	raw, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(raw), `"nodes"`) || !strings.Contains(string(raw), `"edges"`) {
+		t.Fatalf("unexpected json: %s", raw)
+	}
+	if !strings.Contains(string(raw), "fills_dto") && !strings.Contains(string(raw), `"role"`) {
+		t.Fatalf("expected roles or role kinds in json: %s", raw)
+	}
+}
+
+func TestCLI_emit_ok(t *testing.T) {
+	t.Parallel()
+	src, _ := filepath.Abs(filepath.Join("..", "..", "testdata", "tiny-module"))
+	typ, err := catalog.LoadYAML(filepath.Join(src, ".typology", "typology.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	repo := t.TempDir()
+	catalogPath := filepath.Join(repo, ".typology", "typology.yaml")
+	if err := catalog.SaveYAML(catalogPath, typ); err != nil {
+		t.Fatal(err)
+	}
+	var stdout, stderr bytes.Buffer
+	code := cli.Run([]string{"emit", repo, "--catalog", catalogPath, "--go-only"}, nil, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("exit=%d stderr=%s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "emit: ok") {
+		t.Fatalf("stdout=%q", stdout.String())
+	}
+	if _, err := os.Stat(filepath.Join(repo, ".typology", "README.md")); err != nil {
+		t.Fatalf("README not written: %v", err)
+	}
+}
+
+func TestCLI_remediate(t *testing.T) {
+	t.Parallel()
+	repo, _ := filepath.Abs(filepath.Join("..", "..", "testdata", "tiny-module"))
+	var stdout, stderr bytes.Buffer
+	code := cli.Run([]string{"remediate", repo, "billing"}, nil, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("exit=%d stderr=%s stdout=%s", code, stderr.String(), stdout.String())
+	}
+	code = cli.Run([]string{"remediate", repo, "no-such-slice"}, nil, &stdout, &stderr)
+	if code == 0 {
+		t.Fatal("unknown slice should fail")
+	}
+}
+
+func TestCLI_validate_missingDoc_exits1(t *testing.T) {
+	t.Parallel()
+	repo, _ := filepath.Abs(filepath.Join("..", "..", "testdata", "tiny-module"))
+	typ, err := catalog.LoadYAML(filepath.Join(repo, ".typology", "typology.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	typ.Slices[0].Docs.Pages = []catalog.DocPage{{
+		Kind: catalog.DocOverview,
+		Path: "docs/develop/billing/missing-overview.md",
+	}}
+	catalogPath := filepath.Join(t.TempDir(), "typology.yaml")
+	if err := catalog.SaveYAML(catalogPath, typ); err != nil {
+		t.Fatal(err)
+	}
+	var stdout, stderr bytes.Buffer
+	code := cli.Run([]string{"validate", repo, "--catalog", catalogPath, "billing"}, nil, &stdout, &stderr)
+	if code != 1 {
+		t.Fatalf("exit=%d want 1 stderr=%s", code, stderr.String())
+	}
+}
+
+func TestCLI_show_json(t *testing.T) {
+	t.Parallel()
+	repo, _ := filepath.Abs(filepath.Join("..", "..", "testdata", "tiny-module"))
+	catalogPath := filepath.Join(repo, ".typology", "typology.yaml")
+	var stdout, stderr bytes.Buffer
+	code := cli.Run([]string{"show", "--catalog", catalogPath, "--json"}, nil, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("exit=%d stderr=%s", code, stderr.String())
+	}
+	var catalogDoc map[string]any
+	if err := json.Unmarshal(stdout.Bytes(), &catalogDoc); err != nil {
+		t.Fatalf("catalog json: %v\n%s", err, stdout.String())
+	}
+	if _, ok := catalogDoc["slices"]; !ok {
+		t.Fatalf("catalog json missing slices: %v", catalogDoc)
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	code = cli.Run([]string{"show", "graph", "--catalog", catalogPath, "--json"}, nil, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("graph exit=%d stderr=%s", code, stderr.String())
+	}
+	var graphDoc map[string]any
+	if err := json.Unmarshal(stdout.Bytes(), &graphDoc); err != nil {
+		t.Fatalf("graph json: %v\n%s", err, stdout.String())
+	}
+	if _, ok := graphDoc["nodes"]; !ok {
+		t.Fatalf("graph json missing nodes: %v", graphDoc)
+	}
+}
+
+func TestCLI_init_pinnedVersion(t *testing.T) {
+	t.Parallel()
+	repo := t.TempDir()
+	mustWrite(t, filepath.Join(repo, "go.mod"), "module example.com/init-ok\n\ngo 1.27\n")
+	var stdout, stderr bytes.Buffer
+	code := cli.Run([]string{"init", repo, "--version", "v0.0.5"}, nil, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("exit=%d stderr=%s stdout=%s", code, stderr.String(), stdout.String())
+	}
+	if !strings.Contains(stdout.String(), "init: configured") {
+		t.Fatalf("stdout=%q", stdout.String())
+	}
+}
+
+func TestCLI_usageErrors(t *testing.T) {
+	t.Parallel()
+	var stdout, stderr bytes.Buffer
+	if code := cli.Run([]string{"nope"}, nil, &stdout, &stderr); code != 2 {
+		t.Fatalf("unknown command exit=%d", code)
+	}
+	stderr.Reset()
+	if code := cli.Run([]string{"validate"}, nil, &stdout, &stderr); code != 2 {
+		t.Fatalf("validate missing repo exit=%d stderr=%s", code, stderr.String())
+	}
+	stderr.Reset()
+	repo, _ := filepath.Abs(filepath.Join("..", "..", "testdata", "tiny-module"))
+	if code := cli.Run([]string{"architecture", repo, "--nope"}, nil, &stdout, &stderr); code != 2 {
+		t.Fatalf("unknown flag exit=%d stderr=%s", code, stderr.String())
+	}
+	stderr.Reset()
+	if code := cli.Run([]string{"assembly-graph"}, nil, &stdout, &stderr); code != 2 {
+		t.Fatalf("assembly-graph usage exit=%d stderr=%s", code, stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "usage: typology assembly-graph") {
+		t.Fatalf("stderr=%q", stderr.String())
 	}
 }
 

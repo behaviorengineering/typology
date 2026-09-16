@@ -42,6 +42,7 @@ typology init REPO [--module PATH] [--version VERSION]
 typology discover REPO [--module PATH] [--out PATH] [--docs-root PATH]
 typology emit REPO [--catalog PATH] [--docs-only] [--go-only]
 typology architecture REPO [--module PATH] [--catalog PATH] [--out PATH]
+typology assembly-graph REPO [--module PATH] [--out PATH]
 typology validate REPO [--module PATH] [--catalog PATH] [SLICE]
 typology show [SLICE|graph] [--module PATH] [--json] [--catalog PATH]
 typology remediate REPO SLICE [--module PATH] [--catalog PATH]
@@ -61,6 +62,7 @@ One repository owns one Typology catalog and its architecture documentation. In 
 | `.typology/tools.yaml` | Generated CLI tool index from `opRuns` |
 | `.typology/typology-journey.md` | First-map session file (journey skill) |
 | `tmp/typology/typology.yaml` | Discover draft (not the confirmed catalog) |
+| `tmp/typology/assembly-graph.json` | Portable package wiring graph (assembly-graph command) |
 | `AGENTS.md` | Pointer to `.typology/README.md` (created or appended by emit) |
 | `docs/develop/` | Per-slice DocPages (default docs root) |
 | `docs/architecture/typology.md` | Human-readable catalog and Go-topology comparison |
@@ -75,9 +77,10 @@ First map in a new repo: load [skills/journey/SKILL.md](skills/journey/SKILL.md)
 2. Human confirms slice names and bindings.
 3. `typology emit` writes `.typology/typology.yaml`, `.typology/README.md`, `.typology/tools.yaml`, ensures `AGENTS.md` points at `.typology/README.md`, plus DocPage skeletons under the docs root (default `docs/develop`). Empty CLI/UI/API/Jobs pages are omitted unless listed in YAML.
 4. `typology architecture` writes a deterministic Markdown projection under `docs/architecture/typology.md`. It combines the intended catalog with observed package topology within `scope.modules` and names findings for human review. It does not make narrative design decisions.
-5. An agent or architect fixes each finding or records the boundary debt in the journey file.
-6. `typology validate` fails closed on missing paths, bindings, DocPages, or program leaves.
-7. `typology remediate REPO SLICE` returns agent-scoped violations for one slice.
+5. `typology assembly-graph` writes a portable JSON wiring graph (`tmp/typology/assembly-graph.json` by default): packages, import edges, observed roles, role-edge kinds, and wrong-way layer marks for assembly-board style viewers.
+6. An agent or architect fixes each finding or records the boundary debt in the journey file.
+7. `typology validate` fails closed on missing paths, bindings, DocPages, or program leaves.
+8. `typology remediate REPO SLICE` returns agent-scoped violations for one slice.
 
 ## Layout
 
@@ -86,6 +89,7 @@ AGENTS.md             Pointer for coding agents
 skills/               Portable agent skills (journey, docs, catalog, CLI)
 catalog/              Typology model + YAML I/O
 architecture/         Human-readable catalog and topology reports
+assemblygraph/        Portable package wiring JSON for assembly viewers
 validate/             Path + import + DocPage checks
 cmd/typology/         CLI entry
 internal/discover/    Go import graph → draft catalog

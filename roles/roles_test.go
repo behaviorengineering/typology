@@ -1,6 +1,7 @@
 package roles_test
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -63,5 +64,35 @@ edges:
 				t.Fatalf("CLI door must not claim server-private agent:\n%s", md)
 			}
 		}
+	}
+}
+
+func TestParseYAML_invalid(t *testing.T) {
+	t.Parallel()
+	_, err := roles.ParseYAML([]byte("packages: [\n"))
+	if err == nil {
+		t.Fatal("expected parse error")
+	}
+	_, err = roles.BuildGroupingFromYAML([]byte("packages: [\n"))
+	if err == nil {
+		t.Fatal("expected grouping parse error")
+	}
+}
+
+func TestFormatPackageRLMContextForPath_board(t *testing.T) {
+	t.Parallel()
+	repo, err := filepath.Abs(filepath.Join("..", "testdata", "tiny-module"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	md, err := roles.FormatPackageRLMContextForPath(repo, "internal/board", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.TrimSpace(md) == "" {
+		t.Fatal("expected non-empty RLM context for internal/board")
+	}
+	if !strings.Contains(md, "board") && !strings.Contains(md, "internal/board") {
+		t.Fatalf("context should mention board:\n%s", md)
 	}
 }
