@@ -153,3 +153,53 @@ func TestEmit_docs(t *testing.T) {
 		t.Fatalf("actuator stub missing objective: %s", actBody)
 	}
 }
+
+func TestEmit_goOnlySkipsDocs(t *testing.T) {
+	t.Parallel()
+	repo := t.TempDir()
+	src := filepath.Join("..", "..", "testdata", "tiny-module")
+	typ, err := catalog.LoadYAML(filepath.Join(src, ".typology", "typology.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := emit.Run(emit.Options{RepoRoot: repo, Catalog: typ, GoOnly: true}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(repo, ".typology", "typology.yaml")); err != nil {
+		t.Fatalf("catalog should be written: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(repo, "docs", "develop")); !os.IsNotExist(err) {
+		t.Fatalf("GoOnly should skip docs/develop, err=%v", err)
+	}
+}
+
+func TestEmit_preservesHumanDocPage(t *testing.T) {
+	t.Parallel()
+	repo := t.TempDir()
+	src := filepath.Join("..", "..", "testdata", "tiny-module")
+	typ, err := catalog.LoadYAML(filepath.Join(src, ".typology", "typology.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	human := "# Hand-written billing overview\n\nDo not overwrite.\n"
+	overview := filepath.Join(repo, "docs", "develop", "billing", "overview.md")
+	if err := os.MkdirAll(filepath.Dir(overview), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(overview, []byte(human), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := emit.Run(emit.Options{RepoRoot: repo, Catalog: typ, DocsOnly: true}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(overview)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != human {
+		t.Fatalf("human overview overwritten:\n%s", got)
+	}
+	if _, err := os.Stat(filepath.Join(repo, ".typology", "typology.yaml")); !os.IsNotExist(err) {
+		t.Fatalf("DocsOnly should not write catalog, err=%v", err)
+	}
+}

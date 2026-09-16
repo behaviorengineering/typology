@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/behaviorengineering/typology/architecture"
+	"github.com/behaviorengineering/typology/assemblygraph"
 	"github.com/behaviorengineering/typology/catalog"
 	terrors "github.com/behaviorengineering/typology/errors"
 	"github.com/behaviorengineering/typology/internal/bootstrap"
@@ -45,6 +46,8 @@ func Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return runEmit(args[1:], stdout, stderr)
 	case "architecture":
 		return runArchitecture(args[1:], stdout, stderr)
+	case "assembly-graph":
+		return runAssemblyGraph(args[1:], stdout, stderr)
 	case "validate":
 		return runValidate(args[1:], stdout, stderr)
 	case "show":
@@ -73,6 +76,7 @@ func printUsage(w io.Writer) {
 	_, _ = fmt.Fprintln(w, "  typology contracts REPO [--module PATH] [--out PATH]")
 	_, _ = fmt.Fprintln(w, "  typology emit REPO [--catalog PATH] [--docs-only] [--go-only]")
 	_, _ = fmt.Fprintln(w, "  typology architecture REPO [--module PATH] [--catalog PATH] [--out PATH]")
+	_, _ = fmt.Fprintln(w, "  typology assembly-graph REPO [--module PATH] [--out PATH]")
 	_, _ = fmt.Fprintln(w, "  typology validate REPO [--module PATH] [--catalog PATH] [SLICE]")
 	_, _ = fmt.Fprintln(w, "  typology show [SLICE|graph] [--module PATH] [--json] [--catalog PATH]")
 	_, _ = fmt.Fprintln(w, "  typology remediate REPO SLICE [--module PATH] [--catalog PATH]")
@@ -380,6 +384,55 @@ func runArchitecture(args []string, stdout, stderr io.Writer) int {
 		_, _ = fmt.Fprintf(stderr, "architecture: %d finding(s); review the brief and fix or record each one\n", len(report.Findings))
 		return 1
 	}
+	return 0
+}
+
+func runAssemblyGraph(args []string, stdout, stderr io.Writer) int {
+	repo, rest, ok := firstArg(args)
+	if !ok {
+		_, _ = fmt.Fprintln(stderr, "usage: typology assembly-graph REPO [--module PATH] [--out PATH]")
+		return 2
+	}
+	outPath := assemblygraph.DefaultPath(repo)
+	module := ""
+	for i := 0; i < len(rest); i++ {
+		switch rest[i] {
+		case "--module":
+			if i+1 >= len(rest) {
+				_, _ = fmt.Fprintln(stderr, "assembly-graph: --module requires path")
+				return 2
+			}
+			module = rest[i+1]
+			i++
+		case "--out":
+			if i+1 >= len(rest) {
+				_, _ = fmt.Fprintln(stderr, "assembly-graph: --out requires path")
+				return 2
+			}
+			outPath = rest[i+1]
+			i++
+		default:
+			_, _ = fmt.Fprintf(stderr, "assembly-graph: unknown flag %q\n", rest[i])
+			return 2
+		}
+	}
+	g, err := assemblygraph.Build(assemblygraph.BuildOptions{RepoRoot: repo, Module: module})
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "assembly-graph: %v\n", err)
+		return 1
+	}
+	if err := assemblygraph.WriteJSON(outPath, g); err != nil {
+		_, _ = fmt.Fprintf(stderr, "assembly-graph: %v\n", err)
+		return 1
+	}
+	wrong := 0
+	for _, e := range g.Edges {
+		if e.WrongWay {
+			wrong++
+		}
+	}
+	_, _ = fmt.Fprintf(stdout, "assembly-graph: wrote %s (%d nodes, %d edges, %d wrong-way)\n",
+		outPath, len(g.Nodes), len(g.Edges), wrong)
 	return 0
 }
 
