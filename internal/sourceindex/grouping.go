@@ -427,7 +427,7 @@ func mechanicalGroupingNotes(topo RoleTopology, byPath map[string]RoleNode, g Me
 		notes = append(notes, fmt.Sprintf("`%s` packages are technical libraries, not product slices.", role))
 	}
 	for _, p := range g.SharedPaths {
-		notes = append(notes, fmt.Sprintf("`%s` is shared across doors; keep it library-leaning unless evidence says otherwise.", p))
+		notes = append(notes, fmt.Sprintf("`%s` is shared across doors; do not invent sole ownership for one door (shared is not the same as library).", p))
 	}
 	for _, p := range g.UnreachedPaths {
 		node := byPath[p]
