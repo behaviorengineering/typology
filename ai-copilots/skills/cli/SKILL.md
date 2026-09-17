@@ -12,7 +12,7 @@ description: >-
 
 **Moral:** Discover drafts. A human confirms slice names. One repository owns one catalog and its architecture docs. In a multi-module workspace, `scope.modules` is authoritative and `go.work` does not widen the scan. Emit writes docs only where the `<!-- typology:generated -->` marker is present. Validate fail-closes. Remediate scopes the agent to one slice.
 
-**Binary:** `make build` → `./bin/typology` · **Catalog skill:** [catalog/SKILL.md](../catalog/SKILL.md) (load first when the YAML shape is in doubt) · **First map:** [journey/SKILL.md](../journey/SKILL.md) · **DocPages:** [docs/SKILL.md](../docs/SKILL.md)
+**Binary:** `make build` → `./bin/typology` · **Catalog skill:** [catalog/SKILL.md](../catalog/SKILL.md) (load first when the YAML shape is in doubt) · **Cable board:** [cable-board/SKILL.md](../cable-board/SKILL.md) · **First map:** [journey/SKILL.md](../journey/SKILL.md) · **DocPages:** [docs/SKILL.md](../docs/SKILL.md)
 
 ## When to load
 
@@ -28,6 +28,7 @@ typology init REPO [--module PATH] [--version VERSION]
 typology discover REPO [--module PATH] [--out PATH] [--docs-root PATH] [--suggest-merges]
 typology emit REPO [--catalog PATH] [--docs-only] [--go-only]
 typology architecture REPO [--module PATH] [--catalog PATH] [--out PATH]
+typology assembly-graph REPO [--module PATH] [--out PATH]
 typology validate REPO [--module PATH] [--catalog PATH] [SLICE]
 typology show [SLICE|graph] [--module PATH] [--json] [--catalog PATH]
 typology remediate REPO SLICE [--module PATH] [--catalog PATH]
@@ -44,9 +45,10 @@ Default catalog: `REPO/.typology/typology.yaml`. `discover` writes its draft to 
 4. **Confirm (Slice Walk)**: operator accepts or renames consolidated slices and bindings (one slice per turn). MUST NOT emit or validate-as-done on unconfirmed names when this is a first map.
 5. **Emit**: `typology emit REPO` writes catalog YAML (unless `--docs-only`), `.typology/README.md` (agent guidance), `.typology/tools.yaml` from CLI `opRuns`, ensures `AGENTS.md` points at `.typology/README.md`, a slice README hub, DocPage skeletons (unless `--go-only`), and program leaves. MUST NOT overwrite a doc page that exists and lacks `<!-- typology:generated -->`. On a first map, load [docs/SKILL.md](../docs/SKILL.md) after emit (journey phase `docs`). Default `docs.pages` follows surfaces and opRuns; MUST NOT treat six missing files per slice as architecture failure.
 6. **Architecture brief**: `typology architecture REPO` writes `docs/architecture/typology.md`, combining catalog intent with observed Go topology and validation findings within `scope.modules`. Read it as a human diagnostic projection, not as a second source of truth. Have an agent or architect fix each finding or record the boundary debt in the journey file. The command preserves a report after its generated marker is removed.
-7. **Fill catalog** — add subprograms, actuators, opRuns, bindings per [catalog/SKILL.md](../catalog/SKILL.md). Every subprogram and actuator MUST have a non-empty `objective`. Owned paths MUST exist as directories.
-8. **Validate** — `typology validate REPO` (optional slice id). MUST fix every issue. MUST NOT ignore import or missing-path findings.
-9. **Remediate** — `typology remediate REPO SLICE` when the job is one slice. MUST follow the returned `protocol`. MUST NOT refactor other slices in that pass.
+7. **Cable board**: for package wiring (import cables, roles, wrong-way edges), run `typology assembly-graph REPO` and load [cable-board/SKILL.md](../cable-board/SKILL.md). Default output is `tmp/typology/assembly-graph.json`. MUST regenerate after import edits that this change introduces.
+8. **Fill catalog** — add subprograms, actuators, opRuns, bindings per [catalog/SKILL.md](../catalog/SKILL.md). Every subprogram and actuator MUST have a non-empty `objective`. Owned paths MUST exist as directories.
+9. **Validate** — `typology validate REPO` (optional slice id). MUST fix every issue. MUST NOT ignore import or missing-path findings.
+10. **Remediate** — `typology remediate REPO SLICE` when the job is one slice. MUST follow the returned `protocol`. MUST NOT refactor other slices in that pass.
 
 ## Core constraints
 

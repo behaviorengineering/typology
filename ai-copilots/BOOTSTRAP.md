@@ -49,6 +49,7 @@ ai-copilots/
     docs/SKILL.md
     catalog/SKILL.md
     cli/SKILL.md
+    cable-board/SKILL.md
 ```
 
 ---
@@ -71,6 +72,7 @@ Canonical skill trees under `$MOD`:
 | `typology-docs` | `ai-copilots/skills/docs/` |
 | `typology-catalog` | `ai-copilots/skills/catalog/` |
 | `typology-cli` | `ai-copilots/skills/cli/` |
+| `typology-cable-board` | `ai-copilots/skills/cable-board/` |
 
 Discovery paths:
 
@@ -90,6 +92,7 @@ ln -snf "$MOD/ai-copilots/skills/journey" .cursor/skills/typology-journey
 ln -snf "$MOD/ai-copilots/skills/docs" .cursor/skills/typology-docs
 ln -snf "$MOD/ai-copilots/skills/catalog" .cursor/skills/typology-catalog
 ln -snf "$MOD/ai-copilots/skills/cli" .cursor/skills/typology-cli
+ln -snf "$MOD/ai-copilots/skills/cable-board" .cursor/skills/typology-cable-board
 ```
 
 When the workspace root is the Typology module itself, relative links are fine:
@@ -100,6 +103,7 @@ ln -snf ../ai-copilots/skills/journey .cursor/skills/typology-journey
 ln -snf ../ai-copilots/skills/docs .cursor/skills/typology-docs
 ln -snf ../ai-copilots/skills/catalog .cursor/skills/typology-catalog
 ln -snf ../ai-copilots/skills/cli .cursor/skills/typology-cli
+ln -snf ../ai-copilots/skills/cable-board .cursor/skills/typology-cable-board
 ```
 
 **Windows:** prefer junction or developer-mode symlink; copy fallback only with user approval.
@@ -114,8 +118,9 @@ ln -snf ../ai-copilots/skills/cli .cursor/skills/typology-cli
 
 ```bash
 MOD="$(go list -m -f '{{.Dir}}' github.com/behaviorengineering/typology)"
-ls -la .cursor/skills/typology-journey .cursor/skills/typology-cli
+ls -la .cursor/skills/typology-journey .cursor/skills/typology-cli .cursor/skills/typology-cable-board
 test -f .cursor/skills/typology-journey/SKILL.md
+test -f .cursor/skills/typology-cable-board/SKILL.md
 test -f "$MOD/ai-copilots/BOOTSTRAP.md"
 ```
 
