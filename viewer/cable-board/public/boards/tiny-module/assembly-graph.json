@@ -1,0 +1,136 @@
+{
+  "nodes": [
+    {
+      "id": "internal__billing__httpapi",
+      "path": "internal/billing/httpapi",
+      "inDegree": 0,
+      "outDegree": 1,
+      "imports": [
+        "internal/billing/store"
+      ],
+      "importedBy": [],
+      "isHub": false,
+      "isLeaf": false,
+      "role": "unknown",
+      "layer": 2
+    },
+    {
+      "id": "internal__billing__store",
+      "path": "internal/billing/store",
+      "inDegree": 1,
+      "outDegree": 2,
+      "imports": [
+        "internal/config",
+        "internal/ledger"
+      ],
+      "importedBy": [
+        "internal/billing/httpapi"
+      ],
+      "isHub": false,
+      "isLeaf": false,
+      "role": "unknown",
+      "layer": 2
+    },
+    {
+      "id": "internal__board",
+      "path": "internal/board",
+      "inDegree": 1,
+      "outDegree": 0,
+      "imports": [],
+      "importedBy": [
+        "internal/kitchen"
+      ],
+      "isHub": false,
+      "isLeaf": true,
+      "role": "dto",
+      "roleConfidence": 0.9,
+      "layer": 3
+    },
+    {
+      "id": "internal__config",
+      "path": "internal/config",
+      "inDegree": 3,
+      "outDegree": 0,
+      "imports": [],
+      "importedBy": [
+        "internal/billing/store",
+        "internal/kitchen",
+        "internal/ledger"
+      ],
+      "isHub": true,
+      "isLeaf": true,
+      "role": "unknown",
+      "layer": 2
+    },
+    {
+      "id": "internal__kitchen",
+      "path": "internal/kitchen",
+      "inDegree": 0,
+      "outDegree": 2,
+      "imports": [
+        "internal/board",
+        "internal/config"
+      ],
+      "importedBy": [],
+      "isHub": false,
+      "isLeaf": false,
+      "role": "aggregator",
+      "roleConfidence": 0.8,
+      "layer": 2
+    },
+    {
+      "id": "internal__ledger",
+      "path": "internal/ledger",
+      "inDegree": 1,
+      "outDegree": 1,
+      "imports": [
+        "internal/config"
+      ],
+      "importedBy": [
+        "internal/billing/store"
+      ],
+      "isHub": false,
+      "isLeaf": false,
+      "role": "unknown",
+      "layer": 2
+    }
+  ],
+  "edges": [
+    {
+      "id": "internal__billing__httpapi__internal__billing__store",
+      "source": "internal__billing__httpapi",
+      "target": "internal__billing__store",
+      "roleKind": "imports"
+    },
+    {
+      "id": "internal__billing__store__internal__config",
+      "source": "internal__billing__store",
+      "target": "internal__config",
+      "roleKind": "imports"
+    },
+    {
+      "id": "internal__billing__store__internal__ledger",
+      "source": "internal__billing__store",
+      "target": "internal__ledger",
+      "roleKind": "imports"
+    },
+    {
+      "id": "internal__kitchen__internal__board",
+      "source": "internal__kitchen",
+      "target": "internal__board",
+      "roleKind": "fills_dto"
+    },
+    {
+      "id": "internal__kitchen__internal__config",
+      "source": "internal__kitchen",
+      "target": "internal__config",
+      "roleKind": "composes"
+    },
+    {
+      "id": "internal__ledger__internal__config",
+      "source": "internal__ledger",
+      "target": "internal__config",
+      "roleKind": "imports"
+    }
+  ]
+}

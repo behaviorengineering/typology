@@ -22,9 +22,14 @@ export type WiringEdgeData = {
 
 export type WiringFlowEdge = Edge<WiringEdgeData, 'wiring'>
 
-/** Cable midpoint overrides; hydrated from localStorage. */
+/** Cable midpoint overrides; hydrated from localStorage for the active board. */
 export const cableNudges = new Map<string, { bowX: number; bowY: number }>()
 hydrateCableNudges(cableNudges)
+
+/** Re-hydrate nudges after the active board changes (see boardPersist). */
+export function refreshCableNudges(): void {
+  hydrateCableNudges(cableNudges)
+}
 
 export function applyCableNudges(edges: Edge[]): Edge[] {
   return edges.map((edge) => {

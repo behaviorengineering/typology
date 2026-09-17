@@ -55,9 +55,22 @@ Interactive viewer (human surface for the same JSON):
 ```text
 # from Typology module root
 make build
-./viewer/cable-board/scripts/load-graph.sh REPO
+make cable-board-sample
 cd viewer/cable-board && npm install && npm run dev
 ```
+
+One server serves many named boards. Register a board without touching the
+others (stable id: lowercase, digits, hyphens):
+
+```text
+./viewer/cable-board/scripts/load-graph.sh REPO BOARD_ID [--module PATH] [--label TEXT] [--make-default]
+```
+
+Then open `http://localhost:5173/?board=BOARD_ID` in one window and another
+board id in a second window. The header switcher moves between boards and
+keeps the board in the URL. Registry file: `viewer/cable-board/public/boards.json`
+(`defaultBoard` plus `boards[]`). Only the tiny-module sample is committed;
+consumer boards stay local. Optional URL override: `http://localhost:5173/?src=/assembly-graph.json`.
 
 Or copy an existing board file:
 
@@ -65,14 +78,14 @@ Or copy an existing board file:
 typology assembly-graph REPO --out $MOD/viewer/cable-board/public/assembly-graph.json
 ```
 
-`$MOD` is `go list -m -f '{{.Dir}}' github.com/behaviorengineering/typology` when Typology is only a dependency. Optional URL override: `http://localhost:5173/?src=/assembly-graph.json`.
+`$MOD` is `go list -m -f '{{.Dir}}' github.com/behaviorengineering/typology` when Typology is only a dependency.
 
 ## Steps
 
 1. **Scope:** resolve the repository root and optional `--module` the same way as [cli/SKILL.md](../cli/SKILL.md). MUST NOT scan every `go.work` module by accident.
 2. **Generate:** run `typology assembly-graph REPO` (add `--module` when needed). Confirm the stdout line reports nodes, edges, and wrong-way count.
-3. **Open the viewer (when a human needs the board):** load the JSON into `viewer/cable-board/public/assembly-graph.json` (helper script above) and run `npm run dev`. Use click-to-detangle and wrong-way marks to explain hubs and debt. Agents MAY skip the viewer when only machine checks are required, but MUST still regenerate and read the JSON.
-4. **Read the board:** open the JSON (and viewer when used). Inventory hubs, leaves, and every edge with `wrongWay: true` (read `wrongWayReason`).
+3. **Open the viewer (when a human needs the board):** register the board with `viewer/cable-board/scripts/load-graph.sh REPO BOARD_ID` (stable id, never reuse an id for a different repo scope) and run `npm run dev` from `viewer/cable-board`. Use click-to-detangle and wrong-way marks to explain hubs and debt. Agents MAY skip the viewer when only machine checks are required, but MUST still regenerate and read the JSON.
+4. **Read the board:** open `http://localhost:5173/?board=BOARD_ID` (and the JSON when used). Inventory hubs, leaves, and every edge with `wrongWay: true` (read `wrongWayReason`).
 5. **Align with catalog:** if `.typology/typology.yaml` exists, map package paths to slice `owns` / `surfaces` / `libraries`. Cables that cross slices MUST already have (or gain) a matching `sliceBindings` row per [catalog/SKILL.md](../catalog/SKILL.md).
 6. **Implement:** when adding imports, prefer cables that stay inward on role layer and that match declared bindings. After the change, regenerate the board and re-check wrong-way count.
 7. **Debt:** if a wrong-way cable must remain, record it in `.typology/typology-journey.md` under technical debt (or the consumer's agreed debt log) with target refactoring. MUST NOT silently accept new wrong-way cables.
@@ -98,19 +111,21 @@ PROHIBITED:
 typology cable-board .
 ```
 
-**CONSTRAINT:** When the operator asks to *see* or *open* the cable board, agents MUST use the shipped viewer under `viewer/cable-board/` fed by `assembly-graph.json`. MUST NOT invent a second graph format or point humans only at raw JSON when a visual walk is requested.
+**CONSTRAINT:** When the operator asks to *see* or *open* the cable board, agents MUST use the shipped viewer under `viewer/cable-board/` with a registered board id. MUST NOT invent a second graph format or point humans only at raw JSON when a visual walk is requested.
 
-- MUST: regenerate with `typology assembly-graph`, then load into `viewer/cable-board/public/assembly-graph.json` (or `scripts/load-graph.sh`)
+- MUST: regenerate with `typology assembly-graph`, then register with `viewer/cable-board/scripts/load-graph.sh REPO BOARD_ID` (stable id per repo scope)
+- MUST: give the human a `?board=BOARD_ID` URL; open a second window with a different board id when comparison is requested
 - MUST: run the Vite app from that directory (`npm install && npm run dev`) when a human needs the interactive board
 - MUST NOT: claim the viewer is unavailable while this module tree contains `viewer/cable-board/`
 
-Enforcement: viewer README + skill steps; file exists under module Dir
-Violation: STOP, open `viewer/cable-board/README.md`, load graph, start `npm run dev`
+Enforcement: viewer README + skill steps; board id present in `public/boards.json`
+Violation: STOP, open `viewer/cable-board/README.md`, register the board, start `npm run dev`
 
 CORRECT:
 ```text
-typology assembly-graph . --out "$MOD/viewer/cable-board/public/assembly-graph.json"
+./viewer/cable-board/scripts/load-graph.sh . engine --module engine
 cd "$MOD/viewer/cable-board" && npm install && npm run dev
+# open http://localhost:5173/?board=engine
 ```
 
 PROHIBITED:
@@ -186,9 +201,9 @@ Contract smoke: `scripts/check-assembly-graph.py` in this module.
       Pass: non-empty `nodes` and `edges`
       Fail: STOP, fix harvest/CLI errors, regenerate
 - [ ] **Viewer when requested:** if the operator asked to see the board, the Vite viewer is running on current JSON
-      Method: `viewer/cable-board/public/assembly-graph.json` matches the regenerate; localhost board loads
-      Pass: human can open the board, or operator waived the UI this turn
-      Fail: STOP, load graph and start `npm run dev`
+      Method: the board id is registered in `viewer/cable-board/public/boards.json`; `http://localhost:5173/?board=ID` loads
+      Pass: human can open the named board, or operator waived the UI this turn
+      Fail: STOP, register the board with `scripts/load-graph.sh REPO BOARD_ID` and start `npm run dev`
 - [ ] **Wrong-way reviewed:** every `wrongWay` edge that touches this change is fixed or logged as debt
       Method: filter edges with `wrongWay: true`
       Pass: none new unexplained, or debt rows exist

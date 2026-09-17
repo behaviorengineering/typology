@@ -39,4 +39,4 @@ smoke: build
 	echo "smoke: ok"
 
 cable-board-sample: build
-	./$(VIEWER)/scripts/load-graph.sh $(SMOKE_REPO)
+	./$(VIEWER)/scripts/load-graph.sh $(SMOKE_REPO) tiny-module --label "Tiny module sample" --make-default
