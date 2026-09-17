@@ -6,8 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
-    "preview": "vite preview",
-    "load-graph": "bash ./scripts/load-graph.sh"
+    "preview": "vite preview"
   },
   "dependencies": {
     "@xyflow/react": "^12.6.0",

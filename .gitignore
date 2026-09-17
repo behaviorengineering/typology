@@ -1,3 +1,5 @@
 /bin/typology
 viewer/cable-board/node_modules/
 viewer/cable-board/dist/
+.DS_Store
+**/.DS_Store

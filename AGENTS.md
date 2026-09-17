@@ -12,8 +12,8 @@ One repository owns one Typology catalog and its architecture documentation. In 
 2. [ai-copilots/skills/journey/SKILL.md](ai-copilots/skills/journey/SKILL.md) (first map, onboard, resume `.typology/typology-journey.md`)
 3. [ai-copilots/skills/docs/SKILL.md](ai-copilots/skills/docs/SKILL.md) (fill and evaluate develop DocPages and program leaves)
 4. [ai-copilots/skills/catalog/SKILL.md](ai-copilots/skills/catalog/SKILL.md) (model and YAML/Go catalog)
-5. [ai-copilots/skills/cli/SKILL.md](ai-copilots/skills/cli/SKILL.md) (discover, emit, validate, remediate)
-6. [ai-copilots/skills/cable-board/SKILL.md](ai-copilots/skills/cable-board/SKILL.md) (cable board: package wiring graph, viewer, wrong-way cables, implement against imports)
+5. [ai-copilots/skills/cli/SKILL.md](ai-copilots/skills/cli/SKILL.md) (discover, emit, boards, validate, remediate)
+6. [ai-copilots/skills/cable-board/SKILL.md](ai-copilots/skills/cable-board/SKILL.md) (cable board: `assembly-graph` / `boards register`, viewer, wrong-way cables)
 
 Worked catalog: [testdata/tiny-module/.typology/typology.yaml](testdata/tiny-module/.typology/typology.yaml). Types: [catalog/types.go](catalog/types.go).
 
@@ -21,15 +21,15 @@ Worked catalog: [testdata/tiny-module/.typology/typology.yaml](testdata/tiny-mod
 
 When another Go library adopts Typology, `typology emit REPO` installs the same agent setup in that repo:
 
-- `.typology/typology.yaml` — confirmed catalog
-- `.typology/README.md` — skills, commands, catalog-first workflow
-- `AGENTS.md` — pointer to `.typology/README.md` (created or appended; keeps existing content)
-- `tmp/typology/` — discover drafts only
+- `.typology/typology.yaml`: confirmed catalog
+- `.typology/README.md`: skills, commands, catalog-first workflow
+- `AGENTS.md`: pointer to `.typology/README.md` (created or appended; keeps existing content)
+- `tmp/typology/`: discover drafts only
 
 Before running Typology commands in a consumer, register the CLI as a Go tool:
 
 ```bash
-go run github.com/behaviorengineering/typology/cmd/typology@v0.0.5 init .
+go run github.com/behaviorengineering/typology/cmd/typology@latest init .
 go tool typology version
 ```
 

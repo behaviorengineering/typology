@@ -39,10 +39,13 @@ smoke: build
 	python3 scripts/check-assembly-graph.py "$$tmp/assembly-graph.json" && \
 	./$(BINARY) assembly-graph $(SMOKE_REPO) --catalog $(SMOKE_CATALOG) --slice billing --out "$$tmp/billing.json" && \
 	python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); assert d.get("slice")=="billing"; assert d.get("nodes")' "$$tmp/billing.json" && \
+	bash scripts/check-prefix-boards.sh && \
 	echo "smoke: ok"
 
 cable-board-sample: build
-	./$(VIEWER)/scripts/load-graph.sh $(SMOKE_REPO) tiny-module --label "Tiny module sample" --make-default
+	./$(BINARY) boards register $(SMOKE_REPO) tiny-module \
+		--label "Tiny module sample" --make-default --viewer $(VIEWER)/public
 
 cable-board-slices: build
-	./$(VIEWER)/scripts/load-graph.sh $(SMOKE_REPO) --all-slices --catalog $(SMOKE_CATALOG)
+	./$(BINARY) boards register $(SMOKE_REPO) --all-slices \
+		--prefix tiny --catalog $(SMOKE_CATALOG) --viewer $(VIEWER)/public

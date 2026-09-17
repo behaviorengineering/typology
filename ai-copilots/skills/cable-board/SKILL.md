@@ -2,20 +2,21 @@
 name: typology-cable-board
 description: >-
   Manage the Typology cable board: generate and read the portable package
-  wiring graph (CLI: typology assembly-graph), open the interactive cable board
-  viewer, interpret hubs, leaves, roles, import cables, and wrong-way edges, and
-  steer AI implementation so new imports stay intentional. Load when the
-  operator says cable board, assembly graph, package wiring, import cables,
-  wrong-way imports, hubs/leaves, or asks to implement against observed wiring.
+  wiring graph (CLI: typology assembly-graph / boards register), open the
+  interactive cable board viewer (TTY wizard or flags), interpret hubs, leaves,
+  roles, import cables, and wrong-way edges, and steer AI implementation so new
+  imports stay intentional. Load when the operator says cable board, assembly
+  graph, boards register, package wiring, import cables, wrong-way imports,
+  hubs/leaves, or asks to implement against observed wiring.
 ---
 
 # Typology cable board
 
 **Moral:** The cable board is the observed package wiring board. Packages are posts. Import edges are cables. Roles and layers say which way a cable may run. The catalog is intent; the cable board is what the code actually wires. Implement against both: match catalog ownership, then refuse new wrong-way cables unless the operator accepts the debt.
 
-**CLI command (stable id):** `typology assembly-graph` · **Default artefact:** `tmp/typology/assembly-graph.json` · **Library:** `assemblygraph/` · **Viewer:** [`viewer/cable-board/`](../../../viewer/cable-board/) · **Catalog skill:** [catalog/SKILL.md](../catalog/SKILL.md) · **CLI skill:** [cli/SKILL.md](../cli/SKILL.md) · **First map:** [journey/SKILL.md](../journey/SKILL.md)
+**CLI:** `typology assembly-graph` (machine JSON) · `typology boards register` (XDG + viewer; bare command opens a TTY wizard) · **Default artefact:** `tmp/typology/assembly-graph.json` · **Library:** `assemblygraph/` · **Viewer:** [`viewer/cable-board/`](../../../viewer/cable-board/) · **Catalog skill:** [catalog/SKILL.md](../catalog/SKILL.md) · **CLI skill:** [cli/SKILL.md](../cli/SKILL.md) · **First map:** [journey/SKILL.md](../journey/SKILL.md)
 
-Human and agent name: **cable board**. File and command names stay `assembly-graph` until a deliberate rename ships. The interactive UI lives under `viewer/cable-board/` and consumes that JSON; it is not a second CLI command.
+Human and agent name: **cable board**. Machine harvest keeps the stable id `assembly-graph`. Viewer registration is `boards register` / `boards sync`.
 
 ## When to load
 
@@ -66,25 +67,33 @@ One server serves many named boards. Register a board without touching the
 others (stable id: lowercase, digits, hyphens):
 
 ```text
-./viewer/cable-board/scripts/load-graph.sh REPO BOARD_ID [--module PATH] [--label TEXT] [--make-default]
-./viewer/cable-board/scripts/load-graph.sh REPO BOARD_ID --slice SLICE [--catalog PATH] [--module PATH] [--label TEXT]
-./viewer/cable-board/scripts/load-graph.sh REPO --all-slices [--catalog PATH] [--module PATH]
+# Interactive (from inside a consumer repo, TTY):
+typology boards register
+
+# Non-interactive / CI:
+typology boards register REPO BOARD_ID [--module PATH] [--label TEXT] [--make-default] [--prefix PREFIX] [--viewer PUBLIC_DIR]
+typology boards register REPO BOARD_ID --slice SLICE [--catalog PATH] [--module PATH] [--label TEXT] [--prefix PREFIX] [--viewer PUBLIC_DIR]
+typology boards register REPO --all-slices [--prefix PREFIX] [--catalog PATH] [--module PATH] [--viewer PUBLIC_DIR]
+typology boards sync --viewer PUBLIC_DIR
+typology boards path [--yaml|--config|--data]
 ```
 
 Then open `http://localhost:5173/?board=BOARD_ID` in one window and another
-board id in a second window. The header switcher moves between boards and
-keeps the board in the URL. Registry file: `viewer/cable-board/public/boards.json`
-(`defaultBoard` plus `boards[]`). Only the tiny-module sample is committed;
-consumer boards stay local. Optional URL override: `http://localhost:5173/?src=/assembly-graph.json`.
+board id in a second window. Durable registry: `~/.config/typology/boards.yaml`.
+Share graphs: `~/.local/share/typology/boards/<id>/`. The viewer reads a
+materialized `public/boards.json` projection. Only the tiny-module sample is
+committed; consumer boards stay under XDG. Optional URL override:
+`http://localhost:5173/?src=/assembly-graph.json`.
 
-Prefer slice boards for human review when a full-module board is dense: use the
-confirmed catalog slice id as the board id (`?board=chronology`). Boundary stubs
+Prefer slice boards for human review when a full-module board is dense. When
+several repos share one viewer, MUST pass `--prefix` so board ids become
+`<prefix>-<slice>` (for example `?board=product-a-chronology`). Boundary stubs
 are dashed cards; amber dashed cables mean missing catalog bindings.
 
-Or copy an existing board file:
+Machine-only harvest (no XDG registry):
 
 ```text
-typology assembly-graph REPO --out $MOD/viewer/cable-board/public/assembly-graph.json
+typology assembly-graph REPO --out PATH
 ```
 
 `$MOD` is `go list -m -f '{{.Dir}}' github.com/behaviorengineering/typology` when Typology is only a dependency.
@@ -92,27 +101,27 @@ typology assembly-graph REPO --out $MOD/viewer/cable-board/public/assembly-graph
 ## Steps
 
 1. **Scope:** resolve the repository root and optional `--module` the same way as [cli/SKILL.md](../cli/SKILL.md). MUST NOT scan every `go.work` module by accident.
-2. **Generate:** prefer `typology assembly-graph REPO --catalog PATH --slice SLICE` (or `--all-slices`) when the catalog is confirmed. Use the raw module harvest only when comparing the whole module. Confirm stdout reports owned nodes, boundary stubs, and missing bindings for slice boards.
-3. **Open the viewer (when a human needs the board):** register with `viewer/cable-board/scripts/load-graph.sh REPO BOARD_ID` (use the slice id as BOARD_ID for slice boards) and run `npm run dev` from `viewer/cable-board`. Agents MAY skip the viewer when only machine checks are required, but MUST still regenerate and read the JSON.
-4. **Read the board:** open `http://localhost:5173/?board=BOARD_ID`. Inventory hubs, leaves, boundary stubs, every edge with `wrongWay: true`, and every edge with `bindingStatus: "missing"`.
+2. **Generate:** prefer `typology boards register REPO BOARD_ID --slice SLICE --viewer PUBLIC_DIR` (or `--all-slices`) when a human needs the viewer. Humans MAY run bare `typology boards register` for the interactive wizard. For machine-only checks, `typology assembly-graph REPO --catalog PATH --slice SLICE` is enough. Confirm stdout reports owned nodes, boundary stubs, and missing bindings for slice boards.
+3. **Open the viewer (when a human needs the board):** register with `typology boards register REPO BOARD_ID` (use the slice id as BOARD_ID for single-repo slice boards; pass `--prefix` when multiple repos share the viewer; pass `--viewer` to materialize) and run `npm run dev` from `viewer/cable-board`. Agents MAY skip the viewer when only machine checks are required, but MUST still regenerate and read the JSON.
+4. **Read the board:** open `http://localhost:5173/?board=BOARD_ID` (or `?board=<prefix>-<slice>&repo=<prefix>`). Inventory hubs, leaves, boundary stubs, every edge with `wrongWay: true`, and every edge with `bindingStatus: "missing"`.
 5. **Align with catalog:** map boundary debt back to `sliceBindings` / `componentBindings` / `owns` per [catalog/SKILL.md](../catalog/SKILL.md). Refine the catalog, regenerate, re-open the board.
 6. **Implement:** when adding imports, prefer cables that stay inward on role layer and that match declared bindings. After the change, regenerate the board and re-check wrong-way and missing-binding counts.
 7. **Debt:** if a wrong-way or missing-binding cable must remain, record it in `.typology/typology-journey.md` under technical debt (or the consumer's agreed debt log) with target refactoring. MUST NOT silently accept new boundary debt.
 
 ## Core constraints
 
-**CONSTRAINT:** Agents MUST call the artefact a cable board in operator-facing prose, while using the stable CLI id `assembly-graph` in commands and paths.
+**CONSTRAINT:** Agents MUST call the artefact a cable board in operator-facing prose. Stable harvest CLI ids are `assembly-graph` (machine JSON) and `boards register` (XDG + viewer; interactive wizard on bare register).
 
 - MUST: say "cable board" when tutoring or summarizing wiring
-- MUST: run `typology assembly-graph` (not an invented `cable-board` command) until a rename ships
+- MUST: run `typology assembly-graph` or `typology boards register` (not an invented `cable-board` command)
 - MUST NOT: invent a second JSON format or a parallel command name in scripts
 
-Enforcement: skill load; CLI help lists `assembly-graph`
-Violation: STOP, correct the command to `typology assembly-graph`, keep human wording as cable board
+Enforcement: skill load; CLI help lists `assembly-graph` and `boards`
+Violation: STOP, correct the command to `typology assembly-graph` or `typology boards register`, keep human wording as cable board
 
 CORRECT:
 ```text
-Regenerate the cable board: typology assembly-graph . --module engine --slice chronology
+Regenerate the cable board: typology boards register . chronology --module engine --slice chronology --viewer viewer/cable-board/public
 ```
 
 PROHIBITED:
@@ -120,28 +129,53 @@ PROHIBITED:
 typology cable-board .
 ```
 
-**CONSTRAINT:** When a confirmed catalog exists, human-facing boards SHOULD be slice-scoped. Every human-facing board MUST have a stable id (prefer the catalog slice id).
+**CONSTRAINT:** When a confirmed catalog exists, human-facing boards SHOULD be slice-scoped. Every human-facing board MUST have a stable id (prefer the catalog slice id within one repo).
 
-- MUST: use `--slice` / `--all-slices` (or loader equivalents) for review boards when slices are confirmed
+- MUST: use `--slice` / `--all-slices` on `boards register` (or `assembly-graph`) for review boards when slices are confirmed
 - MUST: keep boundary stubs for external callers and dependencies; MUST NOT drop cross-slice cables from the projection
 - MUST NOT: treat the full-module board as the default human view when slice boards are available
 
 Enforcement: skill steps + viewer README
 Violation: STOP, project with `--slice`, register `?board=<slice-id>`
 
+**CONSTRAINT:** When registering boards from more than one consumer repository into the same viewer, agents MUST pass `--prefix` so board ids, graph paths, and localStorage keys stay unique.
+
+- MUST: use `typology boards register … --prefix <repo>` (or `<prefix>-<slice>` as BOARD_ID) for multi-repo refresh
+- MUST: treat `~/.config/typology/boards.yaml` as the durable registry and `~/.local/share/typology/boards/` as graph storage (respect `TYPOLOGY_CONFIG_DIR` / `TYPOLOGY_DATA_DIR`)
+- MUST: materialize into the viewer with `--viewer` on register or `typology boards sync --viewer`; MUST NOT treat `public/boards.json` as the source of truth
+- MUST: treat the full board id as the storage scope; MUST NOT migrate bare-id layout into a prefixed id silently
+- MUST NOT: register bare slice ids from two repos into one registry
+
+Enforcement: CLI `--prefix` + XDG YAML + `boards[].repo`; viewer groups by repo
+Violation: STOP, re-register with `--prefix`, use `?board=<prefix>-<slice>`
+
+CORRECT:
+```text
+typology boards register /path/to/product-a --all-slices --prefix product-a --module engine --viewer viewer/cable-board/public
+# durable: ~/.config/typology/boards.yaml
+# open http://localhost:5173/?board=product-a-chronology
+```
+
+PROHIBITED:
+```text
+# Two repos both register ?board=chronology into the same viewer without --prefix
+typology boards register /a --all-slices --viewer viewer/cable-board/public
+typology boards register /b --all-slices --viewer viewer/cable-board/public
+```
+
 **CONSTRAINT:** When the operator asks to *see* or *open* the cable board, agents MUST use the shipped viewer under `viewer/cable-board/` with a registered board id. MUST NOT invent a second graph format or point humans only at raw JSON when a visual walk is requested.
 
-- MUST: regenerate with `typology assembly-graph`, then register with `viewer/cable-board/scripts/load-graph.sh REPO BOARD_ID` (stable id per repo scope)
+- MUST: regenerate with `typology boards register REPO BOARD_ID` (stable id per repo scope; pass `--viewer` to materialize), or point the human at bare `typology boards register` for the wizard
 - MUST: give the human a `?board=BOARD_ID` URL; open a second window with a different board id when comparison is requested
 - MUST: run the Vite app from that directory (`npm install && npm run dev`) when a human needs the interactive board
 - MUST NOT: claim the viewer is unavailable while this module tree contains `viewer/cable-board/`
 
-Enforcement: viewer README + skill steps; board id present in `public/boards.json`
+Enforcement: viewer README + skill steps; board id present in `~/.config/typology/boards.yaml` and materialized into `public/boards.json`
 Violation: STOP, open `viewer/cable-board/README.md`, register the board, start `npm run dev`
 
 CORRECT:
 ```text
-./viewer/cable-board/scripts/load-graph.sh . chronology --module engine --slice chronology
+typology boards register . chronology --module engine --slice chronology --viewer viewer/cable-board/public
 cd "$MOD/viewer/cable-board" && npm install && npm run dev
 # open http://localhost:5173/?board=chronology
 ```
@@ -219,9 +253,9 @@ Contract smoke: `scripts/check-assembly-graph.py` in this module.
       Pass: non-empty `nodes` and `edges`
       Fail: STOP, fix harvest/CLI errors, regenerate
 - [ ] **Viewer when requested:** if the operator asked to see the board, the Vite viewer is running on current JSON
-      Method: the board id is registered in `viewer/cable-board/public/boards.json`; `http://localhost:5173/?board=ID` loads
+      Method: board id in `~/.config/typology/boards.yaml`, materialized into `public/boards.json`; `http://localhost:5173/?board=ID` loads
       Pass: human can open the named board, or operator waived the UI this turn
-      Fail: STOP, register the board with `scripts/load-graph.sh REPO BOARD_ID` and start `npm run dev`
+      Fail: STOP, register with `typology boards register REPO BOARD_ID --viewer PUBLIC_DIR` (or `boards sync`), start `npm run dev`
 - [ ] **Wrong-way reviewed:** every `wrongWay` edge that touches this change is fixed or logged as debt
       Method: filter edges with `wrongWay: true`
       Pass: none new unexplained, or debt rows exist

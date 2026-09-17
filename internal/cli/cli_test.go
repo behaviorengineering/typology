@@ -265,6 +265,68 @@ func TestCLI_assemblyGraph_sliceProjection(t *testing.T) {
 	}
 }
 
+func TestCLI_boards_registerAndSync(t *testing.T) {
+	cfg := t.TempDir()
+	data := t.TempDir()
+	public := t.TempDir()
+	t.Setenv("TYPOLOGY_CONFIG_DIR", cfg)
+	t.Setenv("TYPOLOGY_DATA_DIR", data)
+
+	repo, _ := filepath.Abs(filepath.Join("..", "..", "testdata", "tiny-module"))
+	var stdout, stderr bytes.Buffer
+	code := cli.Run([]string{
+		"boards", "register", repo, "tiny-billing",
+		"--slice", "billing",
+		"--prefix", "tiny",
+		"--catalog", filepath.Join(repo, ".typology", "typology.yaml"),
+		"--viewer", public,
+		"--make-default",
+	}, nil, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("register exit=%d stderr=%s stdout=%s", code, stderr.String(), stdout.String())
+	}
+	if _, err := os.Stat(filepath.Join(cfg, "boards.yaml")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(data, "boards", "tiny-billing", "assembly-graph.json")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(public, "boards.json")); err != nil {
+		t.Fatal(err)
+	}
+	stdout.Reset()
+	stderr.Reset()
+	code = cli.Run([]string{"boards", "sync", "--viewer", public}, nil, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("sync exit=%d stderr=%s", code, stderr.String())
+	}
+}
+
+func TestCLI_boards_registerAllSlices(t *testing.T) {
+	cfg := t.TempDir()
+	data := t.TempDir()
+	public := t.TempDir()
+	t.Setenv("TYPOLOGY_CONFIG_DIR", cfg)
+	t.Setenv("TYPOLOGY_DATA_DIR", data)
+
+	repo, _ := filepath.Abs(filepath.Join("..", "..", "testdata", "tiny-module"))
+	var stdout, stderr bytes.Buffer
+	code := cli.Run([]string{
+		"boards", "register", repo,
+		"--all-slices",
+		"--prefix", "alpha",
+		"--viewer", public,
+	}, nil, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("register exit=%d stderr=%s stdout=%s", code, stderr.String(), stdout.String())
+	}
+	for _, id := range []string{"alpha-billing", "alpha-ledger", "alpha-delivery"} {
+		if _, err := os.Stat(filepath.Join(data, "boards", id, "assembly-graph.json")); err != nil {
+			t.Fatalf("%s: %v", id, err)
+		}
+	}
+}
+
 func TestCLI_assemblyGraph_allSlices(t *testing.T) {
 	t.Parallel()
 	repo, _ := filepath.Abs(filepath.Join("..", "..", "testdata", "tiny-module"))
