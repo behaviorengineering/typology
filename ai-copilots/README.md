@@ -1,6 +1,6 @@
 # Typology ai-copilots
 
-Portable agent pack for Typology: journey, catalog, CLI, and docs skills.
+Portable agent pack for Typology: journey, catalog, CLI, docs, and cable-board skills.
 
 Canonical source lives here. Wiring is done by the AI copilot when you ask it to execute [BOOTSTRAP.md](BOOTSTRAP.md).
 

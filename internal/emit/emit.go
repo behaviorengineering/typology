@@ -571,6 +571,7 @@ Before you change this catalog or the code it describes, load these skills:
 - ` + "`typology-catalog`" + ` — model, YAML shape, subprograms, actuators, bindings
 - ` + "`typology-cli`" + ` — discover, emit, validate, remediate
 - ` + "`typology-docs`" + ` — fill and evaluate develop DocPages
+- ` + "`typology-cable-board`" + ` — cable board: package wiring graph, wrong-way cables, implement against imports
 
 If your host does not have these skills, install the Typology module and symlink the skills from ` + "`$TYPOLOGY_ROOT/ai-copilots/skills/`" + ` into your host skills directory (see the Typology module ` + "`AGENTS.md`" + ` and ` + "`ai-copilots/BOOTSTRAP.md`" + `).
 
@@ -591,6 +592,7 @@ The bootstrap updates the selected module's ` + "`go.mod`" + ` and ` + "`go.sum`
 - ` + "`typology discover REPO [--module PATH]`" + ` — writes a draft to ` + "`tmp/typology/typology.yaml`" + `; use ` + "`--module`" + ` when the repository has multiple Go modules
 - ` + "`typology emit REPO`" + ` — writes ` + "`.typology/typology.yaml`" + ` and DocPages
 - ` + "`typology architecture REPO [--module PATH]`" + ` — writes ` + "`docs/architecture/typology.md`" + ` for human review within ` + "`scope.modules`" + `
+- ` + "`typology assembly-graph REPO [--module PATH]`" + ` — writes the cable board JSON (` + "`tmp/typology/assembly-graph.json`" + `)
 - ` + "`typology validate REPO [--module PATH]`" + ` — checks the catalog and scoped modules against each other
 - ` + "`typology remediate REPO SLICE [--module PATH]`" + ` — agent-scoped violations for one slice and module scope
 
@@ -602,8 +604,9 @@ Catalog first, code second, validation last:
 2. Implement the code to match the catalog.
 3. In a multi-module repository, set ` + "`scope.modules`" + ` to the modules owned by this catalog. Do not rely on ` + "`go.work`" + ` as Typology scope.
 4. Run ` + "`typology architecture REPO`" + ` to give humans a readable comparison of the catalog and the observed Go topology.
-5. Have an agent or architect fix each finding or record the boundary debt in ` + "`.typology/typology-journey.md`" + `.
-6. Run ` + "`typology validate REPO`" + ` and fix every issue before considering the change done.
+5. Run ` + "`typology assembly-graph REPO`" + ` and load ` + "`typology-cable-board`" + ` when changing package imports; fix wrong-way cables or record debt.
+6. Have an agent or architect fix each finding or record the boundary debt in ` + "`.typology/typology-journey.md`" + `.
+7. Run ` + "`typology validate REPO`" + ` and fix every issue before considering the change done.
 
 A green catalog means the code matches the declared slices, components, and bindings.
 

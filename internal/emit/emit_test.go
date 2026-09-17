@@ -86,6 +86,7 @@ func TestEmit_docs(t *testing.T) {
 	}
 	if !strings.Contains(string(typologyReadme), "typology:generated") ||
 		!strings.Contains(string(typologyReadme), "typology-cli") ||
+		!strings.Contains(string(typologyReadme), "typology-cable-board") ||
 		!strings.Contains(string(typologyReadme), "typology architecture") ||
 		!strings.Contains(string(typologyReadme), "scope.modules") ||
 		!strings.Contains(string(typologyReadme), "does not widen that scope") {
