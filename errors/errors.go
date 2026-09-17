@@ -4,6 +4,7 @@ package errors
 import (
 	stderrors "errors"
 	"fmt"
+	"sort"
 	"strings"
 )
 
@@ -28,6 +29,8 @@ type Error struct {
 }
 
 // Error implements the error interface.
+// Attached Fields (via With) are appended so CLI %v output surfaces
+// diagnostics such as go list stderr without a separate formatter.
 func (e *Error) Error() string {
 	if e == nil {
 		return ""
@@ -41,6 +44,11 @@ func (e *Error) Error() string {
 	if e.Cause != nil {
 		b.WriteString(": ")
 		b.WriteString(e.Cause.Error())
+	}
+	if fields := FormatFields(e); fields != "" {
+		b.WriteString(" (")
+		b.WriteString(fields)
+		b.WriteString(")")
 	}
 	return b.String()
 }
@@ -87,14 +95,19 @@ func CodeOf(err error) (Code, bool) {
 	return "", false
 }
 
-// FormatFields returns fields as "k=v" pairs for logs.
+// FormatFields returns fields as stable "k=v" pairs for logs and Error().
 func FormatFields(e *Error) string {
 	if e == nil || len(e.Fields) == 0 {
 		return ""
 	}
-	parts := make([]string, 0, len(e.Fields))
-	for k, v := range e.Fields {
-		parts = append(parts, fmt.Sprintf("%s=%s", k, v))
+	keys := make([]string, 0, len(e.Fields))
+	for k := range e.Fields {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	parts := make([]string, 0, len(keys))
+	for _, k := range keys {
+		parts = append(parts, fmt.Sprintf("%s=%s", k, e.Fields[k]))
 	}
 	return strings.Join(parts, " ")
 }
