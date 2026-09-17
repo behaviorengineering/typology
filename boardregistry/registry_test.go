@@ -23,6 +23,10 @@ func TestUpsertAndMaterialize(t *testing.T) {
 	if paths.ConfigDir != cfg || paths.DataDir != data {
 		t.Fatalf("paths=%+v", paths)
 	}
+	wantViewer := filepath.Join(data, "viewer", "public")
+	if got := paths.ViewerPublicDir(); got != wantViewer {
+		t.Fatalf("ViewerPublicDir=%q want %q", got, wantViewer)
+	}
 
 	id := boardregistry.PrefixedID("consilium", "chronology")
 	if id != "consilium-chronology" {

@@ -142,6 +142,7 @@ Violation: STOP, project with `--slice`, register `?board=<slice-id>`
 
 - MUST: use `typology boards register … --prefix <repo>` (or `<prefix>-<slice>` as BOARD_ID) for multi-repo refresh
 - MUST: treat `~/.config/typology/boards.yaml` as the durable registry and `~/.local/share/typology/boards/` as graph storage (respect `TYPOLOGY_CONFIG_DIR` / `TYPOLOGY_DATA_DIR`)
+- MUST: treat the wizard's default viewer public dir as `~/.local/share/typology/viewer/public/` (same data-dir root); pass an explicit `--viewer` checkout path only when materializing into the module Vite tree
 - MUST: materialize into the viewer with `--viewer` on register or `typology boards sync --viewer`; MUST NOT treat `public/boards.json` as the source of truth
 - MUST: treat the full board id as the storage scope; MUST NOT migrate bare-id layout into a prefixed id silently
 - MUST NOT: register bare slice ids from two repos into one registry

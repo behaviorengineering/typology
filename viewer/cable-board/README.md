@@ -32,7 +32,8 @@ Two layers of storage:
 |------|------|
 | `~/.config/typology/boards.yaml` | Durable registry (`TYPOLOGY_CONFIG_DIR` override) |
 | `~/.local/share/typology/boards/<id>/assembly-graph.json` | Harvested graphs (`TYPOLOGY_DATA_DIR` override) |
-| `public/boards.json` | Materialized manifest for the React app |
+| `~/.local/share/typology/viewer/public/` | Wizard default materialize target (`boards.json` + graphs) |
+| `public/boards.json` | Materialized manifest for the React app (checkout or XDG) |
 | `public/boards/<id>/assembly-graph.json` | Materialized graphs Vite serves |
 
 ```bash

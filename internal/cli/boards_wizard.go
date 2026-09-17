@@ -188,7 +188,7 @@ func runBoardsRegisterWizard(stdout, stderr io.Writer) int {
 				Value(&label),
 			huh.NewInput().
 				Title("Viewer public dir (optional)").
-				Description("Materialize boards.json into this Vite public/ tree").
+				Description("Materialize boards.json into this Vite public/ tree (default: XDG data dir)").
 				Value(&viewerPublic),
 			huh.NewConfirm().
 				Title("Make the first board the default?").
@@ -261,20 +261,9 @@ func sanitizeBoardStem(raw string) string {
 }
 
 func defaultViewerPublicHint() string {
-	// Best-effort: typology module checkout viewer public/, else empty.
-	candidates := []string{
-		filepath.Join("viewer", "cable-board", "public"),
-		filepath.Join("providers", "typology", "viewer", "cable-board", "public"),
-	}
-	cwd, err := os.Getwd()
+	paths, err := boardregistry.ResolvePaths()
 	if err != nil {
 		return ""
 	}
-	for _, rel := range candidates {
-		p := filepath.Join(cwd, rel)
-		if info, err := os.Stat(p); err == nil && info.IsDir() {
-			return p
-		}
-	}
-	return ""
+	return paths.ViewerPublicDir()
 }
