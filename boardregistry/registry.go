@@ -102,6 +102,12 @@ func (p Paths) YAMLPath() string {
 	return filepath.Join(p.ConfigDir, boardsFile)
 }
 
+// ViewerPublicDir is the operator-local Vite public/ tree under the XDG data dir.
+// Wizard defaults and optional materialize targets prefer this over a module checkout.
+func (p Paths) ViewerPublicDir() string {
+	return filepath.Join(p.DataDir, "viewer", "public")
+}
+
 // GraphRel returns the data-dir-relative graph path for a board id.
 func GraphRel(boardID string) string {
 	return filepath.ToSlash(filepath.Join(boardsSubdir, boardID, "assembly-graph.json"))

@@ -104,6 +104,7 @@ Operator board registry (not in the consumer repo; lives on the machine that run
 |------|------|
 | `~/.config/typology/boards.yaml` | Durable board registry (`TYPOLOGY_CONFIG_DIR` override) |
 | `~/.local/share/typology/boards/<id>/` | Harvested graphs (`TYPOLOGY_DATA_DIR` override) |
+| `~/.local/share/typology/viewer/public/` | Wizard default materialize target for `boards.json` |
 
 Day-to-day in a consumer: update the catalog first, implement code to match it, then `typology validate`. Agents load the skills listed in `.typology/README.md` before changing architecture or package layout.
 
