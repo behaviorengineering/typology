@@ -50,7 +50,7 @@ MUST NOT use this skill as a substitute for [catalog/SKILL.md](../catalog/SKILL.
 typology assembly-graph REPO [--module PATH] [--catalog PATH] [--slice SLICE|--all-slices] [--out PATH|--out-dir DIR]
 ```
 
-Defaults: writes `REPO/tmp/typology/assembly-graph.json`. Use `--module PATH` in a multi-module workspace the same way as discover/validate. With `--slice`, the board keeps only that slice's owned packages plus boundary stubs. With `--all-slices`, each catalog slice is written under `--out-dir` (default `tmp/typology/boards/<slice>/assembly-graph.json`). Library equivalent: `assemblygraph.Build`, optional `assemblygraph.Project`, then `assemblygraph.WriteJSON`.
+Defaults: writes `REPO/tmp/typology/assembly-graph.json`. In a multi-module workspace, harvest uses catalog `scope.modules` when present (same as discover/validate); `--module PATH` still overrides to one module. With `--slice`, the board keeps only that slice's owned packages plus boundary stubs. With `--all-slices`, each catalog slice is written under `--out-dir` (default `tmp/typology/boards/<slice>/assembly-graph.json`). Library equivalent: `assemblygraph.Build`, optional `assemblygraph.Project`, then `assemblygraph.WriteJSON`.
 
 Companion topology view (text, not the cable-board JSON): `typology show graph REPO` (see [cli/SKILL.md](../cli/SKILL.md)).
 
@@ -143,6 +143,7 @@ Violation: STOP, project with `--slice`, register `?board=<slice-id>`
 - MUST: use `typology boards register … --prefix <repo>` (or `<prefix>-<slice>` as BOARD_ID) for multi-repo refresh
 - MUST: treat `~/.config/typology/boards.yaml` as the durable registry and `~/.local/share/typology/boards/` as graph storage (respect `TYPOLOGY_CONFIG_DIR` / `TYPOLOGY_DATA_DIR`)
 - MUST: treat the wizard's default viewer public dir as `~/.local/share/typology/viewer/public/` (same data-dir root); pass an explicit `--viewer` checkout path only when materializing into the module Vite tree
+- MUST: let `boards register` / `assembly-graph` read catalog `scope.modules` for multi-module workspaces (same as discover); pass `--module` only to override to one module
 - MUST: materialize into the viewer with `--viewer` on register or `typology boards sync --viewer`; MUST NOT treat `public/boards.json` as the source of truth
 - MUST: treat the full board id as the storage scope; MUST NOT migrate bare-id layout into a prefixed id silently
 - MUST NOT: register bare slice ids from two repos into one registry

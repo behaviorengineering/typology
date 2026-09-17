@@ -22,10 +22,21 @@ type Result struct {
 	HasPy bool
 }
 
-// Harvest builds evidence for all supported languages under repoRoot.
-// moduleScope applies only to Go module selection.
-func Harvest(repoRoot, moduleScope string) (Result, error) {
-	repo := strings.TrimSpace(repoRoot)
+// HarvestOptions configures multi-language package harvest.
+type HarvestOptions struct {
+	RepoRoot string
+	// Modules is catalog scope.modules (repository-relative selectors).
+	Modules []string
+	// Module is an optional single-module override (--module).
+	Module string
+}
+
+// Harvest builds evidence for all supported languages under RepoRoot.
+// Go module selection matches discover: catalog Modules, then Module override.
+// When a Go workspace is present but unscoped, Harvest fails closed instead of
+// silently returning a Python-only (or empty) graph.
+func Harvest(opts HarvestOptions) (Result, error) {
+	repo := strings.TrimSpace(opts.RepoRoot)
 	if repo == "" {
 		return Result{}, terrors.New(terrors.CodeInvalid, "evidence.Harvest", "repo root empty")
 	}
@@ -35,7 +46,11 @@ func Harvest(repoRoot, moduleScope string) (Result, error) {
 			With("repo", repo)
 	}
 
-	goModules, goErr := gorepo.ResolveModules(absRepo, nil, moduleScope)
+	listed, listErr := gorepo.Modules(absRepo)
+	goModules, goErr := gorepo.ResolveModules(absRepo, opts.Modules, opts.Module)
+	if listErr == nil && len(listed) > 0 && goErr != nil {
+		return Result{}, goErr
+	}
 	hasGo := goErr == nil && len(goModules) > 0
 
 	pyRoots, pyErr := pyrepo.FindRoots(absRepo)
@@ -47,6 +62,9 @@ func Harvest(repoRoot, moduleScope string) (Result, error) {
 	if !hasGo && !hasPy {
 		if goErr != nil {
 			return Result{}, goErr
+		}
+		if listErr != nil {
+			return Result{}, listErr
 		}
 		return Result{}, terrors.New(terrors.CodeFailedPrecondition, "evidence.Harvest",
 			"no Go modules or Python project roots found")
