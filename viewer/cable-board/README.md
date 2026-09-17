@@ -8,7 +8,17 @@ It is product-neutral: any consumer repo can harvest a graph and open this UI.
 
 ## Run
 
-From the Typology module root:
+**Operators (no npm):** after `typology boards register`, run:
+
+```bash
+typology boards serve
+# open http://127.0.0.1:5173/?board=<id>
+```
+
+The Go binary embeds the production SPA. Board JSON is read from
+`~/.local/share/typology/viewer/public` (or `--viewer PUBLIC_DIR`).
+
+**Developers editing this React app** (from the Typology module root):
 
 ```bash
 make build
@@ -20,6 +30,9 @@ npm run dev
 
 Open the printed URL (default http://localhost:5173). The page loads the
 default board from `public/boards.json`.
+
+Release builds run `make cable-board-dist` so `internal/boardsviewer/dist` is
+embedded for `go install` / GitHub Releases.
 
 ## Boards
 

@@ -19,6 +19,15 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: viewer/cable-board/package-lock.json
+
+      - name: Build cable-board dist (embed)
+        run: make cable-board-dist
+
       - name: Vet
         run: go vet ./...
 

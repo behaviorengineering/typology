@@ -3,6 +3,10 @@ version: 2
 
 project_name: typology
 
+before:
+  hooks:
+    - make cable-board-dist
+
 builds:
   - id: typology
     main: ./cmd/typology
