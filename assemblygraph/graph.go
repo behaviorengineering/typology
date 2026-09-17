@@ -83,7 +83,9 @@ type Edge struct {
 // BuildOptions configures an assembly graph harvest.
 type BuildOptions struct {
 	RepoRoot string
-	// Module scopes Go module selection the same way as discover/contracts.
+	// Modules is catalog scope.modules (repository-relative).
+	Modules []string
+	// Module is an optional single-module override (--module).
 	Module string
 }
 
@@ -98,7 +100,11 @@ func Build(opts BuildOptions) (Graph, error) {
 		return Graph{}, terrors.Wrap(err, terrors.CodeInvalid, "assemblygraph.Build", "abs repo").
 			With("repo", repo)
 	}
-	h, err := evidence.Harvest(absRepo, strings.TrimSpace(opts.Module))
+	h, err := evidence.Harvest(evidence.HarvestOptions{
+		RepoRoot: absRepo,
+		Modules:  opts.Modules,
+		Module:   strings.TrimSpace(opts.Module),
+	})
 	if err != nil {
 		return Graph{}, terrors.Wrap(err, terrors.CodeUnavailable, "assemblygraph.Build", "harvest").
 			With("repo", absRepo)

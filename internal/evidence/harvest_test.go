@@ -17,7 +17,7 @@ func TestHarvest_tinyModule_goOnly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	h, err := evidence.Harvest(repo, "")
+	h, err := evidence.Harvest(evidence.HarvestOptions{RepoRoot: repo})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -38,7 +38,7 @@ func TestHarvest_pythonTiny(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	h, err := evidence.Harvest(repo, "")
+	h, err := evidence.Harvest(evidence.HarvestOptions{RepoRoot: repo})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -61,7 +61,7 @@ func TestHarvest_mixedLanguages(t *testing.T) {
 	mustWrite(t, filepath.Join(root, "src", "appserver", "__init__.py"), "")
 	mustWrite(t, filepath.Join(root, "src", "appserver", "api.py"), "from appboard.models import Board\n\ndef serve() -> Board:\n    return Board(name=\"x\")\n")
 
-	h, err := evidence.Harvest(root, "")
+	h, err := evidence.Harvest(evidence.HarvestOptions{RepoRoot: root})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,7 +84,7 @@ func TestHarvest_mixedLanguages(t *testing.T) {
 
 func TestHarvest_errors(t *testing.T) {
 	t.Parallel()
-	_, err := evidence.Harvest("", "")
+	_, err := evidence.Harvest(evidence.HarvestOptions{})
 	if err == nil {
 		t.Fatal("empty root: expected error")
 	}
@@ -94,7 +94,7 @@ func TestHarvest_errors(t *testing.T) {
 	}
 
 	empty := t.TempDir()
-	_, err = evidence.Harvest(empty, "")
+	_, err = evidence.Harvest(evidence.HarvestOptions{RepoRoot: empty})
 	if err == nil {
 		t.Fatal("module-less repo: expected error")
 	}
@@ -109,7 +109,7 @@ func TestHarvest_moduleScope_workspace(t *testing.T) {
 	mustWrite(t, filepath.Join(root, "lib", "go.mod"), "module example.com/ws/lib\n\ngo 1.27\n")
 	mustWrite(t, filepath.Join(root, "lib", "widget", "widget.go"), "package widget\n\nvar New = 1\n")
 
-	h, err := evidence.Harvest(root, "engine")
+	h, err := evidence.Harvest(evidence.HarvestOptions{RepoRoot: root, Module: "engine"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -130,13 +130,57 @@ func TestHarvest_moduleScope_workspace(t *testing.T) {
 	}
 }
 
+func TestHarvest_catalogModules_workspace(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	mustWrite(t, filepath.Join(root, "go.work"), "go 1.27\n\nuse (\n\t./engine\n\t./lib\n)\n")
+	mustWrite(t, filepath.Join(root, "engine", "go.mod"), "module example.com/ws/engine\n\ngo 1.27\n")
+	mustWrite(t, filepath.Join(root, "engine", "svc", "svc.go"), "package svc\n\nfunc Run() {}\n")
+	mustWrite(t, filepath.Join(root, "lib", "go.mod"), "module example.com/ws/lib\n\ngo 1.27\n")
+	mustWrite(t, filepath.Join(root, "lib", "widget", "widget.go"), "package widget\n\nvar New = 1\n")
+	// Nested Python root must not mask an unscoped Go workspace.
+	mustWrite(t, filepath.Join(root, "tools", "pyproject.toml"), "[project]\nname = \"tools\"\n")
+	mustWrite(t, filepath.Join(root, "tools", "src", "toolpkg", "__init__.py"), "")
+
+	_, err := evidence.Harvest(evidence.HarvestOptions{RepoRoot: root})
+	if err == nil {
+		t.Fatal("unscoped workspace: expected error")
+	}
+	if !strings.Contains(err.Error(), "multiple Go modules") {
+		t.Fatalf("err=%v, want multiple Go modules", err)
+	}
+
+	h, err := evidence.Harvest(evidence.HarvestOptions{
+		RepoRoot: root,
+		Modules:  []string{"engine", "lib"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !h.HasGo {
+		t.Fatal("expected HasGo with catalog modules")
+	}
+	foundEngine, foundLib := false, false
+	for path := range h.Index.Packages {
+		if strings.Contains(path, "svc") || strings.Contains(path, "engine") {
+			foundEngine = true
+		}
+		if strings.Contains(path, "widget") || strings.Contains(path, "lib/") {
+			foundLib = true
+		}
+	}
+	if !foundEngine || !foundLib {
+		t.Fatalf("expected engine+lib packages, got %v", h.Index.Packages)
+	}
+}
+
 func TestWriteFiles_rolesRoundTrip(t *testing.T) {
 	t.Parallel()
 	repo, err := filepath.Abs(filepath.Join("..", "..", "testdata", "tiny-module"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	h, err := evidence.Harvest(repo, "")
+	h, err := evidence.Harvest(evidence.HarvestOptions{RepoRoot: repo})
 	if err != nil {
 		t.Fatal(err)
 	}

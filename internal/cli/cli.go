@@ -116,6 +116,19 @@ func defaultCatalogPath(repo string) string {
 	return filepath.Join(repo, filepath.FromSlash(catalog.DefaultCatalogRel))
 }
 
+// loadCatalogModules returns scope.modules when a catalog exists; missing catalog is empty.
+func loadCatalogModules(repo, catalogPath string) []string {
+	path := strings.TrimSpace(catalogPath)
+	if path == "" {
+		path = defaultCatalogPath(repo)
+	}
+	typ, err := catalog.LoadYAML(path)
+	if err != nil {
+		return nil
+	}
+	return typ.Scope.Modules
+}
+
 func defaultDraftCatalogPath(repo string) string {
 	return filepath.Join(repo, filepath.FromSlash(catalog.DefaultDraftCatalogRel))
 }
@@ -286,7 +299,11 @@ func runContracts(args []string, stdout, stderr io.Writer) int {
 }
 
 func writePackageEvidence(repo, module, contractsOut, rolesOut string) error {
-	h, err := evidence.Harvest(repo, module)
+	h, err := evidence.Harvest(evidence.HarvestOptions{
+		RepoRoot: repo,
+		Modules:  loadCatalogModules(repo, ""),
+		Module:   module,
+	})
 	if err != nil {
 		return err
 	}
@@ -484,7 +501,14 @@ func runAssemblyGraph(args []string, stdout, stderr io.Writer) int {
 		return 2
 	}
 
-	g, err := assemblygraph.Build(assemblygraph.BuildOptions{RepoRoot: repo, Module: module})
+	if catalogPath == "" {
+		catalogPath = defaultCatalogPath(repo)
+	}
+	g, err := assemblygraph.Build(assemblygraph.BuildOptions{
+		RepoRoot: repo,
+		Modules:  loadCatalogModules(repo, catalogPath),
+		Module:   module,
+	})
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "assembly-graph: %v\n", err)
 		return 1
@@ -501,9 +525,6 @@ func runAssemblyGraph(args []string, stdout, stderr io.Writer) int {
 		return 0
 	}
 
-	if catalogPath == "" {
-		catalogPath = defaultCatalogPath(repo)
-	}
 	typ, err := catalog.LoadYAML(catalogPath)
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "assembly-graph: %v\n", err)

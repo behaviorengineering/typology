@@ -256,7 +256,11 @@ func harvestOne(stdout, stderr io.Writer, paths boardregistry.Paths, opts harves
 		_, _ = fmt.Fprintf(stderr, "boards register: board id %q is unsafe\n", finalID)
 		return 2
 	}
-	g, err := assemblygraph.Build(assemblygraph.BuildOptions{RepoRoot: opts.Repo, Module: opts.Module})
+	g, err := assemblygraph.Build(assemblygraph.BuildOptions{
+		RepoRoot: opts.Repo,
+		Modules:  loadCatalogModules(opts.Repo, opts.Catalog),
+		Module:   opts.Module,
+	})
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "boards register: %v\n", err)
 		return 1
@@ -314,7 +318,11 @@ func harvestAllSlices(stdout, stderr io.Writer, paths boardregistry.Paths, opts 
 	if code != 0 {
 		return code
 	}
-	g, err := assemblygraph.Build(assemblygraph.BuildOptions{RepoRoot: opts.Repo, Module: opts.Module})
+	g, err := assemblygraph.Build(assemblygraph.BuildOptions{
+		RepoRoot: opts.Repo,
+		Modules:  typ.Scope.Modules,
+		Module:   opts.Module,
+	})
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "boards register: %v\n", err)
 		return 1

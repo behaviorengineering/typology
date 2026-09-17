@@ -50,7 +50,7 @@ func TestBuildPython_tinyRoles(t *testing.T) {
 func TestHarvest_pythonTinyWritesLanguage(t *testing.T) {
 	t.Parallel()
 	repo := filepath.Join("..", "..", "testdata", "python_tiny")
-	h, err := evidence.Harvest(repo, "")
+	h, err := evidence.Harvest(evidence.HarvestOptions{RepoRoot: repo})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,7 +78,7 @@ func TestHarvest_pythonTinyWritesLanguage(t *testing.T) {
 func TestBuildRoleTopology_tinyModule_setsLanguageGo(t *testing.T) {
 	t.Parallel()
 	repo := filepath.Join("..", "..", "testdata", "tiny-module")
-	h, err := evidence.Harvest(repo, "")
+	h, err := evidence.Harvest(evidence.HarvestOptions{RepoRoot: repo})
 	if err != nil {
 		t.Fatal(err)
 	}
