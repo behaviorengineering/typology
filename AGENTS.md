@@ -13,7 +13,7 @@ One repository owns one Typology catalog and its architecture documentation. In 
 3. [ai-copilots/skills/docs/SKILL.md](ai-copilots/skills/docs/SKILL.md) (fill and evaluate develop DocPages and program leaves)
 4. [ai-copilots/skills/catalog/SKILL.md](ai-copilots/skills/catalog/SKILL.md) (model and YAML/Go catalog)
 5. [ai-copilots/skills/cli/SKILL.md](ai-copilots/skills/cli/SKILL.md) (discover, emit, validate, remediate)
-6. [ai-copilots/skills/cable-board/SKILL.md](ai-copilots/skills/cable-board/SKILL.md) (cable board: package wiring graph, wrong-way cables, implement against imports)
+6. [ai-copilots/skills/cable-board/SKILL.md](ai-copilots/skills/cable-board/SKILL.md) (cable board: package wiring graph, viewer, wrong-way cables, implement against imports)
 
 Worked catalog: [testdata/tiny-module/.typology/typology.yaml](testdata/tiny-module/.typology/typology.yaml). Types: [catalog/types.go](catalog/types.go).
 

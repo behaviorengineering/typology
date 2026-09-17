@@ -1,4 +1,4 @@
-.PHONY: help build test vet smoke
+.PHONY: help build test vet smoke cable-board-sample
 
 .DEFAULT_GOAL := help
 
@@ -7,14 +7,16 @@ VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 LDFLAGS := -X github.com/behaviorengineering/typology/internal/cli.version=$(VERSION)
 SMOKE_REPO := testdata/tiny-module
 SMOKE_CATALOG := $(SMOKE_REPO)/.typology/typology.yaml
+VIEWER := viewer/cable-board
 
 help:
 	@echo "typology — architecture discover, validate, emit"
 	@echo ""
-	@echo "  make build    Build $(BINARY)"
-	@echo "  make test     go test ./..."
-	@echo "  make vet      go vet ./..."
-	@echo "  make smoke    Build + read-only CLI checks on $(SMOKE_REPO)"
+	@echo "  make build               Build $(BINARY)"
+	@echo "  make test                go test ./..."
+	@echo "  make vet                 go vet ./..."
+	@echo "  make smoke               Build + read-only CLI checks on $(SMOKE_REPO)"
+	@echo "  make cable-board-sample  Harvest $(SMOKE_REPO) into $(VIEWER)/public/assembly-graph.json"
 
 build:
 	@mkdir -p $(dir $(BINARY))
@@ -35,3 +37,6 @@ smoke: build
 	./$(BINARY) assembly-graph $(SMOKE_REPO) --out "$$tmp/assembly-graph.json" && \
 	python3 scripts/check-assembly-graph.py "$$tmp/assembly-graph.json" && \
 	echo "smoke: ok"
+
+cable-board-sample: build
+	./$(VIEWER)/scripts/load-graph.sh $(SMOKE_REPO)

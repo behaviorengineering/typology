@@ -571,7 +571,7 @@ Before you change this catalog or the code it describes, load these skills:
 - ` + "`typology-catalog`" + ` — model, YAML shape, subprograms, actuators, bindings
 - ` + "`typology-cli`" + ` — discover, emit, validate, remediate
 - ` + "`typology-docs`" + ` — fill and evaluate develop DocPages
-- ` + "`typology-cable-board`" + ` — cable board: package wiring graph, wrong-way cables, implement against imports
+- ` + "`typology-cable-board`" + ` — cable board: package wiring graph, interactive viewer, wrong-way cables, implement against imports
 
 If your host does not have these skills, install the Typology module and symlink the skills from ` + "`$TYPOLOGY_ROOT/ai-copilots/skills/`" + ` into your host skills directory (see the Typology module ` + "`AGENTS.md`" + ` and ` + "`ai-copilots/BOOTSTRAP.md`" + `).
 
@@ -592,7 +592,7 @@ The bootstrap updates the selected module's ` + "`go.mod`" + ` and ` + "`go.sum`
 - ` + "`typology discover REPO [--module PATH]`" + ` — writes a draft to ` + "`tmp/typology/typology.yaml`" + `; use ` + "`--module`" + ` when the repository has multiple Go modules
 - ` + "`typology emit REPO`" + ` — writes ` + "`.typology/typology.yaml`" + ` and DocPages
 - ` + "`typology architecture REPO [--module PATH]`" + ` — writes ` + "`docs/architecture/typology.md`" + ` for human review within ` + "`scope.modules`" + `
-- ` + "`typology assembly-graph REPO [--module PATH]`" + ` — writes the cable board JSON (` + "`tmp/typology/assembly-graph.json`" + `)
+- ` + "`typology assembly-graph REPO [--module PATH]`" + ` — writes the cable board JSON (` + "`tmp/typology/assembly-graph.json`" + `); open the viewer under the Typology module ` + "`viewer/cable-board/`" + `
 - ` + "`typology validate REPO [--module PATH]`" + ` — checks the catalog and scoped modules against each other
 - ` + "`typology remediate REPO SLICE [--module PATH]`" + ` — agent-scoped violations for one slice and module scope
 
