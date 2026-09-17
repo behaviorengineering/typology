@@ -50,12 +50,42 @@ consumer boards are local. The page loads `/assembly-graph.json` from
 `public/` when no registry exists. Override any board with
 `?src=/other.json`.
 
+## Slice boards
+
+Prefer catalog slice projections when a full-module board is too dense. Each
+slice keeps owned packages as full nodes and turns external neighbors into
+boundary stubs (dashed cards with `[Slice:…]` / `[Library:…]` / `[Unowned]`).
+Cables without a matching catalog binding render amber as missing-binding debt.
+
+```bash
+# One slice board (board id usually matches the slice id):
+./viewer/cable-board/scripts/load-graph.sh /path/to/consumer-repo chronology \
+  --module engine --slice chronology --catalog /path/to/consumer-repo/.typology/typology.yaml \
+  --label "Chronology"
+
+# Every confirmed catalog slice into public/boards/<slice-id>/:
+./viewer/cable-board/scripts/load-graph.sh /path/to/consumer-repo --all-slices \
+  --module engine --catalog /path/to/consumer-repo/.typology/typology.yaml
+
+# Or from the Typology module against the tiny fixture:
+make cable-board-slices
+```
+
+CLI equivalent:
+
+```bash
+typology assembly-graph REPO --catalog PATH --slice SLICE --out PATH
+typology assembly-graph REPO --catalog PATH --all-slices --out-dir DIR
+```
+
 ## Behavior
 
 - Arrow direction: **importer → imported**
 - Click a package to detangle its 1-hop neighborhood; click canvas to restore
-- Layers filter role-kind cables (`imports`, `fills_dto`, …)
+- Layers filter role-kind cables (`imports`, `fills_dto`, …); default layer is Imports
 - Risk marks: cycles, mesh density, wrong-way role-layer cables
+- Boundary stubs and missing-binding cables appear on slice-projected boards
+- Layout, selection, and cable nudges are saved per board id in localStorage
 
 ## Generate without the helper
 

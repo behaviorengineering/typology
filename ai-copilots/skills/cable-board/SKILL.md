@@ -39,14 +39,17 @@ MUST NOT use this skill as a substitute for [catalog/SKILL.md](../catalog/SKILL.
 | Hub | High fan-in or fan-out package (board marks `isHub`) |
 | Leaf | Package with no outbound imports inside the board (`isLeaf`) |
 | Role | Observed package role from evidence (`entrypoint`, `http_surface`, `aggregator`, `adapter`, `exec_runner`, `dto`, `config`, `observability`, `unknown`) |
+| Slice board | Cable board projected through one catalog slice: owned packages plus boundary stubs |
+| Boundary stub | Lightweight node for a package outside the selected slice (`isBoundary`, `boundaryKind`, `ownerId`) |
+| Missing binding | Boundary cable with no matching `sliceBindings` / allowed `componentBindings` (`bindingStatus: missing`) |
 
 ## Commands
 
 ```text
-typology assembly-graph REPO [--module PATH] [--out PATH]
+typology assembly-graph REPO [--module PATH] [--catalog PATH] [--slice SLICE|--all-slices] [--out PATH|--out-dir DIR]
 ```
 
-Defaults: writes `REPO/tmp/typology/assembly-graph.json`. Use `--module PATH` in a multi-module workspace the same way as discover/validate. Library equivalent: `assemblygraph.Build` then `assemblygraph.WriteJSON`.
+Defaults: writes `REPO/tmp/typology/assembly-graph.json`. Use `--module PATH` in a multi-module workspace the same way as discover/validate. With `--slice`, the board keeps only that slice's owned packages plus boundary stubs. With `--all-slices`, each catalog slice is written under `--out-dir` (default `tmp/typology/boards/<slice>/assembly-graph.json`). Library equivalent: `assemblygraph.Build`, optional `assemblygraph.Project`, then `assemblygraph.WriteJSON`.
 
 Companion topology view (text, not the cable-board JSON): `typology show graph REPO` (see [cli/SKILL.md](../cli/SKILL.md)).
 
@@ -64,6 +67,8 @@ others (stable id: lowercase, digits, hyphens):
 
 ```text
 ./viewer/cable-board/scripts/load-graph.sh REPO BOARD_ID [--module PATH] [--label TEXT] [--make-default]
+./viewer/cable-board/scripts/load-graph.sh REPO BOARD_ID --slice SLICE [--catalog PATH] [--module PATH] [--label TEXT]
+./viewer/cable-board/scripts/load-graph.sh REPO --all-slices [--catalog PATH] [--module PATH]
 ```
 
 Then open `http://localhost:5173/?board=BOARD_ID` in one window and another
@@ -71,6 +76,10 @@ board id in a second window. The header switcher moves between boards and
 keeps the board in the URL. Registry file: `viewer/cable-board/public/boards.json`
 (`defaultBoard` plus `boards[]`). Only the tiny-module sample is committed;
 consumer boards stay local. Optional URL override: `http://localhost:5173/?src=/assembly-graph.json`.
+
+Prefer slice boards for human review when a full-module board is dense: use the
+confirmed catalog slice id as the board id (`?board=chronology`). Boundary stubs
+are dashed cards; amber dashed cables mean missing catalog bindings.
 
 Or copy an existing board file:
 
@@ -83,12 +92,12 @@ typology assembly-graph REPO --out $MOD/viewer/cable-board/public/assembly-graph
 ## Steps
 
 1. **Scope:** resolve the repository root and optional `--module` the same way as [cli/SKILL.md](../cli/SKILL.md). MUST NOT scan every `go.work` module by accident.
-2. **Generate:** run `typology assembly-graph REPO` (add `--module` when needed). Confirm the stdout line reports nodes, edges, and wrong-way count.
-3. **Open the viewer (when a human needs the board):** register the board with `viewer/cable-board/scripts/load-graph.sh REPO BOARD_ID` (stable id, never reuse an id for a different repo scope) and run `npm run dev` from `viewer/cable-board`. Use click-to-detangle and wrong-way marks to explain hubs and debt. Agents MAY skip the viewer when only machine checks are required, but MUST still regenerate and read the JSON.
-4. **Read the board:** open `http://localhost:5173/?board=BOARD_ID` (and the JSON when used). Inventory hubs, leaves, and every edge with `wrongWay: true` (read `wrongWayReason`).
-5. **Align with catalog:** if `.typology/typology.yaml` exists, map package paths to slice `owns` / `surfaces` / `libraries`. Cables that cross slices MUST already have (or gain) a matching `sliceBindings` row per [catalog/SKILL.md](../catalog/SKILL.md).
-6. **Implement:** when adding imports, prefer cables that stay inward on role layer and that match declared bindings. After the change, regenerate the board and re-check wrong-way count.
-7. **Debt:** if a wrong-way cable must remain, record it in `.typology/typology-journey.md` under technical debt (or the consumer's agreed debt log) with target refactoring. MUST NOT silently accept new wrong-way cables.
+2. **Generate:** prefer `typology assembly-graph REPO --catalog PATH --slice SLICE` (or `--all-slices`) when the catalog is confirmed. Use the raw module harvest only when comparing the whole module. Confirm stdout reports owned nodes, boundary stubs, and missing bindings for slice boards.
+3. **Open the viewer (when a human needs the board):** register with `viewer/cable-board/scripts/load-graph.sh REPO BOARD_ID` (use the slice id as BOARD_ID for slice boards) and run `npm run dev` from `viewer/cable-board`. Agents MAY skip the viewer when only machine checks are required, but MUST still regenerate and read the JSON.
+4. **Read the board:** open `http://localhost:5173/?board=BOARD_ID`. Inventory hubs, leaves, boundary stubs, every edge with `wrongWay: true`, and every edge with `bindingStatus: "missing"`.
+5. **Align with catalog:** map boundary debt back to `sliceBindings` / `componentBindings` / `owns` per [catalog/SKILL.md](../catalog/SKILL.md). Refine the catalog, regenerate, re-open the board.
+6. **Implement:** when adding imports, prefer cables that stay inward on role layer and that match declared bindings. After the change, regenerate the board and re-check wrong-way and missing-binding counts.
+7. **Debt:** if a wrong-way or missing-binding cable must remain, record it in `.typology/typology-journey.md` under technical debt (or the consumer's agreed debt log) with target refactoring. MUST NOT silently accept new boundary debt.
 
 ## Core constraints
 
@@ -103,13 +112,22 @@ Violation: STOP, correct the command to `typology assembly-graph`, keep human wo
 
 CORRECT:
 ```text
-Regenerate the cable board: typology assembly-graph . --module engine
+Regenerate the cable board: typology assembly-graph . --module engine --slice chronology
 ```
 
 PROHIBITED:
 ```text
 typology cable-board .
 ```
+
+**CONSTRAINT:** When a confirmed catalog exists, human-facing boards SHOULD be slice-scoped. Every human-facing board MUST have a stable id (prefer the catalog slice id).
+
+- MUST: use `--slice` / `--all-slices` (or loader equivalents) for review boards when slices are confirmed
+- MUST: keep boundary stubs for external callers and dependencies; MUST NOT drop cross-slice cables from the projection
+- MUST NOT: treat the full-module board as the default human view when slice boards are available
+
+Enforcement: skill steps + viewer README
+Violation: STOP, project with `--slice`, register `?board=<slice-id>`
 
 **CONSTRAINT:** When the operator asks to *see* or *open* the cable board, agents MUST use the shipped viewer under `viewer/cable-board/` with a registered board id. MUST NOT invent a second graph format or point humans only at raw JSON when a visual walk is requested.
 
@@ -123,9 +141,9 @@ Violation: STOP, open `viewer/cable-board/README.md`, register the board, start 
 
 CORRECT:
 ```text
-./viewer/cable-board/scripts/load-graph.sh . engine --module engine
+./viewer/cable-board/scripts/load-graph.sh . chronology --module engine --slice chronology
 cd "$MOD/viewer/cable-board" && npm install && npm run dev
-# open http://localhost:5173/?board=engine
+# open http://localhost:5173/?board=chronology
 ```
 
 PROHIBITED:
@@ -186,11 +204,11 @@ PROHIBITED: board the whole monorepo, then refactor an out-of-scope UI module fr
 
 ## Board JSON (contract)
 
-Top level: `nodes`, `edges`.
+Top level: `nodes`, `edges`, optional `slice` (set on projected boards).
 
-Node fields agents MUST read: `id`, `path`, `inDegree`, `outDegree`, `imports`, `importedBy`, `isHub`, `isLeaf`, `layer`, optional `role`, `roleConfidence`.
+Node fields agents MUST read: `id`, `path`, `inDegree`, `outDegree`, `imports`, `importedBy`, `isHub`, `isLeaf`, `layer`, optional `role`, `roleConfidence`, and on stubs `isBoundary`, `boundaryKind`, `ownerId`.
 
-Edge fields agents MUST read: `id`, `source`, `target`, optional `roleKind`, `wrongWay`, `wrongWayReason`.
+Edge fields agents MUST read: `id`, `source`, `target`, optional `roleKind`, `wrongWay`, `wrongWayReason`, and on boundary cables `bindingStatus`, `boundaryKind`.
 
 Contract smoke: `scripts/check-assembly-graph.py` in this module.
 

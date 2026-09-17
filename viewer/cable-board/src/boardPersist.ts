@@ -42,7 +42,7 @@ function storageKey(boardId: string): string {
 }
 
 export const defaultBoardState = (): BoardNavState => ({
-  layer: 'all',
+  layer: 'imports',
   selectedId: null,
   legendOpen: false,
   viewport: null,

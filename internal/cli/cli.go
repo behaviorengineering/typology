@@ -76,7 +76,7 @@ func printUsage(w io.Writer) {
 	_, _ = fmt.Fprintln(w, "  typology contracts REPO [--module PATH] [--out PATH]")
 	_, _ = fmt.Fprintln(w, "  typology emit REPO [--catalog PATH] [--docs-only] [--go-only]")
 	_, _ = fmt.Fprintln(w, "  typology architecture REPO [--module PATH] [--catalog PATH] [--out PATH]")
-	_, _ = fmt.Fprintln(w, "  typology assembly-graph REPO [--module PATH] [--out PATH]")
+	_, _ = fmt.Fprintln(w, "  typology assembly-graph REPO [--module PATH] [--catalog PATH] [--slice SLICE|--all-slices] [--out PATH|--out-dir DIR]")
 	_, _ = fmt.Fprintln(w, "  typology validate REPO [--module PATH] [--catalog PATH] [SLICE]")
 	_, _ = fmt.Fprintln(w, "  typology show [SLICE|graph] [--module PATH] [--json] [--catalog PATH]")
 	_, _ = fmt.Fprintln(w, "  typology remediate REPO SLICE [--module PATH] [--catalog PATH]")
@@ -390,11 +390,15 @@ func runArchitecture(args []string, stdout, stderr io.Writer) int {
 func runAssemblyGraph(args []string, stdout, stderr io.Writer) int {
 	repo, rest, ok := firstArg(args)
 	if !ok {
-		_, _ = fmt.Fprintln(stderr, "usage: typology assembly-graph REPO [--module PATH] [--out PATH]")
+		_, _ = fmt.Fprintln(stderr, "usage: typology assembly-graph REPO [--module PATH] [--catalog PATH] [--slice SLICE|--all-slices] [--out PATH|--out-dir DIR]")
 		return 2
 	}
 	outPath := assemblygraph.DefaultPath(repo)
+	outDir := ""
 	module := ""
+	catalogPath := ""
+	sliceID := ""
+	allSlices := false
 	for i := 0; i < len(rest); i++ {
 		switch rest[i] {
 		case "--module":
@@ -404,6 +408,22 @@ func runAssemblyGraph(args []string, stdout, stderr io.Writer) int {
 			}
 			module = rest[i+1]
 			i++
+		case "--catalog":
+			if i+1 >= len(rest) {
+				_, _ = fmt.Fprintln(stderr, "assembly-graph: --catalog requires path")
+				return 2
+			}
+			catalogPath = rest[i+1]
+			i++
+		case "--slice":
+			if i+1 >= len(rest) {
+				_, _ = fmt.Fprintln(stderr, "assembly-graph: --slice requires id")
+				return 2
+			}
+			sliceID = rest[i+1]
+			i++
+		case "--all-slices":
+			allSlices = true
 		case "--out":
 			if i+1 >= len(rest) {
 				_, _ = fmt.Fprintln(stderr, "assembly-graph: --out requires path")
@@ -411,29 +431,113 @@ func runAssemblyGraph(args []string, stdout, stderr io.Writer) int {
 			}
 			outPath = rest[i+1]
 			i++
+		case "--out-dir":
+			if i+1 >= len(rest) {
+				_, _ = fmt.Fprintln(stderr, "assembly-graph: --out-dir requires path")
+				return 2
+			}
+			outDir = rest[i+1]
+			i++
 		default:
 			_, _ = fmt.Fprintf(stderr, "assembly-graph: unknown flag %q\n", rest[i])
 			return 2
 		}
 	}
+	if sliceID != "" && allSlices {
+		_, _ = fmt.Fprintln(stderr, "assembly-graph: use --slice or --all-slices, not both")
+		return 2
+	}
+	if allSlices && outDir == "" {
+		outDir = filepath.Join(repo, filepath.FromSlash(assemblygraph.DefaultBoardsRel))
+	}
+	if sliceID == "" && !allSlices && outDir != "" {
+		_, _ = fmt.Fprintln(stderr, "assembly-graph: --out-dir requires --slice or --all-slices")
+		return 2
+	}
+
 	g, err := assemblygraph.Build(assemblygraph.BuildOptions{RepoRoot: repo, Module: module})
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "assembly-graph: %v\n", err)
 		return 1
 	}
-	if err := assemblygraph.WriteJSON(outPath, g); err != nil {
+
+	if sliceID == "" && !allSlices {
+		if err := assemblygraph.WriteJSON(outPath, g); err != nil {
+			_, _ = fmt.Fprintf(stderr, "assembly-graph: %v\n", err)
+			return 1
+		}
+		wrong := countWrongWay(g)
+		_, _ = fmt.Fprintf(stdout, "assembly-graph: wrote %s (%d nodes, %d edges, %d wrong-way)\n",
+			outPath, len(g.Nodes), len(g.Edges), wrong)
+		return 0
+	}
+
+	if catalogPath == "" {
+		catalogPath = defaultCatalogPath(repo)
+	}
+	typ, err := catalog.LoadYAML(catalogPath)
+	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "assembly-graph: %v\n", err)
 		return 1
 	}
+	if issues := typ.ValidateStructure(); len(issues) > 0 {
+		_, _ = fmt.Fprintf(stderr, "assembly-graph: catalog structure invalid (%d issue(s)); fix catalog first\n", len(issues))
+		for _, issue := range issues {
+			_, _ = fmt.Fprintf(stderr, "  - %s\n", issue.Message)
+		}
+		return 1
+	}
+
+	if sliceID != "" {
+		projected, stats, err := assemblygraph.Project(g, typ, assemblygraph.ProjectOptions{SliceID: sliceID})
+		if err != nil {
+			_, _ = fmt.Fprintf(stderr, "assembly-graph: %v\n", err)
+			return 1
+		}
+		writePath := outPath
+		if outDir != "" {
+			writePath = filepath.Join(outDir, sliceID, "assembly-graph.json")
+		}
+		if err := assemblygraph.WriteJSON(writePath, projected); err != nil {
+			_, _ = fmt.Fprintf(stderr, "assembly-graph: %v\n", err)
+			return 1
+		}
+		_, _ = fmt.Fprintf(stdout,
+			"assembly-graph: wrote %s (slice %s: %d owned, %d boundary stubs, %d internal cables, %d boundary cables, %d missing bindings, %d wrong-way)\n",
+			writePath, stats.SliceID, stats.OwnedNodes, stats.BoundaryNodes,
+			stats.InternalEdges, stats.BoundaryEdges, stats.MissingBindings, stats.WrongWay)
+		return 0
+	}
+
+	written := 0
+	for _, s := range typ.Slices {
+		projected, stats, err := assemblygraph.Project(g, typ, assemblygraph.ProjectOptions{SliceID: s.ID})
+		if err != nil {
+			_, _ = fmt.Fprintf(stderr, "assembly-graph: slice %s: %v\n", s.ID, err)
+			return 1
+		}
+		writePath := filepath.Join(outDir, s.ID, "assembly-graph.json")
+		if err := assemblygraph.WriteJSON(writePath, projected); err != nil {
+			_, _ = fmt.Fprintf(stderr, "assembly-graph: %v\n", err)
+			return 1
+		}
+		_, _ = fmt.Fprintf(stdout,
+			"assembly-graph: wrote %s (slice %s: %d owned, %d boundary stubs, %d boundary cables, %d missing bindings)\n",
+			writePath, stats.SliceID, stats.OwnedNodes, stats.BoundaryNodes, stats.BoundaryEdges, stats.MissingBindings)
+		written++
+	}
+	_, _ = fmt.Fprintf(stdout, "assembly-graph: wrote %d slice board(s) under %s\n", written, outDir)
+	return 0
+}
+
+func countWrongWay(g assemblygraph.Graph) int {
 	wrong := 0
 	for _, e := range g.Edges {
 		if e.WrongWay {
 			wrong++
 		}
 	}
-	_, _ = fmt.Fprintf(stdout, "assembly-graph: wrote %s (%d nodes, %d edges, %d wrong-way)\n",
-		outPath, len(g.Nodes), len(g.Edges), wrong)
-	return 0
+	return wrong
 }
 
 func runValidate(args []string, stdout, stderr io.Writer) int {

@@ -21,11 +21,29 @@ import (
 // tmp/typology evidence).
 const DefaultRel = "tmp/typology/assembly-graph.json"
 
+// DefaultBoardsRel is the default directory for --all-slices board JSON files.
+const DefaultBoardsRel = "tmp/typology/boards"
+
 // Graph is the portable assembly wiring document.
 type Graph struct {
 	Nodes []Node `json:"nodes"`
 	Edges []Edge `json:"edges"`
+	// Slice is set when this graph is a catalog slice projection.
+	Slice string `json:"slice,omitempty"`
 }
+
+// BoundaryKind names why a package appears on a slice board without being owned.
+const (
+	BoundarySlice   = "slice"
+	BoundaryLibrary = "library"
+	BoundaryUnowned = "unowned"
+)
+
+// BindingStatus reports whether a boundary cable is allowed by the catalog.
+const (
+	BindingDeclared = "declared"
+	BindingMissing  = "missing"
+)
 
 // Node is one package in the wiring graph.
 type Node struct {
@@ -40,6 +58,12 @@ type Node struct {
 	Role           string   `json:"role,omitempty"`
 	RoleConfidence float64  `json:"roleConfidence,omitempty"`
 	Layer          int      `json:"layer"`
+	// IsBoundary marks a lightweight stub for a package outside the selected slice.
+	IsBoundary bool `json:"isBoundary,omitempty"`
+	// BoundaryKind is slice, library, or unowned when IsBoundary is true.
+	BoundaryKind string `json:"boundaryKind,omitempty"`
+	// OwnerID is the catalog slice or library id that claims this stub, when known.
+	OwnerID string `json:"ownerId,omitempty"`
 }
 
 // Edge is one directed import cable, optionally labeled by role kind.
@@ -50,6 +74,10 @@ type Edge struct {
 	RoleKind       string `json:"roleKind,omitempty"`
 	WrongWay       bool   `json:"wrongWay,omitempty"`
 	WrongWayReason string `json:"wrongWayReason,omitempty"`
+	// BindingStatus is declared or missing for cables that cross the slice boundary.
+	BindingStatus string `json:"bindingStatus,omitempty"`
+	// BoundaryKind mirrors the external side of a boundary cable (slice/library/unowned).
+	BoundaryKind string `json:"boundaryKind,omitempty"`
 }
 
 // BuildOptions configures an assembly graph harvest.

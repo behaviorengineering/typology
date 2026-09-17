@@ -490,6 +490,31 @@ body,
   border-style: dashed;
 }
 
+.pkg-node--boundary {
+  border-style: dashed;
+  border-color: #64748b;
+  background: #f8fafc;
+}
+
+.pkg-node--boundary-library {
+  border-color: #0f766e;
+  background: #f0fdfa;
+}
+
+.pkg-node--boundary-unowned {
+  border-color: #d97706;
+  background: #fffbeb;
+}
+
+.pkg-node__badge {
+  margin-bottom: 4px;
+  color: #334155;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: none;
+}
+
 .pkg-node--hot {
   border-color: #1d4ed8;
   box-shadow: 0 0 0 2px rgb(29 78 216 / 25%);

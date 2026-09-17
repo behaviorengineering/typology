@@ -1,4 +1,4 @@
-.PHONY: help build test vet smoke cable-board-sample
+.PHONY: help build test vet smoke cable-board-sample cable-board-slices
 
 .DEFAULT_GOAL := help
 
@@ -16,7 +16,8 @@ help:
 	@echo "  make test                go test ./..."
 	@echo "  make vet                 go vet ./..."
 	@echo "  make smoke               Build + read-only CLI checks on $(SMOKE_REPO)"
-	@echo "  make cable-board-sample  Harvest $(SMOKE_REPO) into $(VIEWER)/public/assembly-graph.json"
+	@echo "  make cable-board-sample  Harvest $(SMOKE_REPO) into named tiny-module board"
+	@echo "  make cable-board-slices  Project every catalog slice into named boards"
 
 build:
 	@mkdir -p $(dir $(BINARY))
@@ -36,7 +37,12 @@ smoke: build
 	python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); assert d.get("nodes"), "graph nodes empty"' "$$tmp/graph.json" && \
 	./$(BINARY) assembly-graph $(SMOKE_REPO) --out "$$tmp/assembly-graph.json" && \
 	python3 scripts/check-assembly-graph.py "$$tmp/assembly-graph.json" && \
+	./$(BINARY) assembly-graph $(SMOKE_REPO) --catalog $(SMOKE_CATALOG) --slice billing --out "$$tmp/billing.json" && \
+	python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); assert d.get("slice")=="billing"; assert d.get("nodes")' "$$tmp/billing.json" && \
 	echo "smoke: ok"
 
 cable-board-sample: build
 	./$(VIEWER)/scripts/load-graph.sh $(SMOKE_REPO) tiny-module --label "Tiny module sample" --make-default
+
+cable-board-slices: build
+	./$(VIEWER)/scripts/load-graph.sh $(SMOKE_REPO) --all-slices --catalog $(SMOKE_CATALOG)

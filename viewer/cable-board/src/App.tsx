@@ -110,7 +110,7 @@ function BoardInner() {
   const [boardLabel, setBoardLabel] = useState<string>('')
   const [graphSrc, setGraphSrc] = useState<string | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [selectedLayer, setSelectedLayer] = useState<WiringLayer>('all')
+  const [selectedLayer, setSelectedLayer] = useState<WiringLayer>('imports')
   const [legendOpen, setLegendOpen] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
   const [layoutEpoch, setLayoutEpoch] = useState(0)
@@ -133,7 +133,7 @@ function BoardInner() {
     viewportsRef.current = { ...saved.viewports }
     restoreViewportOnceRef.current = true
     setSelectedId(saved.selectedId)
-    setSelectedLayer(isWiringLayer(saved.layer) ? saved.layer : 'all')
+    setSelectedLayer(isWiringLayer(saved.layer) ? saved.layer : 'imports')
     setLegendOpen(saved.legendOpen)
     setHoverId(null)
     setBoardId(id)
