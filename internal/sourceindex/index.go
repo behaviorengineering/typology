@@ -177,6 +177,10 @@ type listPackage struct {
 	Name            string   `json:"Name"`
 	GoFiles         []string `json:"GoFiles"`
 	CompiledGoFiles []string `json:"CompiledGoFiles"`
+	Incomplete      bool     `json:"Incomplete"`
+	Error           *struct {
+		Err string `json:"Err"`
+	} `json:"Error"`
 }
 
 func listPackagesInModules(modules []gorepo.Module) ([]listPackage, error) {
@@ -192,7 +196,9 @@ func listPackagesInModules(modules []gorepo.Module) ([]listPackage, error) {
 }
 
 func listPackagesInModule(moduleRoot string) ([]listPackage, error) {
-	cmd := exec.Command("go", "list", "-json", "./...")
+	// -e keeps harvest going when GOWORK=off surfaces missing go.sum noise;
+	// incomplete packages are skipped below.
+	cmd := exec.Command("go", "list", "-e", "-json", "./...")
 	cmd.Dir = moduleRoot
 	// Isolate each module from an enclosing workspace so sibling modules stay out of scope.
 	cmd.Env = append(os.Environ(), "GOWORK=off")
@@ -217,7 +223,14 @@ func listPackagesInModule(moduleRoot string) ([]listPackage, error) {
 			return nil, terrors.Wrap(err, terrors.CodeInternal, "sourceindex.listPackages", "decode go list json").
 				With("dir", moduleRoot)
 		}
+		if strings.TrimSpace(pkg.Dir) == "" || pkg.Error != nil {
+			continue
+		}
 		pkgs = append(pkgs, pkg)
+	}
+	if len(pkgs) == 0 {
+		return nil, terrors.New(terrors.CodeFailedPrecondition, "sourceindex.listPackages",
+			"go list returned no usable packages").With("dir", moduleRoot)
 	}
 	return pkgs, nil
 }

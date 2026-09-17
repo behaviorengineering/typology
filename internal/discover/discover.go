@@ -386,11 +386,16 @@ func listPackagesInModule(modRoot string) ([]string, error) {
 
 type packageInfo struct {
 	ImportPath string
+	Dir        string
 	Imports    []string
+	Incomplete bool
+	Error      *struct {
+		Err string `json:"Err"`
+	} `json:"Error"`
 }
 
 func listPackageInfosInModule(modRoot string) ([]packageInfo, error) {
-	cmd := goCmd(modRoot, "list", "-json", "./...")
+	cmd := goCmd(modRoot, "list", "-e", "-json", "./...")
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	out, err := cmd.Output()
@@ -410,7 +415,14 @@ func listPackageInfosInModule(modRoot string) ([]packageInfo, error) {
 			return nil, terrors.Wrap(err, terrors.CodeInternal, "discover.listPackages", "decode go list json").
 				With("dir", modRoot)
 		}
+		if strings.TrimSpace(info.ImportPath) == "" || info.Error != nil {
+			continue
+		}
 		infos = append(infos, info)
+	}
+	if len(infos) == 0 {
+		return nil, terrors.New(terrors.CodeFailedPrecondition, "discover.listPackages",
+			"go list returned no usable packages").With("dir", modRoot)
 	}
 	return infos, nil
 }
