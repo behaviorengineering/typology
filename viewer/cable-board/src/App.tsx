@@ -23,12 +23,19 @@ import {
   resetViewState,
   saveBoardState,
   saveNodePositionsForKey,
+  setActiveBoardId,
   type BoardViewport,
 } from './boardPersist'
+import {
+  defaultBoardId,
+  fetchBoardsManifest,
+  LEGACY_BOARD_PATH,
+  type BoardsManifest,
+} from './boards'
 import { layoutGraph } from './layout'
 import { analyzeRisks } from './risks'
 import type { PackageGraph } from './types'
-import WiringEdge, { applyCableNudges, cableNudges } from './WiringEdge'
+import WiringEdge, { applyCableNudges, cableNudges, refreshCableNudges } from './WiringEdge'
 
 const nodeTypes = { package: PackageNode }
 const edgeTypes = { wiring: WiringEdge }
@@ -96,14 +103,15 @@ function isWiringLayer(value: string): value is WiringLayer {
 }
 
 function BoardInner() {
-  const saved = useMemo(() => loadBoardState(), [])
   const [graph, setGraph] = useState<PackageGraph | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [selectedId, setSelectedId] = useState<string | null>(saved.selectedId)
-  const [selectedLayer, setSelectedLayer] = useState<WiringLayer>(
-    isWiringLayer(saved.layer) ? saved.layer : 'all',
-  )
-  const [legendOpen, setLegendOpen] = useState(saved.legendOpen)
+  const [boards, setBoards] = useState<BoardsManifest | null>(null)
+  const [boardId, setBoardId] = useState<string | null>(null)
+  const [boardLabel, setBoardLabel] = useState<string>('')
+  const [graphSrc, setGraphSrc] = useState<string | null>(null)
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [selectedLayer, setSelectedLayer] = useState<WiringLayer>('imports')
+  const [legendOpen, setLegendOpen] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
   const [layoutEpoch, setLayoutEpoch] = useState(0)
   const [hoverId, setHoverId] = useState<string | null>(null)
@@ -111,22 +119,79 @@ function BoardInner() {
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
   const toolbarRef = useRef<HTMLDivElement | null>(null)
   const legendToolbarRef = useRef<HTMLDivElement | null>(null)
-  const viewportsRef = useRef<Record<string, BoardViewport>>({ ...saved.viewports })
+  const viewportsRef = useRef<Record<string, BoardViewport>>({})
   const restoreViewportOnceRef = useRef(true)
   const { fitView, setViewport, getViewport } = useReactFlow()
 
   const risks = useMemo(() => (graph ? analyzeRisks(graph) : null), [graph])
   const selectedLayerMeta = wiringLayers.find((layer) => layer.id === selectedLayer)
 
+  const applyBoard = useCallback((id: string, label: string, src: string) => {
+    setActiveBoardId(id)
+    refreshCableNudges()
+    const saved = loadBoardState()
+    viewportsRef.current = { ...saved.viewports }
+    restoreViewportOnceRef.current = true
+    setSelectedId(saved.selectedId)
+    setSelectedLayer(isWiringLayer(saved.layer) ? saved.layer : 'imports')
+    setLegendOpen(saved.legendOpen)
+    setHoverId(null)
+    setBoardId(id)
+    setBoardLabel(label)
+    setGraph(null)
+    setError(null)
+    setGraphSrc(src)
+  }, [])
+
   useEffect(() => {
     let cancelled = false
-    const params = new URLSearchParams(window.location.search)
-    const src = (params.get('src') || '/assembly-graph.json').trim() || '/assembly-graph.json'
-    fetch(src)
+    async function resolveBoard() {
+      const params = new URLSearchParams(window.location.search)
+      const srcOverride = (params.get('src') || '').trim()
+      const requestedBoard = (params.get('board') || '').trim()
+      const manifest = await fetchBoardsManifest()
+      if (cancelled) return
+      if (manifest) setBoards(manifest)
+      if (srcOverride !== '') {
+        applyBoard('custom', srcOverride, srcOverride)
+        return
+      }
+      if (!manifest) {
+        applyBoard('default', 'Default board', LEGACY_BOARD_PATH)
+        return
+      }
+      if (requestedBoard !== '') {
+        const entry = manifest.boards.find((board) => board.id === requestedBoard)
+        if (!entry) {
+          setError(
+            `unknown cable board "${requestedBoard}". Available boards: ${manifest.boards
+              .map((board) => board.id)
+              .join(', ')}`,
+          )
+          return
+        }
+        applyBoard(entry.id, entry.label, entry.graph)
+        return
+      }
+      const fallback =
+        manifest.boards.find((board) => board.id === defaultBoardId(manifest)) ??
+        manifest.boards[0]
+      applyBoard(fallback.id, fallback.label, fallback.graph)
+    }
+    void resolveBoard()
+    return () => {
+      cancelled = true
+    }
+  }, [applyBoard])
+
+  useEffect(() => {
+    if (!graphSrc) return
+    let cancelled = false
+    fetch(graphSrc)
       .then(async (res) => {
         if (!res.ok) {
           throw new Error(
-            `failed to load cable board JSON from ${src} (${res.status}). Run typology assembly-graph and copy the file to viewer/cable-board/public/assembly-graph.json`,
+            `failed to load cable board JSON from ${graphSrc} (${res.status}). Run typology assembly-graph and register the board with viewer/cable-board/scripts/load-graph.sh`,
           )
         }
         return res.json() as Promise<PackageGraph>
@@ -140,7 +205,7 @@ function BoardInner() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [graphSrc])
 
   useEffect(() => {
     saveBoardState({
@@ -316,6 +381,29 @@ function BoardInner() {
     [persistViewport],
   )
 
+  const onBoardChange = useCallback(
+    (nextId: string) => {
+      if (!boards) return
+      const entry = boards.boards.find((board) => board.id === nextId)
+      if (!entry || entry.id === boardId) return
+      const vp = getViewport()
+      viewportsRef.current = { ...viewportsRef.current, [navKey(selectedLayer, selectedId)]: vp }
+      saveBoardState({
+        layer: selectedLayer,
+        selectedId,
+        legendOpen,
+        viewport: vp,
+        viewports: viewportsRef.current,
+      })
+      const url = new URL(window.location.href)
+      url.searchParams.delete('src')
+      url.searchParams.set('board', entry.id)
+      window.history.replaceState(null, '', url.toString())
+      applyBoard(entry.id, entry.label, entry.graph)
+    },
+    [boards, boardId, getViewport, selectedLayer, selectedId, legendOpen, applyBoard],
+  )
+
   const onNodeDragStop: OnNodeDrag<PackageFlowNode> = useCallback(
     (_event, _node, nextNodes) => {
       const key = navKey(selectedLayer, selectedId)
@@ -419,9 +507,19 @@ function BoardInner() {
                   </ul>
                 </section>
                 <section className="help-popout__section">
+                  <h3>Boards</h3>
+                  <ul>
+                    <li>Switch named boards without restarting the server.</li>
+                    <li>
+                      Open another window with a different <code>?board=</code> id.
+                    </li>
+                    <li>Each board remembers its own layout in this browser.</li>
+                  </ul>
+                </section>
+                <section className="help-popout__section">
                   <h3>Remembered in this browser</h3>
                   <ul>
-                    <li>Cable nudges, box positions, and the camera are saved per view.</li>
+                    <li>Cable nudges, box positions, and the camera are saved per board and view.</li>
                     <li>
                       <strong>Reset view</strong> clears only the layer and focus you are on.
                     </li>
@@ -431,10 +529,27 @@ function BoardInner() {
             ) : null}
           </div>
           <p className="header__tagline">
-            Interactive cable board for typology <code>assembly-graph.json</code> (imports, roles,
-            wrong-way marks).
+            Interactive cable board{boardLabel ? ` — ${boardLabel}` : ''} for typology{' '}
+            <code>assembly-graph.json</code> (imports, roles, wrong-way marks).
           </p>
           <div className="toolbar" ref={legendToolbarRef}>
+            {boards && boards.boards.length > 1 ? (
+              <label className="board-switch">
+                <span className="board-switch__label">Board</span>
+                <select
+                  className="board-switch__select"
+                  value={boardId ?? ''}
+                  onChange={(event) => onBoardChange(event.target.value)}
+                  aria-label="Cable board"
+                >
+                  {boards.boards.map((board) => (
+                    <option key={board.id} value={board.id}>
+                      {board.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
             <div className="layer-switch" role="tablist" aria-label="Wiring layers">
               {wiringLayers.map((layer) => (
                 <button

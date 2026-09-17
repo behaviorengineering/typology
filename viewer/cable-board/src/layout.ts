@@ -144,6 +144,9 @@ export async function layoutGraph(
         inMesh: risk.meshNodeIds.has(n.id),
         wrongWay: risk.wrongWayNodeIds.has(n.id),
         role: n.role ?? '',
+        isBoundary: Boolean(n.isBoundary),
+        boundaryKind: n.boundaryKind,
+        ownerId: n.ownerId,
       },
     }
   })
@@ -164,14 +167,20 @@ export async function layoutGraph(
     const focused = selectedId !== null
     const cyclic = risk.cycleEdgeIds.has(e.id)
     const wrong = risk.wrongWayEdgeIds.has(e.id)
+    const missingBinding = e.bindingStatus === 'missing'
     let stroke = '#64748b'
     let width = denseOverview ? 1.1 : 1.25
+    let dash: string | undefined
     if (cyclic) {
       stroke = '#b91c1c'
       width = 2.75
     } else if (wrong) {
       stroke = '#c026d3'
       width = 2.5
+    } else if (missingBinding) {
+      stroke = '#d97706'
+      width = 2.25
+      dash = '6 4'
     } else if (focused) {
       stroke = '#1d4ed8'
       width = 2.5
@@ -179,9 +188,11 @@ export async function layoutGraph(
     const label =
       wrong
         ? e.roleKind || 'wrong-way'
-        : singleKindLayer
-          ? undefined
-          : e.roleKind || undefined
+        : missingBinding
+          ? 'missing binding'
+          : singleKindLayer
+            ? undefined
+            : e.roleKind || undefined
     return {
       id: e.id,
       source: e.source,
@@ -189,7 +200,7 @@ export async function layoutGraph(
       sourceHandle: `out-${e.target}`,
       targetHandle: `in-${e.source}`,
       type: 'wiring',
-      animated: focused || cyclic || wrong,
+      animated: focused || cyclic || wrong || missingBinding,
       label,
       data: {
         bowX: 0,
@@ -202,9 +213,10 @@ export async function layoutGraph(
         stroke,
         strokeWidth: width,
         opacity: 1,
+        ...(dash ? { strokeDasharray: dash } : {}),
       },
-      zIndex: focused || cyclic || wrong ? 10 : 1,
-      title: e.wrongWayReason || e.roleKind || undefined,
+      zIndex: focused || cyclic || wrong || missingBinding ? 10 : 1,
+      title: e.wrongWayReason || (missingBinding ? 'undeclared cross-boundary import' : e.roleKind) || undefined,
     }
   })
 

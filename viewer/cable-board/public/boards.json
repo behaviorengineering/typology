@@ -1,0 +1,10 @@
+{
+  "boards": [
+    {
+      "id": "tiny-module",
+      "label": "Tiny module sample",
+      "graph": "/boards/tiny-module/assembly-graph.json"
+    }
+  ],
+  "defaultBoard": "tiny-module"
+}

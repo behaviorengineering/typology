@@ -239,6 +239,54 @@ func TestCLI_assemblyGraph_tinyModule(t *testing.T) {
 	}
 }
 
+func TestCLI_assemblyGraph_sliceProjection(t *testing.T) {
+	t.Parallel()
+	repo, _ := filepath.Abs(filepath.Join("..", "..", "testdata", "tiny-module"))
+	out := filepath.Join(t.TempDir(), "billing.json")
+	var stdout, stderr bytes.Buffer
+	code := cli.Run([]string{
+		"assembly-graph", repo,
+		"--catalog", filepath.Join(repo, ".typology", "typology.yaml"),
+		"--slice", "billing",
+		"--out", out,
+	}, nil, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("exit=%d stderr=%s stdout=%s", code, stderr.String(), stdout.String())
+	}
+	if !strings.Contains(stdout.String(), "slice billing") {
+		t.Fatalf("stdout=%q", stdout.String())
+	}
+	raw, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(raw), `"slice": "billing"`) {
+		t.Fatalf("expected slice field: %s", raw)
+	}
+}
+
+func TestCLI_assemblyGraph_allSlices(t *testing.T) {
+	t.Parallel()
+	repo, _ := filepath.Abs(filepath.Join("..", "..", "testdata", "tiny-module"))
+	outDir := filepath.Join(t.TempDir(), "boards")
+	var stdout, stderr bytes.Buffer
+	code := cli.Run([]string{
+		"assembly-graph", repo,
+		"--all-slices",
+		"--out-dir", outDir,
+	}, nil, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("exit=%d stderr=%s stdout=%s", code, stderr.String(), stdout.String())
+	}
+	billing := filepath.Join(outDir, "billing", "assembly-graph.json")
+	if _, err := os.Stat(billing); err != nil {
+		t.Fatalf("missing billing board: %v", err)
+	}
+	if !strings.Contains(stdout.String(), "slice board") {
+		t.Fatalf("stdout=%q", stdout.String())
+	}
+}
+
 func TestCLI_emit_ok(t *testing.T) {
 	t.Parallel()
 	src, _ := filepath.Abs(filepath.Join("..", "..", "testdata", "tiny-module"))

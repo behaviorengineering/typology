@@ -23,17 +23,29 @@ export type PackageNodeData = {
   inMesh: boolean
   wrongWay: boolean
   role: string
+  isBoundary?: boolean
+  boundaryKind?: string
+  ownerId?: string
 }
 
 export type PackageFlowNode = Node<PackageNodeData, 'package'>
+
+function boundaryBadge(kind?: string, ownerId?: string): string {
+  if (kind === 'library') return ownerId ? `[Library: ${ownerId}]` : '[Library]'
+  if (kind === 'slice') return ownerId ? `[Slice: ${ownerId}]` : '[Slice]'
+  return '[Unowned]'
+}
 
 function PackageNodeView({ data }: NodeProps<PackageFlowNode>) {
   const width = 168 + Math.min(data.outDegree + data.inDegree, 12) * 6
   const className = [
     'pkg-node',
     data.inbound.length > 0 ? 'pkg-node--has-ins' : '',
-    data.isHub ? 'pkg-node--hub' : '',
-    data.isLeaf ? 'pkg-node--leaf' : '',
+    data.isBoundary ? 'pkg-node--boundary' : '',
+    data.isBoundary && data.boundaryKind === 'library' ? 'pkg-node--boundary-library' : '',
+    data.isBoundary && data.boundaryKind === 'unowned' ? 'pkg-node--boundary-unowned' : '',
+    !data.isBoundary && data.isHub ? 'pkg-node--hub' : '',
+    !data.isBoundary && data.isLeaf ? 'pkg-node--leaf' : '',
     data.highlighted ? 'pkg-node--hot' : '',
     data.dimmed ? 'pkg-node--dim' : '',
     data.inCycle ? 'pkg-node--cycle' : '',
@@ -64,11 +76,16 @@ function PackageNodeView({ data }: NodeProps<PackageFlowNode>) {
           <InboundSocket kind={port.kind} />
         </Handle>
       ))}
+      {data.isBoundary ? (
+        <div className="pkg-node__badge">{boundaryBadge(data.boundaryKind, data.ownerId)}</div>
+      ) : null}
       <div className="pkg-node__title">{data.label}</div>
       <div className="pkg-node__meta">
-        {data.role ? `${data.role} · ` : ''}
-        in {data.inDegree} · out {data.outDegree}
-        {marks.length > 0 ? ` · ${marks.join(' · ')}` : ''}
+        {data.isBoundary
+          ? 'boundary stub'
+          : `${data.role ? `${data.role} · ` : ''}in ${data.inDegree} · out ${data.outDegree}${
+              marks.length > 0 ? ` · ${marks.join(' · ')}` : ''
+            }`}
       </div>
       <div className="pkg-node__path">{data.path}</div>
       {data.outbound.map((port, i) => (

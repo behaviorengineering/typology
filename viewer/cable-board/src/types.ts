@@ -10,6 +10,9 @@ export type GraphNode = {
   role?: string
   roleConfidence?: number
   layer?: number
+  isBoundary?: boolean
+  boundaryKind?: 'slice' | 'library' | 'unowned' | string
+  ownerId?: string
 }
 
 export type GraphEdge = {
@@ -19,11 +22,14 @@ export type GraphEdge = {
   roleKind?: string
   wrongWay?: boolean
   wrongWayReason?: string
+  bindingStatus?: 'declared' | 'missing' | string
+  boundaryKind?: string
 }
 
 export type PackageGraph = {
   nodes: GraphNode[]
   edges: GraphEdge[]
+  slice?: string
 }
 
 export function pathToId(path: string): string {

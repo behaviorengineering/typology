@@ -1,4 +1,11 @@
-/** localStorage for assembly-board navigation, cable nudges, and box positions. */
+/**
+ * localStorage for assembly-board navigation, cable nudges, and box positions.
+ *
+ * State is scoped per board: every key is namespaced by the active board id,
+ * so two `?board=` windows never share layout, selection, or camera state.
+ * Boards served without a registry (legacy `?src=` / `/assembly-graph.json`)
+ * use the `default` and `custom` scopes.
+ */
 
 export type BoardViewport = { x: number; y: number; zoom: number }
 export type NodePos = { x: number; y: number }
@@ -8,17 +15,34 @@ export type BoardNavState = {
   selectedId: string | null
   legendOpen: boolean
   viewport: BoardViewport | null
-  /** Viewports keyed by `${layer}::${selectedId ?? ''}` for tab returns mid-exploration. */
+  /** Viewports keyed by nav key for tab returns mid-exploration. */
   viewports: Record<string, BoardViewport>
   cableNudges: Record<string, { bowX: number; bowY: number }>
   /** Node positions keyed by nav key, then node id. */
   nodePositions: Record<string, Record<string, NodePos>>
 }
 
-const STORAGE_KEY = 'assembly-board:v1'
+const LEGACY_STORAGE_KEY = 'assembly-board:v1'
+const STORAGE_PREFIX = 'assembly-board:v2:'
+
+let activeBoardId = 'default'
+
+/** Switch the persistence scope. Call before any other function in this module. */
+export function setActiveBoardId(boardId: string): void {
+  const id = boardId.trim()
+  activeBoardId = id === '' ? 'default' : id
+}
+
+export function getActiveBoardId(): string {
+  return activeBoardId
+}
+
+function storageKey(boardId: string): string {
+  return `${STORAGE_PREFIX}${boardId}`
+}
 
 export const defaultBoardState = (): BoardNavState => ({
-  layer: 'all',
+  layer: 'imports',
   selectedId: null,
   legendOpen: false,
   viewport: null,
@@ -27,40 +51,62 @@ export const defaultBoardState = (): BoardNavState => ({
   nodePositions: {},
 })
 
+function normalize(parsed: Partial<BoardNavState>): BoardNavState {
+  return {
+    ...defaultBoardState(),
+    ...parsed,
+    viewports: parsed.viewports ?? {},
+    cableNudges: parsed.cableNudges ?? {},
+    nodePositions: parsed.nodePositions ?? {},
+  }
+}
+
+/** Nav keys include the board, so saved views never cross boards. */
 export function navKey(layer: string, selectedId: string | null): string {
-  return `${layer}::${selectedId ?? ''}`
+  return `${activeBoardId}::${layer}::${selectedId ?? ''}`
 }
 
 export function loadBoardState(): BoardNavState {
+  const key = storageKey(activeBoardId)
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return defaultBoardState()
-    const parsed = JSON.parse(raw) as Partial<BoardNavState>
-    return {
-      ...defaultBoardState(),
-      ...parsed,
-      viewports: parsed.viewports ?? {},
-      cableNudges: parsed.cableNudges ?? {},
-      nodePositions: parsed.nodePositions ?? {},
+    const raw = localStorage.getItem(key)
+    if (raw) return normalize(JSON.parse(raw) as Partial<BoardNavState>)
+  } catch {
+    // Corrupt entry: fall through to legacy adoption, then defaults.
+  }
+  // First visit for this board: adopt the pre-registry state once so
+  // existing users keep node positions. The legacy key is left in place.
+  try {
+    const legacy = localStorage.getItem(LEGACY_STORAGE_KEY)
+    if (legacy) {
+      const adopted = normalize(JSON.parse(legacy) as Partial<BoardNavState>)
+      try {
+        localStorage.setItem(key, JSON.stringify(adopted))
+      } catch {
+        // quota / private mode: ignore
+      }
+      return adopted
     }
   } catch {
-    return defaultBoardState()
+    // ignore
   }
+  return defaultBoardState()
 }
 
 export function saveBoardState(patch: Partial<BoardNavState>): BoardNavState {
   const next = { ...loadBoardState(), ...patch }
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
+    localStorage.setItem(storageKey(activeBoardId), JSON.stringify(next))
   } catch {
     // quota / private mode: ignore
   }
   return next
 }
 
+/** Clear saved state for the active board only. */
 export function clearBoardState(): void {
   try {
-    localStorage.removeItem(STORAGE_KEY)
+    localStorage.removeItem(storageKey(activeBoardId))
   } catch {
     // ignore
   }

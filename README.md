@@ -42,7 +42,7 @@ typology init REPO [--module PATH] [--version VERSION]
 typology discover REPO [--module PATH] [--out PATH] [--docs-root PATH]
 typology emit REPO [--catalog PATH] [--docs-only] [--go-only]
 typology architecture REPO [--module PATH] [--catalog PATH] [--out PATH]
-typology assembly-graph REPO [--module PATH] [--out PATH]
+typology assembly-graph REPO [--module PATH] [--catalog PATH] [--slice SLICE|--all-slices] [--out PATH|--out-dir DIR]
 typology validate REPO [--module PATH] [--catalog PATH] [SLICE]
 typology show [SLICE|graph] [--module PATH] [--json] [--catalog PATH]
 typology remediate REPO SLICE [--module PATH] [--catalog PATH]
@@ -77,7 +77,7 @@ First map in a new repo: load [ai-copilots/skills/journey/SKILL.md](ai-copilots/
 2. Human confirms slice names and bindings.
 3. `typology emit` writes `.typology/typology.yaml`, `.typology/README.md`, `.typology/tools.yaml`, ensures `AGENTS.md` points at `.typology/README.md`, plus DocPage skeletons under the docs root (default `docs/develop`). Empty CLI/UI/API/Jobs pages are omitted unless listed in YAML.
 4. `typology architecture` writes a deterministic Markdown projection under `docs/architecture/typology.md`. It combines the intended catalog with observed package topology within `scope.modules` and names findings for human review. It does not make narrative design decisions.
-5. `typology assembly-graph` writes the **cable board** JSON (`tmp/typology/assembly-graph.json` by default): packages, import cables, observed roles, role-edge kinds, and wrong-way layer marks. Open the interactive viewer under [`viewer/cable-board/`](viewer/cable-board/). Agents load [ai-copilots/skills/cable-board/SKILL.md](ai-copilots/skills/cable-board/SKILL.md) to manage that board while implementing.
+5. `typology assembly-graph` writes the **cable board** JSON (`tmp/typology/assembly-graph.json` by default): packages, import cables, observed roles, role-edge kinds, and wrong-way layer marks. With `--slice` (or `--all-slices`), it projects the observed graph through confirmed catalog ownership so each board stays one bounded context plus boundary stubs. Open the interactive viewer under [`viewer/cable-board/`](viewer/cable-board/). Agents load [ai-copilots/skills/cable-board/SKILL.md](ai-copilots/skills/cable-board/SKILL.md) to manage that board while implementing.
 6. An agent or architect fixes each finding or records the boundary debt in the journey file.
 7. `typology validate` fails closed on missing paths, bindings, DocPages, or program leaves.
 8. `typology remediate REPO SLICE` returns agent-scoped violations for one slice.
