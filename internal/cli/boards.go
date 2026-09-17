@@ -3,18 +3,21 @@ package cli
 import (
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/behaviorengineering/typology/assemblygraph"
 	"github.com/behaviorengineering/typology/boardregistry"
 	"github.com/behaviorengineering/typology/catalog"
+	"github.com/behaviorengineering/typology/internal/boardsviewer"
 )
 
 func runBoards(args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
-		_, _ = fmt.Fprintln(stderr, "usage: typology boards register|sync|path [flags]")
+		_, _ = fmt.Fprintln(stderr, "usage: typology boards register|sync|path|serve [flags]")
 		return 2
 	}
 	switch args[0] {
@@ -24,9 +27,11 @@ func runBoards(args []string, stdout, stderr io.Writer) int {
 		return runBoardsSync(args[1:], stdout, stderr)
 	case "path":
 		return runBoardsPath(args[1:], stdout, stderr)
+	case "serve":
+		return runBoardsServe(args[1:], stdout, stderr)
 	default:
 		_, _ = fmt.Fprintf(stderr, "boards: unknown subcommand %q\n", args[0])
-		_, _ = fmt.Fprintln(stderr, "usage: typology boards register|sync|path [flags]")
+		_, _ = fmt.Fprintln(stderr, "usage: typology boards register|sync|path|serve [flags]")
 		return 2
 	}
 }
@@ -529,3 +534,99 @@ func runBoardsSync(args []string, stdout, stderr io.Writer) int {
 		filepath.Join(viewerPublic, "boards.json"), len(reg.Boards), paths.YAMLPath())
 	return 0
 }
+
+// boardsListenAndServe is replaced in tests.
+var boardsListenAndServe = func(addr string, handler http.Handler) error {
+	server := &http.Server{Addr: addr, Handler: handler, ReadHeaderTimeout: 5 * time.Second}
+	return server.ListenAndServe()
+}
+
+func runBoardsServe(args []string, stdout, stderr io.Writer) int {
+	addr := "127.0.0.1:5173"
+	viewerPublic := ""
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--addr":
+			if i+1 >= len(args) {
+				_, _ = fmt.Fprintln(stderr, "boards serve: --addr requires host:port")
+				return 2
+			}
+			addr = strings.TrimSpace(args[i+1])
+			i++
+		case "--viewer":
+			if i+1 >= len(args) {
+				_, _ = fmt.Fprintln(stderr, "boards serve: --viewer requires public dir path")
+				return 2
+			}
+			viewerPublic = args[i+1]
+			i++
+		case "-h", "--help":
+			_, _ = fmt.Fprintln(stdout, "usage: typology boards serve [--addr HOST:PORT] [--viewer PUBLIC_DIR]")
+			_, _ = fmt.Fprintln(stdout, "  Serves the embedded cable-board UI. Board JSON comes from PUBLIC_DIR")
+			_, _ = fmt.Fprintln(stdout, "  (default: XDG data typology/viewer/public). Run boards register/sync first.")
+			return 0
+		default:
+			_, _ = fmt.Fprintf(stderr, "boards serve: unknown flag %q\n", args[i])
+			return 2
+		}
+	}
+	if strings.TrimSpace(addr) == "" {
+		_, _ = fmt.Fprintln(stderr, "boards serve: --addr is empty")
+		return 2
+	}
+
+	paths, err := boardregistry.ResolvePaths()
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "boards serve: %v\n", err)
+		return 1
+	}
+	if strings.TrimSpace(viewerPublic) == "" {
+		viewerPublic = paths.ViewerPublicDir()
+	}
+	viewerPublic = strings.TrimSpace(viewerPublic)
+
+	manifest := filepath.Join(viewerPublic, "boards.json")
+	if _, err := os.Stat(manifest); err != nil {
+		reg, loadErr := boardregistry.LoadYAML(paths.YAMLPath())
+		if loadErr != nil {
+			_, _ = fmt.Fprintf(stderr, "boards serve: %v\n", loadErr)
+			return 1
+		}
+		if len(reg.Boards) == 0 {
+			_, _ = fmt.Fprintf(stderr, "boards serve: no boards.json at %s and registry empty; run typology boards register\n", manifest)
+			return 1
+		}
+		if err := boardregistry.Materialize(boardregistry.MaterializeOptions{
+			ViewerPublicDir: viewerPublic,
+			Paths:           paths,
+			Registry:        reg,
+		}); err != nil {
+			_, _ = fmt.Fprintf(stderr, "boards serve: materialize: %v\n", err)
+			return 1
+		}
+		_, _ = fmt.Fprintf(stdout, "boards serve: materialized %d board(s) into %s\n", len(reg.Boards), viewerPublic)
+	}
+
+	if !boardsviewer.EmbeddedOK() {
+		_, _ = fmt.Fprintln(stderr, "boards serve: embedded UI missing; run make cable-board-dist and rebuild typology")
+		return 1
+	}
+	handler, err := boardsviewer.Handler(viewerPublic)
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "boards serve: %v\n", err)
+		return 1
+	}
+
+	urlHost := addr
+	if strings.HasPrefix(addr, ":") {
+		urlHost = "127.0.0.1" + addr
+	}
+	_, _ = fmt.Fprintf(stdout, "boards serve: http://%s/  (%s)\n", urlHost, boardsviewer.DescribePublic(viewerPublic))
+	_, _ = fmt.Fprintf(stdout, "boards serve: open http://%s/?board=<id> (Ctrl+C to stop)\n", urlHost)
+	if err := boardsListenAndServe(addr, handler); err != nil {
+		_, _ = fmt.Fprintf(stderr, "boards serve: %v\n", err)
+		return 1
+	}
+	return 0
+}
+
