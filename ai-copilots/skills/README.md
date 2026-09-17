@@ -8,6 +8,6 @@ Portable instructions for any coding agent that builds with this library. Canoni
 | [docs/SKILL.md](docs/SKILL.md) | Fill or evaluate develop DocPages and program leaves; journey phase `docs`; write slice docs |
 | [catalog/SKILL.md](catalog/SKILL.md) | Authoring or changing `.typology/typology.yaml`, `catalog.Typology` in Go, subprograms, actuators, opRuns, or bindings |
 | [cli/SKILL.md](cli/SKILL.md) | Running `typology discover`, `emit`, `architecture`, `validate`, `show`, or `remediate` |
-| [cable-board/SKILL.md](cable-board/SKILL.md) | Cable board: generate/read package wiring (`typology assembly-graph`), wrong-way cables, implement against observed imports |
+| [cable-board/SKILL.md](cable-board/SKILL.md) | Cable board: generate/read package wiring (`typology assembly-graph`), interactive viewer, wrong-way cables, implement against observed imports |
 
 Wire discovery: [../BOOTSTRAP.md](../BOOTSTRAP.md). Entry: [../../AGENTS.md](../../AGENTS.md). Human pitch: [../../README.md](../../README.md) (§ Consumer setup). Types: [../../catalog/types.go](../../catalog/types.go).
