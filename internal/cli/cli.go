@@ -48,6 +48,8 @@ func Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return runArchitecture(args[1:], stdout, stderr)
 	case "assembly-graph":
 		return runAssemblyGraph(args[1:], stdout, stderr)
+	case "boards":
+		return runBoards(args[1:], stdout, stderr)
 	case "validate":
 		return runValidate(args[1:], stdout, stderr)
 	case "show":
@@ -77,6 +79,11 @@ func printUsage(w io.Writer) {
 	_, _ = fmt.Fprintln(w, "  typology emit REPO [--catalog PATH] [--docs-only] [--go-only]")
 	_, _ = fmt.Fprintln(w, "  typology architecture REPO [--module PATH] [--catalog PATH] [--out PATH]")
 	_, _ = fmt.Fprintln(w, "  typology assembly-graph REPO [--module PATH] [--catalog PATH] [--slice SLICE|--all-slices] [--out PATH|--out-dir DIR]")
+	_, _ = fmt.Fprintln(w, "  typology boards register REPO BOARD_ID [--prefix PREFIX] [--slice ID] [--viewer PUBLIC_DIR] [...]")
+	_, _ = fmt.Fprintln(w, "  typology boards register REPO --all-slices [--prefix PREFIX] [--viewer PUBLIC_DIR] [...]")
+	_, _ = fmt.Fprintln(w, "  typology boards register   # interactive wizard (TTY)")
+	_, _ = fmt.Fprintln(w, "  typology boards sync --viewer PUBLIC_DIR")
+	_, _ = fmt.Fprintln(w, "  typology boards path [--yaml|--config|--data]")
 	_, _ = fmt.Fprintln(w, "  typology validate REPO [--module PATH] [--catalog PATH] [SLICE]")
 	_, _ = fmt.Fprintln(w, "  typology show [SLICE|graph] [--module PATH] [--json] [--catalog PATH]")
 	_, _ = fmt.Fprintln(w, "  typology remediate REPO SLICE [--module PATH] [--catalog PATH]")

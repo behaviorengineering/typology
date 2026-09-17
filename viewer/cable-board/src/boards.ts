@@ -1,10 +1,13 @@
-/** Named cable board registry (viewer/cable-board/public/boards.json). */
+/** Materialized cable board manifest (viewer/cable-board/public/boards.json).
+ * Durable source of truth is ~/.config/typology/boards.yaml. */
 
 export type BoardEntry = {
   id: string
   label: string
   graph: string
   description?: string
+  /** Repo namespace from typology boards register --prefix (isolates ids and localStorage). */
+  repo?: string
 }
 
 export type BoardsManifest = {
@@ -43,6 +46,10 @@ export function parseManifest(raw: unknown): BoardsManifest | null {
     if (typeof candidate.description === 'string' && candidate.description.trim()) {
       parsed.description = candidate.description
     }
+    if (typeof candidate.repo === 'string' && candidate.repo.trim()) {
+      if (!isValidBoardId(candidate.repo)) return null
+      parsed.repo = candidate.repo.trim()
+    }
     boards.push(parsed)
   }
   if (boards.length === 0) return null
@@ -76,4 +83,51 @@ export async function fetchBoardsManifest(): Promise<BoardsManifest | null> {
 export function defaultBoardId(manifest: BoardsManifest): string {
   if (manifest.defaultBoard) return manifest.defaultBoard
   return manifest.boards[0].id
+}
+
+const UNGROUPED = 'ungrouped'
+
+/** Stable repo key for grouping; boards without repo fall under ungrouped. */
+export function boardRepoKey(board: BoardEntry): string {
+  return board.repo?.trim() || UNGROUPED
+}
+
+export type BoardRepoGroup = {
+  repo: string
+  label: string
+  boards: BoardEntry[]
+}
+
+/**
+ * Group boards by repo for the switcher. Repo order follows first appearance;
+ * ungrouped is last when mixed with named repos.
+ */
+export function groupBoardsByRepo(boards: BoardEntry[]): BoardRepoGroup[] {
+  const order: string[] = []
+  const byRepo = new Map<string, BoardEntry[]>()
+  for (const board of boards) {
+    const key = boardRepoKey(board)
+    if (!byRepo.has(key)) {
+      order.push(key)
+      byRepo.set(key, [])
+    }
+    byRepo.get(key)!.push(board)
+  }
+  const named = order.filter((key) => key !== UNGROUPED)
+  const keys = byRepo.has(UNGROUPED) ? [...named, UNGROUPED] : named
+  return keys.map((key) => ({
+    repo: key,
+    label: key === UNGROUPED ? 'Ungrouped' : key,
+    boards: byRepo.get(key)!,
+  }))
+}
+
+/** Boards visible under an optional ?repo= filter (empty = all). */
+export function filterBoardsByRepo(
+  boards: BoardEntry[],
+  repoFilter: string | null | undefined,
+): BoardEntry[] {
+  const filter = (repoFilter || '').trim()
+  if (!filter) return boards
+  return boards.filter((board) => boardRepoKey(board) === filter)
 }

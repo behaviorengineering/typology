@@ -27,8 +27,11 @@ import {
   type BoardViewport,
 } from './boardPersist'
 import {
+  boardRepoKey,
   defaultBoardId,
   fetchBoardsManifest,
+  filterBoardsByRepo,
+  groupBoardsByRepo,
   LEGACY_BOARD_PATH,
   type BoardsManifest,
 } from './boards'
@@ -108,6 +111,8 @@ function BoardInner() {
   const [boards, setBoards] = useState<BoardsManifest | null>(null)
   const [boardId, setBoardId] = useState<string | null>(null)
   const [boardLabel, setBoardLabel] = useState<string>('')
+  const [boardRepo, setBoardRepo] = useState<string>('')
+  const [repoFilter, setRepoFilter] = useState<string>('')
   const [graphSrc, setGraphSrc] = useState<string | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [selectedLayer, setSelectedLayer] = useState<WiringLayer>('imports')
@@ -126,7 +131,7 @@ function BoardInner() {
   const risks = useMemo(() => (graph ? analyzeRisks(graph) : null), [graph])
   const selectedLayerMeta = wiringLayers.find((layer) => layer.id === selectedLayer)
 
-  const applyBoard = useCallback((id: string, label: string, src: string) => {
+  const applyBoard = useCallback((id: string, label: string, src: string, repo?: string) => {
     setActiveBoardId(id)
     refreshCableNudges()
     const saved = loadBoardState()
@@ -138,6 +143,7 @@ function BoardInner() {
     setHoverId(null)
     setBoardId(id)
     setBoardLabel(label)
+    setBoardRepo((repo || '').trim())
     setGraph(null)
     setError(null)
     setGraphSrc(src)
@@ -149,9 +155,11 @@ function BoardInner() {
       const params = new URLSearchParams(window.location.search)
       const srcOverride = (params.get('src') || '').trim()
       const requestedBoard = (params.get('board') || '').trim()
+      const requestedRepo = (params.get('repo') || '').trim()
       const manifest = await fetchBoardsManifest()
       if (cancelled) return
       if (manifest) setBoards(manifest)
+      if (requestedRepo) setRepoFilter(requestedRepo)
       if (srcOverride !== '') {
         applyBoard('custom', srcOverride, srcOverride)
         return
@@ -170,19 +178,51 @@ function BoardInner() {
           )
           return
         }
-        applyBoard(entry.id, entry.label, entry.graph)
+        applyBoard(entry.id, entry.label, entry.graph, entry.repo)
         return
       }
+      const visible = filterBoardsByRepo(manifest.boards, requestedRepo || null)
+      if (visible.length === 0) {
+        setError(
+          requestedRepo
+            ? `no cable boards for repo "${requestedRepo}"`
+            : 'boards manifest is empty',
+        )
+        return
+      }
+      const preferredId = defaultBoardId(manifest)
       const fallback =
-        manifest.boards.find((board) => board.id === defaultBoardId(manifest)) ??
-        manifest.boards[0]
-      applyBoard(fallback.id, fallback.label, fallback.graph)
+        visible.find((board) => board.id === preferredId) ?? visible[0]
+      applyBoard(fallback.id, fallback.label, fallback.graph, fallback.repo)
     }
     void resolveBoard()
     return () => {
       cancelled = true
     }
   }, [applyBoard])
+
+  const switcherBoards = useMemo(() => {
+    if (!boards) return []
+    return filterBoardsByRepo(boards.boards, repoFilter || null)
+  }, [boards, repoFilter])
+
+  const switcherGroups = useMemo(
+    () => groupBoardsByRepo(switcherBoards),
+    [switcherBoards],
+  )
+
+  const repoOptions = useMemo(() => {
+    if (!boards) return []
+    const seen = new Set<string>()
+    const out: string[] = []
+    for (const board of boards.boards) {
+      const key = boardRepoKey(board)
+      if (key === 'ungrouped' || seen.has(key)) continue
+      seen.add(key)
+      out.push(key)
+    }
+    return out
+  }, [boards])
 
   useEffect(() => {
     if (!graphSrc) return
@@ -191,7 +231,7 @@ function BoardInner() {
       .then(async (res) => {
         if (!res.ok) {
           throw new Error(
-            `failed to load cable board JSON from ${graphSrc} (${res.status}). Run typology assembly-graph and register the board with viewer/cable-board/scripts/load-graph.sh`,
+            `failed to load cable board JSON from ${graphSrc} (${res.status}). Run typology boards register REPO BOARD_ID --viewer viewer/cable-board/public`,
           )
         }
         return res.json() as Promise<PackageGraph>
@@ -398,10 +438,35 @@ function BoardInner() {
       const url = new URL(window.location.href)
       url.searchParams.delete('src')
       url.searchParams.set('board', entry.id)
+      if (entry.repo) {
+        url.searchParams.set('repo', entry.repo)
+      }
       window.history.replaceState(null, '', url.toString())
-      applyBoard(entry.id, entry.label, entry.graph)
+      applyBoard(entry.id, entry.label, entry.graph, entry.repo)
     },
     [boards, boardId, getViewport, selectedLayer, selectedId, legendOpen, applyBoard],
+  )
+
+  const onRepoFilterChange = useCallback(
+    (nextRepo: string) => {
+      setRepoFilter(nextRepo)
+      const url = new URL(window.location.href)
+      if (nextRepo) {
+        url.searchParams.set('repo', nextRepo)
+      } else {
+        url.searchParams.delete('repo')
+      }
+      window.history.replaceState(null, '', url.toString())
+      if (!boards) return
+      const visible = filterBoardsByRepo(boards.boards, nextRepo || null)
+      if (visible.length === 0) return
+      if (boardId && visible.some((board) => board.id === boardId)) return
+      const entry = visible[0]
+      url.searchParams.set('board', entry.id)
+      window.history.replaceState(null, '', url.toString())
+      applyBoard(entry.id, entry.label, entry.graph, entry.repo)
+    },
+    [boards, boardId, applyBoard],
   )
 
   const onNodeDragStop: OnNodeDrag<PackageFlowNode> = useCallback(
@@ -513,13 +578,21 @@ function BoardInner() {
                     <li>
                       Open another window with a different <code>?board=</code> id.
                     </li>
-                    <li>Each board remembers its own layout in this browser.</li>
+                    <li>
+                      Multi-repo boards use <code>--prefix</code> so ids stay unique
+                      (for example <code>consilium-chronology</code>).
+                    </li>
+                    <li>Filter by repo with the Repo control or <code>?repo=</code>.</li>
+                    <li>Each board id remembers its own layout in this browser.</li>
                   </ul>
                 </section>
                 <section className="help-popout__section">
                   <h3>Remembered in this browser</h3>
                   <ul>
-                    <li>Cable nudges, box positions, and the camera are saved per board and view.</li>
+                    <li>
+                      Cable nudges, box positions, and the camera are saved per full board id
+                      (prefix included), so two repos never share layout.
+                    </li>
                     <li>
                       <strong>Reset view</strong> clears only the layer and focus you are on.
                     </li>
@@ -529,11 +602,31 @@ function BoardInner() {
             ) : null}
           </div>
           <p className="header__tagline">
-            Interactive cable board{boardLabel ? ` — ${boardLabel}` : ''} for typology{' '}
+            Interactive cable board
+            {boardRepo ? ` · ${boardRepo}` : ''}
+            {boardLabel ? ` — ${boardLabel}` : ''} for typology{' '}
             <code>assembly-graph.json</code> (imports, roles, wrong-way marks).
           </p>
           <div className="toolbar" ref={legendToolbarRef}>
-            {boards && boards.boards.length > 1 ? (
+            {boards && repoOptions.length > 0 ? (
+              <label className="board-switch">
+                <span className="board-switch__label">Repo</span>
+                <select
+                  className="board-switch__select"
+                  value={repoFilter}
+                  onChange={(event) => onRepoFilterChange(event.target.value)}
+                  aria-label="Cable board repo filter"
+                >
+                  <option value="">All repos</option>
+                  {repoOptions.map((repo) => (
+                    <option key={repo} value={repo}>
+                      {repo}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+            {boards && switcherBoards.length > 0 ? (
               <label className="board-switch">
                 <span className="board-switch__label">Board</span>
                 <select
@@ -542,11 +635,21 @@ function BoardInner() {
                   onChange={(event) => onBoardChange(event.target.value)}
                   aria-label="Cable board"
                 >
-                  {boards.boards.map((board) => (
-                    <option key={board.id} value={board.id}>
-                      {board.label}
-                    </option>
-                  ))}
+                  {switcherGroups.length > 1
+                    ? switcherGroups.map((group) => (
+                        <optgroup key={group.repo} label={group.label}>
+                          {group.boards.map((board) => (
+                            <option key={board.id} value={board.id}>
+                              {board.label}
+                            </option>
+                          ))}
+                        </optgroup>
+                      ))
+                    : switcherBoards.map((board) => (
+                        <option key={board.id} value={board.id}>
+                          {board.label}
+                        </option>
+                      ))}
                 </select>
               </label>
             ) : null}

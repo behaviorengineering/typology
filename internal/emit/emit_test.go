@@ -88,6 +88,7 @@ func TestEmit_docs(t *testing.T) {
 		!strings.Contains(string(typologyReadme), "typology-cli") ||
 		!strings.Contains(string(typologyReadme), "typology-cable-board") ||
 		!strings.Contains(string(typologyReadme), "typology architecture") ||
+		!strings.Contains(string(typologyReadme), "typology boards register") ||
 		!strings.Contains(string(typologyReadme), "scope.modules") ||
 		!strings.Contains(string(typologyReadme), "does not widen that scope") {
 		t.Fatalf(".typology readme missing agent instructions: %s", typologyReadme)

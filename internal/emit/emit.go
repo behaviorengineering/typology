@@ -571,7 +571,7 @@ Before you change this catalog or the code it describes, load these skills:
 - ` + "`typology-catalog`" + ` — model, YAML shape, subprograms, actuators, bindings
 - ` + "`typology-cli`" + ` — discover, emit, validate, remediate
 - ` + "`typology-docs`" + ` — fill and evaluate develop DocPages
-- ` + "`typology-cable-board`" + ` — cable board: package wiring graph, interactive viewer, wrong-way cables, implement against imports
+- ` + "`typology-cable-board`" + ` — cable board: package wiring graph, ` + "`boards register`" + ` wizard/viewer, wrong-way cables, implement against imports
 
 If your host does not have these skills, install the Typology module and symlink the skills from ` + "`$TYPOLOGY_ROOT/ai-copilots/skills/`" + ` into your host skills directory (see the Typology module ` + "`AGENTS.md`" + ` and ` + "`ai-copilots/BOOTSTRAP.md`" + `).
 
@@ -580,7 +580,7 @@ If your host does not have these skills, install the Typology module and symlink
 Before running Typology commands in a consumer, register the CLI as a Go tool:
 
 ` + "```bash" + `
-go run github.com/behaviorengineering/typology/cmd/typology@v0.0.5 init .
+go run github.com/behaviorengineering/typology/cmd/typology@latest init .
 go tool typology version
 ` + "```" + `
 
@@ -592,7 +592,9 @@ The bootstrap updates the selected module's ` + "`go.mod`" + ` and ` + "`go.sum`
 - ` + "`typology discover REPO [--module PATH]`" + ` — writes a draft to ` + "`tmp/typology/typology.yaml`" + `; use ` + "`--module`" + ` when the repository has multiple Go modules
 - ` + "`typology emit REPO`" + ` — writes ` + "`.typology/typology.yaml`" + ` and DocPages
 - ` + "`typology architecture REPO [--module PATH]`" + ` — writes ` + "`docs/architecture/typology.md`" + ` for human review within ` + "`scope.modules`" + `
-- ` + "`typology assembly-graph REPO [--module PATH]`" + ` — writes the cable board JSON (` + "`tmp/typology/assembly-graph.json`" + `); open the viewer under the Typology module ` + "`viewer/cable-board/`" + `
+- ` + "`typology assembly-graph REPO [--module PATH]`" + ` — writes the cable board JSON (` + "`tmp/typology/assembly-graph.json`" + `) for machine checks
+- ` + "`typology boards register`" + ` — interactive wizard (TTY) to harvest into XDG and materialize the viewer; CI uses ` + "`boards register REPO BOARD_ID`" + ` / ` + "`--all-slices`" + ` with ` + "`--viewer`" + `
+- ` + "`typology boards sync --viewer PUBLIC_DIR`" + ` — rematerialize the Vite ` + "`public/`" + ` tree from the YAML registry
 - ` + "`typology validate REPO [--module PATH]`" + ` — checks the catalog and scoped modules against each other
 - ` + "`typology remediate REPO SLICE [--module PATH]`" + ` — agent-scoped violations for one slice and module scope
 
@@ -604,7 +606,7 @@ Catalog first, code second, validation last:
 2. Implement the code to match the catalog.
 3. In a multi-module repository, set ` + "`scope.modules`" + ` to the modules owned by this catalog. Do not rely on ` + "`go.work`" + ` as Typology scope.
 4. Run ` + "`typology architecture REPO`" + ` to give humans a readable comparison of the catalog and the observed Go topology.
-5. Run ` + "`typology assembly-graph REPO`" + ` and load ` + "`typology-cable-board`" + ` when changing package imports; fix wrong-way cables or record debt.
+5. Run ` + "`typology assembly-graph REPO`" + ` or ` + "`typology boards register`" + ` and load ` + "`typology-cable-board`" + ` when changing package imports; fix wrong-way cables or record debt.
 6. Have an agent or architect fix each finding or record the boundary debt in ` + "`.typology/typology-journey.md`" + `.
 7. Run ` + "`typology validate REPO`" + ` and fix every issue before considering the change done.
 
