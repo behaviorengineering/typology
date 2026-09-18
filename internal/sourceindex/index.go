@@ -61,8 +61,18 @@ type PackageEvidence struct {
 	ImportsOTel         bool         `json:"importsOtel,omitempty"`
 	ImportsPrometheus   bool         `json:"importsPrometheus,omitempty"`
 	HTTPSurfaceIdent    bool         `json:"httpSurfaceIdent,omitempty"`
-	GRPCServerIdent     bool         `json:"grpcServerIdent,omitempty"`
-	DeliveryHint        string       `json:"deliveryHint,omitempty"`
+	// Mechanical HTTP serving signals (production .go only; never from _test.go).
+	HTTPMuxParam          bool `json:"httpMuxParam,omitempty"`          // exported func takes *http.ServeMux
+	HTTPRouteRegister     bool `json:"httpRouteRegister,omitempty"`     // Handle / HandleFunc registration
+	HTTPListenServe       bool `json:"httpListenServe,omitempty"`       // ListenAndServe / Serve*
+	HTTPHandlerSignature  bool `json:"httpHandlerSignature,omitempty"`  // exported (ResponseWriter, *Request)
+	HTTPHandlerResult     bool `json:"httpHandlerResult,omitempty"`     // returns http.Handler / HandlerFunc
+	HTTPFileServer        bool `json:"httpFileServer,omitempty"`        // http.FileServer
+	HTTPResponseHelper    bool `json:"httpResponseHelper,omitempty"`    // http.Error / Status* corroboration
+	ImportsHTTPFramework  bool `json:"importsHttpFramework,omitempty"`  // gin/echo/chi/mux/fiber/…
+	HTTPFrameworkRoute    bool `json:"httpFrameworkRoute,omitempty"`    // framework route registration call
+	GRPCServerIdent       bool `json:"grpcServerIdent,omitempty"`
+	DeliveryHint          string `json:"deliveryHint,omitempty"`
 }
 
 // HasStaticAnchor reports whether the package has at least one exported symbol
@@ -264,6 +274,10 @@ func scanPackage(repoRoot string, pkg listPackage) (PackageEvidence, error) {
 	httpSurfaceIdent := false
 	grpcServerIdent := false
 	for _, file := range files {
+		// go list GoFiles omits tests; skip explicitly so serving signals stay production-only.
+		if strings.HasSuffix(file, "_test.go") {
+			continue
+		}
 		abs := filepath.Join(absDir, file)
 		rel, err := filepath.Rel(repoRoot, abs)
 		if err != nil {
@@ -284,11 +298,15 @@ func scanPackage(repoRoot string, pkg listPackage) (PackageEvidence, error) {
 		if ev.PackageDoc == "" && parsed.Doc != nil {
 			ev.PackageDoc = compactPackageDoc(parsed.Doc.Text())
 		}
+		httpAlias := ""
+		frameworkAliases := map[string]string{} // local name -> import path
 		for _, imp := range parsed.Imports {
 			path := strings.Trim(imp.Path.Value, `"`)
+			alias := importAlias(imp)
 			switch path {
 			case "net/http":
 				ev.ImportsNetHTTP = true
+				httpAlias = alias
 			case "os/exec":
 				ev.ImportsOsExec = true
 			case "google.golang.org/grpc":
@@ -300,6 +318,10 @@ func scanPackage(repoRoot string, pkg listPackage) (PackageEvidence, error) {
 			if strings.HasPrefix(path, "github.com/prometheus/client_golang") {
 				ev.ImportsPrometheus = true
 			}
+			if isHTTPFrameworkImport(path) {
+				ev.ImportsHTTPFramework = true
+				frameworkAliases[alias] = path
+			}
 		}
 		for _, decl := range parsed.Decls {
 			switch d := decl.(type) {
@@ -308,28 +330,27 @@ func scanPackage(repoRoot string, pkg listPackage) (PackageEvidence, error) {
 					ev.HasMain = true
 				}
 				body := nodeSource(fset, src, d)
+				exported := ast.IsExported(d.Name.Name)
 				if d.Recv != nil {
 					recvType := receiverTypeName(d.Recv)
-					if recvType == "" {
-						continue
-					}
-					key := recvType + "." + d.Name.Name
-					if ast.IsExported(d.Name.Name) {
-						exportedMethods[key] = struct{}{}
-						exportedBodies = append(exportedBodies, SymbolBody{Name: key, Kind: "method", Source: truncateBody(body)})
-						if isHTTPSurfaceIdent(d.Name.Name) {
-							httpSurfaceIdent = true
+					if recvType != "" {
+						key := recvType + "." + d.Name.Name
+						if exported {
+							exportedMethods[key] = struct{}{}
+							exportedBodies = append(exportedBodies, SymbolBody{Name: key, Kind: "method", Source: truncateBody(body)})
+							if isHTTPSurfaceIdent(d.Name.Name) {
+								httpSurfaceIdent = true
+							}
+							if isGRPCServerIdent(d.Name.Name) {
+								grpcServerIdent = true
+							}
+							collectHTTPFuncSurface(d.Type, httpAlias, &ev)
+						} else {
+							unexportedMethods[key] = struct{}{}
+							privateBodies[key] = SymbolBody{Name: key, Kind: "method", Source: truncateBody(body)}
 						}
-						if isGRPCServerIdent(d.Name.Name) {
-							grpcServerIdent = true
-						}
-					} else {
-						unexportedMethods[key] = struct{}{}
-						privateBodies[key] = SymbolBody{Name: key, Kind: "method", Source: truncateBody(body)}
 					}
-					continue
-				}
-				if ast.IsExported(d.Name.Name) {
+				} else if exported {
 					exportedFuncs[d.Name.Name] = struct{}{}
 					exportedBodies = append(exportedBodies, SymbolBody{Name: d.Name.Name, Kind: "func", Source: truncateBody(body)})
 					if isHTTPSurfaceIdent(d.Name.Name) {
@@ -338,9 +359,13 @@ func scanPackage(repoRoot string, pkg listPackage) (PackageEvidence, error) {
 					if isGRPCServerIdent(d.Name.Name) {
 						grpcServerIdent = true
 					}
+					collectHTTPFuncSurface(d.Type, httpAlias, &ev)
 				} else {
 					unexportedFuncs[d.Name.Name] = struct{}{}
 					privateBodies[d.Name.Name] = SymbolBody{Name: d.Name.Name, Kind: "func", Source: truncateBody(body)}
+				}
+				if d.Body != nil {
+					inspectHTTPServingCalls(d.Body, httpAlias, frameworkAliases, &ev)
 				}
 			case *ast.GenDecl:
 				if hasGoEmbed(d.Doc) {
@@ -487,16 +512,41 @@ func deliveryHint(ev PackageEvidence, httpSurfaceIdent bool) string {
 	if ev.GoEmbed && ev.EmbedsStatic {
 		return DeliveryServerUI
 	}
-	if ev.GoEmbed || (ev.ImportsNetHTTP && httpSurfaceIdent) {
+	if ev.GoEmbed || looksLikeHTTPServer(ev, httpSurfaceIdent) {
 		return DeliveryServerHTTP
 	}
 	if ev.ImportsGRPC && ev.GRPCServerIdent {
 		return DeliveryServerGRPC
 	}
-	if ev.JSONTags && len(ev.ExportedFuncs) == 0 && len(ev.ExportedMethods) == 0 {
+	if looksLikeShapePackage(ev) {
 		return DeliveryDTO
 	}
 	return ""
+}
+
+// looksLikeHTTPServer reports AST-verified HTTP serving (stdlib or router frameworks).
+// Folder/path names are never evidence. Test files must not contribute signals.
+func looksLikeHTTPServer(ev PackageEvidence, httpSurfaceIdent bool) bool {
+	if ev.ImportsHTTPFramework && ev.HTTPFrameworkRoute {
+		return true
+	}
+	if !ev.ImportsNetHTTP {
+		return false
+	}
+	if httpSurfaceIdent || ev.HTTPSurfaceIdent {
+		return true
+	}
+	if ev.HTTPMuxParam || ev.HTTPRouteRegister || ev.HTTPListenServe {
+		return true
+	}
+	if ev.HTTPHandlerResult || ev.HTTPFileServer {
+		return true
+	}
+	// Tier 2: exported handler shape plus response-helper corroboration.
+	if ev.HTTPHandlerSignature && ev.HTTPResponseHelper {
+		return true
+	}
+	return false
 }
 
 func isHTTPSurfaceIdent(name string) bool {
@@ -513,6 +563,178 @@ func isGRPCServerIdent(name string) bool {
 	case name == "Server":
 		return true
 	case strings.HasPrefix(name, "Register") && strings.HasSuffix(name, "Server"):
+		return true
+	default:
+		return false
+	}
+}
+
+func importAlias(imp *ast.ImportSpec) string {
+	if imp.Name != nil && imp.Name.Name != "" && imp.Name.Name != "_" && imp.Name.Name != "." {
+		return imp.Name.Name
+	}
+	path := strings.Trim(imp.Path.Value, `"`)
+	if i := strings.LastIndex(path, "/"); i >= 0 {
+		return path[i+1:]
+	}
+	return path
+}
+
+func isHTTPFrameworkImport(path string) bool {
+	switch path {
+	case "github.com/gin-gonic/gin",
+		"github.com/labstack/echo",
+		"github.com/labstack/echo/v4",
+		"github.com/go-chi/chi",
+		"github.com/go-chi/chi/v5",
+		"github.com/gorilla/mux",
+		"github.com/gofiber/fiber",
+		"github.com/gofiber/fiber/v2",
+		"github.com/julienschmidt/httprouter",
+		"github.com/grpc-ecosystem/grpc-gateway/runtime",
+		"github.com/grpc-ecosystem/grpc-gateway/v2/runtime":
+		return true
+	default:
+		return false
+	}
+}
+
+func collectHTTPFuncSurface(ft *ast.FuncType, httpAlias string, ev *PackageEvidence) {
+	if ft == nil || httpAlias == "" {
+		return
+	}
+	if funcHasHTTPMuxParam(ft, httpAlias) {
+		ev.HTTPMuxParam = true
+	}
+	if funcHasHTTPHandlerSignature(ft, httpAlias) {
+		ev.HTTPHandlerSignature = true
+	}
+	if funcReturnsHTTPHandler(ft, httpAlias) {
+		ev.HTTPHandlerResult = true
+	}
+}
+
+func funcHasHTTPMuxParam(ft *ast.FuncType, httpAlias string) bool {
+	if ft == nil || ft.Params == nil {
+		return false
+	}
+	for _, field := range ft.Params.List {
+		if isHTTPNamedType(field.Type, httpAlias, "ServeMux") {
+			return true
+		}
+	}
+	return false
+}
+
+func funcHasHTTPHandlerSignature(ft *ast.FuncType, httpAlias string) bool {
+	if ft == nil || ft.Params == nil || len(ft.Params.List) < 2 {
+		return false
+	}
+	hasWriter, hasRequest := false, false
+	for _, field := range ft.Params.List {
+		if isHTTPNamedType(field.Type, httpAlias, "ResponseWriter") {
+			hasWriter = true
+		}
+		if isHTTPNamedType(field.Type, httpAlias, "Request") {
+			hasRequest = true
+		}
+	}
+	return hasWriter && hasRequest
+}
+
+func funcReturnsHTTPHandler(ft *ast.FuncType, httpAlias string) bool {
+	if ft == nil || ft.Results == nil {
+		return false
+	}
+	for _, field := range ft.Results.List {
+		if isHTTPNamedType(field.Type, httpAlias, "Handler") ||
+			isHTTPNamedType(field.Type, httpAlias, "HandlerFunc") {
+			return true
+		}
+	}
+	return false
+}
+
+func isHTTPNamedType(expr ast.Expr, httpAlias, typeName string) bool {
+	expr = unwrapExpr(expr)
+	sel, ok := expr.(*ast.SelectorExpr)
+	if !ok {
+		return false
+	}
+	pkg, ok := sel.X.(*ast.Ident)
+	if !ok || pkg.Name != httpAlias {
+		return false
+	}
+	return sel.Sel != nil && sel.Sel.Name == typeName
+}
+
+func unwrapExpr(expr ast.Expr) ast.Expr {
+	for {
+		switch e := expr.(type) {
+		case *ast.StarExpr:
+			expr = e.X
+		case *ast.ParenExpr:
+			expr = e.X
+		default:
+			return expr
+		}
+	}
+}
+
+func inspectHTTPServingCalls(body *ast.BlockStmt, httpAlias string, frameworkAliases map[string]string, ev *PackageEvidence) {
+	ast.Inspect(body, func(n ast.Node) bool {
+		call, ok := n.(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+		sel, ok := call.Fun.(*ast.SelectorExpr)
+		if !ok || sel.Sel == nil {
+			return true
+		}
+		name := sel.Sel.Name
+		if pkg, ok := sel.X.(*ast.Ident); ok {
+			if httpAlias != "" && pkg.Name == httpAlias {
+				switch name {
+				case "Handle", "HandleFunc":
+					ev.HTTPRouteRegister = true
+				case "ListenAndServe", "ListenAndServeTLS", "Serve", "ServeTLS":
+					ev.HTTPListenServe = true
+				case "FileServer":
+					ev.HTTPFileServer = true
+				case "Error":
+					ev.HTTPResponseHelper = true
+				}
+			}
+			if _, ok := frameworkAliases[pkg.Name]; ok {
+				if isHTTPFrameworkRouteName(name) {
+					ev.HTTPFrameworkRoute = true
+				}
+			}
+		}
+		// Method calls on locals (mux.HandleFunc, r.GET) when the package imports a framework or net/http.
+		switch name {
+		case "Handle", "HandleFunc":
+			if httpAlias != "" {
+				ev.HTTPRouteRegister = true
+			}
+			if len(frameworkAliases) > 0 {
+				ev.HTTPFrameworkRoute = true
+			}
+		case "GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS", "CONNECT", "TRACE",
+			"Any", "Use", "Group", "Route", "Static", "StaticFS", "RegisterHandler", "RegisterService":
+			if len(frameworkAliases) > 0 {
+				ev.HTTPFrameworkRoute = true
+			}
+		}
+		return true
+	})
+}
+
+func isHTTPFrameworkRouteName(name string) bool {
+	switch name {
+	case "Handle", "HandleFunc", "GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS",
+		"CONNECT", "TRACE", "Any", "Use", "Group", "Route", "Static", "StaticFS",
+		"RegisterHandler", "RegisterService":
 		return true
 	default:
 		return false

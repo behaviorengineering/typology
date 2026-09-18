@@ -139,7 +139,7 @@ func classifyPackage(ev PackageEvidence, internalOut int) RoleNode {
 			Evidence: []string{"has_main"}, InspectedStage: 1,
 		}
 	}
-	if ev.GoEmbed || (ev.ImportsNetHTTP && ev.HTTPSurfaceIdent) {
+	if ev.GoEmbed || looksLikeHTTPServer(ev, false) {
 		evidence := []string{"delivery:http"}
 		if ev.GoEmbed {
 			evidence = append(evidence, "go_embed")
@@ -152,6 +152,27 @@ func classifyPackage(ev PackageEvidence, internalOut int) RoleNode {
 		}
 		if ev.HTTPSurfaceIdent {
 			evidence = append(evidence, "http_surface_ident")
+		}
+		if ev.HTTPMuxParam {
+			evidence = append(evidence, "http_mux_param")
+		}
+		if ev.HTTPRouteRegister {
+			evidence = append(evidence, "http_route_register")
+		}
+		if ev.HTTPListenServe {
+			evidence = append(evidence, "http_listen_serve")
+		}
+		if ev.HTTPHandlerResult {
+			evidence = append(evidence, "http_handler_result")
+		}
+		if ev.HTTPFileServer {
+			evidence = append(evidence, "http_file_server")
+		}
+		if ev.HTTPHandlerSignature && ev.HTTPResponseHelper {
+			evidence = append(evidence, "http_handler_signature", "http_response_helper")
+		}
+		if ev.ImportsHTTPFramework && ev.HTTPFrameworkRoute {
+			evidence = append(evidence, "http_framework_import", "http_framework_route")
 		}
 		return RoleNode{
 			Path: path, Role: RoleHTTPSurface, Confidence: confidenceStage1,
@@ -180,11 +201,17 @@ func classifyPackage(ev PackageEvidence, internalOut int) RoleNode {
 			Evidence: evidence, InspectedStage: 1,
 		}
 	}
-	if ev.JSONTags && len(ev.ExportedFuncs) == 0 && len(ev.ExportedMethods) == 0 {
+	if looksLikeShapePackage(ev) {
+		evidence := []string{"json_tags"}
+		exports := len(ev.ExportedFuncs) + len(ev.ExportedMethods)
+		if exports == 0 {
+			evidence = append(evidence, "no_exported_funcs", "no_exported_methods")
+		} else {
+			evidence = append(evidence, "decl_heavy_export_surface")
+		}
 		return RoleNode{
 			Path: path, Role: RoleDTO, Confidence: confidenceStage1,
-			Evidence: []string{"json_tags", "no_exported_funcs", "no_exported_methods"},
-			InspectedStage: 1,
+			Evidence: evidence, InspectedStage: 1,
 		}
 	}
 
@@ -207,7 +234,7 @@ func classifyPackage(ev PackageEvidence, internalOut int) RoleNode {
 			Evidence: []string{"load_save_exports"},
 		})
 	}
-	if !ev.GoEmbed && !ev.HTTPSurfaceIdent && ev.ImportsNetHTTP && exportsClientSurface(ev) {
+	if !ev.GoEmbed && !looksLikeHTTPServer(ev, false) && ev.ImportsNetHTTP && exportsClientSurface(ev) {
 		candidates = append(candidates, roleCandidate{
 			Role: RoleAdapter, Stage: 2, Confidence: confidenceStage2,
 			Evidence: []string{"imports_net_http", "exports_client_surface", "not_server"},
@@ -314,6 +341,38 @@ func exportsOrchestration(ev PackageEvidence) bool {
 		}
 	}
 	return false
+}
+
+// maxShapeHelperExports caps helpers allowed on a dto / shape package.
+// Larger surfaces stay unknown or win a later stage-2 role (aggregator, adapter).
+const maxShapeHelperExports = 6
+
+// looksLikeShapePackage reports JSON/type carriers that may export a few helpers.
+// Pure dto (json tags, no exports) still matches. HTTP packages never match:
+// net/http importers are delivery or adapters, not shape wiring targets.
+func looksLikeShapePackage(ev PackageEvidence) bool {
+	if !ev.JSONTags {
+		return false
+	}
+	if ev.HasMain || ev.GoEmbed || looksLikeHTTPServer(ev, false) || (ev.ImportsGRPC && ev.GRPCServerIdent) {
+		return false
+	}
+	if ev.ImportsNetHTTP {
+		return false
+	}
+	if exportsOrchestration(ev) {
+		return false
+	}
+	decls := len(ev.ExportedDecls)
+	exports := len(ev.ExportedFuncs) + len(ev.ExportedMethods)
+	if exports == 0 {
+		// Type-only package (classic dto). ExportedDecls may still name the structs.
+		return true
+	}
+	if decls == 0 || exports > maxShapeHelperExports || decls < exports {
+		return false
+	}
+	return true
 }
 
 func looksLikeConfig(ev PackageEvidence) bool {
