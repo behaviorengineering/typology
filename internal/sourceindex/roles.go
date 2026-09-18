@@ -28,6 +28,7 @@ const (
 	RoleIngest        = "ingest"
 	RolePipeline      = "pipeline"
 	RoleView          = "view"
+	RoleExport        = "export"
 	RoleUnknown       = "unknown"
 )
 
@@ -256,6 +257,12 @@ func classifyPackage(ev PackageEvidence, internalOut int) RoleNode {
 		candidates = append(candidates, roleCandidate{
 			Role: RoleView, Stage: 2, Confidence: confidenceStage2,
 			Evidence: viewEvidence(ev),
+		})
+	}
+	if looksLikeExport(ev) {
+		candidates = append(candidates, roleCandidate{
+			Role: RoleExport, Stage: 2, Confidence: confidenceStage2,
+			Evidence: exportEvidence(ev),
 		})
 	}
 	if ev.ImportsOsExec && exportsRunnerSurface(ev) {
@@ -610,6 +617,21 @@ func viewEvidence(ev PackageEvidence) []string {
 		out = append(out, "json_tags")
 	}
 	return out
+}
+
+// looksLikeExport reports file-export surfaces (Export/Marshal exports plus file writes).
+func looksLikeExport(ev PackageEvidence) bool {
+	if looksLikeHTTPServer(ev, false) || ev.GoEmbed {
+		return false
+	}
+	if !ev.ExportSurface {
+		return false
+	}
+	return ev.ExportFileWrite
+}
+
+func exportEvidence(ev PackageEvidence) []string {
+	return []string{"export_surface", "export_file_write"}
 }
 
 func exportsClientSurface(ev PackageEvidence) bool {

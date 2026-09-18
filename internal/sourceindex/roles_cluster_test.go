@@ -200,6 +200,38 @@ func Split(repo string) (instance, product string) {
 			},
 			wantRole: sourceindex.RoleUnknown,
 		},
+		{
+			name: "export_writes_files",
+			files: map[string]string{
+				"siteout/export.go": `package siteout
+
+import "os"
+
+type Bundle struct {
+	Name string ` + "`json:\"name\"`" + `
+}
+
+func Export(bundle Bundle, out string) error {
+	return os.WriteFile(out, []byte(bundle.Name), 0o644)
+}
+
+func ExportJSON(bundle Bundle, out string) error {
+	return os.WriteFile(out, []byte("{}"), 0o644)
+}
+`,
+			},
+			wantRole: sourceindex.RoleExport,
+		},
+		{
+			name: "export_surface_without_writes_unknown",
+			files: map[string]string{
+				"names/names.go": `package names
+
+func ExportName(s string) string { return s }
+`,
+			},
+			wantRole: sourceindex.RoleUnknown,
+		},
 	}
 
 	for _, tc := range cases {

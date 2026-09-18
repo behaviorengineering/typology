@@ -95,6 +95,8 @@ type PackageEvidence struct {
 	PipelineModuleMap      bool `json:"pipelineModuleMap,omitempty"`      // map[string]Module result
 	PipelineRunnerType     bool `json:"pipelineRunnerType,omitempty"`     // JobRunner / NewJobRunner
 	ViewBuildExport        bool `json:"viewBuildExport,omitempty"`        // Build/Render -> local Page
+	ExportSurface          bool `json:"exportSurface,omitempty"`          // Export*/Marshal* exports
+	ExportFileWrite        bool `json:"exportFileWrite,omitempty"`        // file writes (os.WriteFile/Create)
 	DeliveryHint           string `json:"deliveryHint,omitempty"`
 }
 
@@ -916,6 +918,12 @@ func collectRoleFuncExport(d *ast.FuncDecl, ev *PackageEvidence) {
 			ev.ViewBuildExport = true
 		}
 	}
+	if name == "Export" || strings.HasPrefix(name, "Export") || strings.HasPrefix(name, "Marshal") {
+		ev.ExportSurface = true
+	}
+	if name == "WritePayload" {
+		ev.ExportSurface = true
+	}
 }
 
 func returnsClientType(ft *ast.FuncType) bool {
@@ -1073,6 +1081,8 @@ func inspectRoleCalls(body *ast.BlockStmt, flagAlias string, ev *PackageEvidence
 			case "UpsertChunks", "DeleteAllDocuments", "DeleteDocuments", "DeleteDocumentsByDocIDs",
 				"AddDocuments", "IndexDocuments", "chunkFiles":
 				ev.IngestIndexOps = true
+			case "WriteFile", "Create", "MkdirAll", "Write":
+				ev.ExportFileWrite = true
 			case "Parse":
 				// cobra/flag style without tracked alias
 				if id, ok := fun.X.(*ast.Ident); ok && (id.Name == "flag" || id.Name == "flags") {

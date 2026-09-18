@@ -447,6 +447,9 @@ func inspectExpr(expr parser2.Expr, ev *PackageEvidence) {
 		if n.Attr == "command" || n.Attr == "add_command" {
 			ev.CLISubcommand = true
 		}
+		if n.Attr == "write" || n.Attr == "write_text" || n.Attr == "dump" {
+			ev.ExportFileWrite = true
+		}
 		inspectExpr(n.Value, ev)
 	case *parser2.Name:
 		if n.Id == "TypedDict" {
@@ -495,6 +498,11 @@ func collectPythonRoleFuncName(name string, ev *PackageEvidence) {
 		ev.IngestWatch = true
 	case "build", "render":
 		ev.ViewBuildExport = true
+	case "write_payload":
+		ev.ExportSurface = true
+	}
+	if strings.HasPrefix(name, "export_") || strings.HasPrefix(name, "marshal_") {
+		ev.ExportSurface = true
 	}
 	if strings.HasPrefix(name, "register_") || strings.HasPrefix(name, "Register") {
 		ev.PipelineRegisterExport = true
