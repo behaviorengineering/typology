@@ -72,7 +72,22 @@ type PackageEvidence struct {
 	ImportsHTTPFramework  bool `json:"importsHttpFramework,omitempty"`  // gin/echo/chi/mux/fiber/…
 	HTTPFrameworkRoute    bool `json:"httpFrameworkRoute,omitempty"`    // framework route registration call
 	GRPCServerIdent       bool `json:"grpcServerIdent,omitempty"`
-	DeliveryHint          string `json:"deliveryHint,omitempty"`
+	// Worker / queue / CLI / ingest (language-neutral; finders fill these).
+	JobHandlerImpl     bool `json:"jobHandlerImpl,omitempty"`     // Kind+Validate+Run on one concrete type
+	JobRegisterExport  bool `json:"jobRegisterExport,omitempty"`  // exported Register
+	JobRegisterCall    bool `json:"jobRegisterCall,omitempty"`    // Register(...) / registerHandler(...)
+	JobEnqueueExport   bool `json:"jobEnqueueExport,omitempty"`   // Enqueue / Submit / Delay / apply_async
+	JobRunLoop         bool `json:"jobRunLoop,omitempty"`         // Run / RunLoop with context
+	JobTaskDecorator   bool `json:"jobTaskDecorator,omitempty"`   // @task / @app.task (Python)
+	ImportsJobFramework bool `json:"importsJobFramework,omitempty"` // celery / rq / arq
+	CLIDispatchExport  bool `json:"cliDispatchExport,omitempty"`  // RunCLI / Execute / Run(args, writers)
+	CLIFlagParse       bool `json:"cliFlagParse,omitempty"`       // flag.Parse / cobra / argparse
+	CLISubcommand      bool `json:"cliSubcommand,omitempty"`      // string-case subcommand switch
+	ImportsCLIFramework bool `json:"importsCliFramework,omitempty"` // click / typer / argparse
+	IngestSyncExport   bool `json:"ingestSyncExport,omitempty"`   // Sync(ctx, ...)
+	IngestIndexOps     bool `json:"ingestIndexOps,omitempty"`     // upsert / delete / chunk index ops
+	IngestWatch        bool `json:"ingestWatch,omitempty"`        // Watch / poll loop
+	DeliveryHint       string `json:"deliveryHint,omitempty"`
 }
 
 // HasStaticAnchor reports whether the package has at least one exported symbol
@@ -273,6 +288,7 @@ func scanPackage(repoRoot string, pkg listPackage) (PackageEvidence, error) {
 	var exportedBodies []SymbolBody
 	httpSurfaceIdent := false
 	grpcServerIdent := false
+	handlerMethods := map[string]map[string]bool{} // receiver -> method names
 	for _, file := range files {
 		// go list GoFiles omits tests; skip explicitly so serving signals stay production-only.
 		if strings.HasSuffix(file, "_test.go") {
@@ -299,6 +315,7 @@ func scanPackage(repoRoot string, pkg listPackage) (PackageEvidence, error) {
 			ev.PackageDoc = compactPackageDoc(parsed.Doc.Text())
 		}
 		httpAlias := ""
+		flagAlias := ""
 		frameworkAliases := map[string]string{} // local name -> import path
 		for _, imp := range parsed.Imports {
 			path := strings.Trim(imp.Path.Value, `"`)
@@ -307,6 +324,8 @@ func scanPackage(repoRoot string, pkg listPackage) (PackageEvidence, error) {
 			case "net/http":
 				ev.ImportsNetHTTP = true
 				httpAlias = alias
+			case "flag":
+				flagAlias = alias
 			case "os/exec":
 				ev.ImportsOsExec = true
 			case "google.golang.org/grpc":
@@ -321,6 +340,12 @@ func scanPackage(repoRoot string, pkg listPackage) (PackageEvidence, error) {
 			if isHTTPFrameworkImport(path) {
 				ev.ImportsHTTPFramework = true
 				frameworkAliases[alias] = path
+			}
+			if isCLIFrameworkImport(path) {
+				ev.ImportsCLIFramework = true
+			}
+			if isJobFrameworkImport(path) {
+				ev.ImportsJobFramework = true
 			}
 		}
 		for _, decl := range parsed.Decls {
@@ -345,9 +370,11 @@ func scanPackage(repoRoot string, pkg listPackage) (PackageEvidence, error) {
 								grpcServerIdent = true
 							}
 							collectHTTPFuncSurface(d.Type, httpAlias, &ev)
+							noteHandlerMethod(handlerMethods, recvType, d.Name.Name)
 						} else {
 							unexportedMethods[key] = struct{}{}
 							privateBodies[key] = SymbolBody{Name: key, Kind: "method", Source: truncateBody(body)}
+							noteHandlerMethod(handlerMethods, recvType, d.Name.Name)
 						}
 					}
 				} else if exported {
@@ -360,12 +387,21 @@ func scanPackage(repoRoot string, pkg listPackage) (PackageEvidence, error) {
 						grpcServerIdent = true
 					}
 					collectHTTPFuncSurface(d.Type, httpAlias, &ev)
+					collectRoleFuncExport(d, &ev)
 				} else {
 					unexportedFuncs[d.Name.Name] = struct{}{}
 					privateBodies[d.Name.Name] = SymbolBody{Name: d.Name.Name, Kind: "func", Source: truncateBody(body)}
+					// Unexported Register helpers still count as register surface when called.
+					if d.Name.Name == "registerHandler" || d.Name.Name == "Register" {
+						ev.JobRegisterExport = true
+					}
 				}
 				if d.Body != nil {
 					inspectHTTPServingCalls(d.Body, httpAlias, frameworkAliases, &ev)
+					inspectRoleCalls(d.Body, flagAlias, &ev)
+					if countStringSwitchCases(d.Body) >= 3 {
+						ev.CLISubcommand = true
+					}
 				}
 			case *ast.GenDecl:
 				if hasGoEmbed(d.Doc) {
@@ -443,6 +479,9 @@ func scanPackage(repoRoot string, pkg listPackage) (PackageEvidence, error) {
 	ev.PrivateOneHopBodies = oneHopPrivateBodies(exportedBodies, privateBodies)
 	ev.HTTPSurfaceIdent = httpSurfaceIdent
 	ev.GRPCServerIdent = grpcServerIdent
+	if hasJobHandlerTrio(handlerMethods) {
+		ev.JobHandlerImpl = true
+	}
 	ev.DeliveryHint = deliveryHint(ev, httpSurfaceIdent)
 	return ev, nil
 }
@@ -739,6 +778,198 @@ func isHTTPFrameworkRouteName(name string) bool {
 	default:
 		return false
 	}
+}
+
+func isCLIFrameworkImport(path string) bool {
+	switch path {
+	case "github.com/spf13/cobra",
+		"github.com/urfave/cli",
+		"github.com/urfave/cli/v2",
+		"github.com/alecthomas/kong":
+		return true
+	default:
+		return false
+	}
+}
+
+func isJobFrameworkImport(path string) bool {
+	switch path {
+	case "github.com/hibiken/asynq",
+		"github.com/riverqueue/river",
+		"github.com/gocraft/work":
+		return true
+	default:
+		return strings.Contains(path, "/celery") || strings.HasSuffix(path, "/rq")
+	}
+}
+
+func noteHandlerMethod(byRecv map[string]map[string]bool, recv, method string) {
+	switch method {
+	case "Kind", "Validate", "Run":
+	default:
+		return
+	}
+	if byRecv[recv] == nil {
+		byRecv[recv] = map[string]bool{}
+	}
+	byRecv[recv][method] = true
+}
+
+func hasJobHandlerTrio(byRecv map[string]map[string]bool) bool {
+	for _, methods := range byRecv {
+		if methods["Kind"] && methods["Validate"] && methods["Run"] {
+			return true
+		}
+	}
+	return false
+}
+
+func collectRoleFuncExport(d *ast.FuncDecl, ev *PackageEvidence) {
+	if d == nil || d.Name == nil {
+		return
+	}
+	name := d.Name.Name
+	switch name {
+	case "Enqueue", "Submit", "Delay":
+		ev.JobEnqueueExport = true
+	case "Register":
+		ev.JobRegisterExport = true
+	case "RunCLI", "Execute":
+		ev.CLIDispatchExport = true
+	case "Sync":
+		if funcHasContextParam(d.Type) {
+			ev.IngestSyncExport = true
+		}
+	case "Watch", "WatchPII":
+		ev.IngestWatch = true
+	case "Run", "RunLoop":
+		if d.Recv == nil && funcHasContextParam(d.Type) {
+			ev.JobRunLoop = true
+		}
+		if d.Recv == nil && looksLikeCLIDispatchSig(d.Type) {
+			ev.CLIDispatchExport = true
+		}
+	}
+	if name == "Run" && looksLikeCLIDispatchSig(d.Type) {
+		ev.CLIDispatchExport = true
+	}
+}
+
+func funcHasContextParam(ft *ast.FuncType) bool {
+	if ft == nil || ft.Params == nil {
+		return false
+	}
+	for _, field := range ft.Params.List {
+		if isNamedSelector(field.Type, "context", "Context") {
+			return true
+		}
+	}
+	return false
+}
+
+func looksLikeCLIDispatchSig(ft *ast.FuncType) bool {
+	if ft == nil || ft.Params == nil || len(ft.Params.List) < 2 {
+		return false
+	}
+	hasArgs, hasWriter := false, false
+	for _, field := range ft.Params.List {
+		if isStringSlice(field.Type) {
+			hasArgs = true
+		}
+		if isNamedSelector(field.Type, "io", "Writer") ||
+			isNamedSelector(field.Type, "io", "Reader") {
+			hasWriter = true
+		}
+	}
+	return hasArgs && hasWriter
+}
+
+func isStringSlice(expr ast.Expr) bool {
+	arr, ok := unwrapExpr(expr).(*ast.ArrayType)
+	if !ok || arr.Len != nil {
+		return false
+	}
+	ident, ok := arr.Elt.(*ast.Ident)
+	return ok && ident.Name == "string"
+}
+
+func isNamedSelector(expr ast.Expr, pkg, name string) bool {
+	expr = unwrapExpr(expr)
+	sel, ok := expr.(*ast.SelectorExpr)
+	if !ok || sel.Sel == nil || sel.Sel.Name != name {
+		return false
+	}
+	id, ok := sel.X.(*ast.Ident)
+	return ok && id.Name == pkg
+}
+
+func inspectRoleCalls(body *ast.BlockStmt, flagAlias string, ev *PackageEvidence) {
+	ast.Inspect(body, func(n ast.Node) bool {
+		call, ok := n.(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+		switch fun := call.Fun.(type) {
+		case *ast.Ident:
+			switch fun.Name {
+			case "Register", "registerHandler":
+				ev.JobRegisterCall = true
+			case "chunkFiles":
+				ev.IngestIndexOps = true
+			}
+		case *ast.SelectorExpr:
+			if fun.Sel == nil {
+				return true
+			}
+			name := fun.Sel.Name
+			if pkg, ok := fun.X.(*ast.Ident); ok {
+				if flagAlias != "" && pkg.Name == flagAlias && name == "Parse" {
+					ev.CLIFlagParse = true
+				}
+			}
+			switch name {
+			case "Register", "registerHandler":
+				ev.JobRegisterCall = true
+			case "UpsertChunks", "DeleteAllDocuments", "DeleteDocuments", "DeleteDocumentsByDocIDs",
+				"AddDocuments", "IndexDocuments", "chunkFiles":
+				ev.IngestIndexOps = true
+			case "Parse":
+				// cobra/flag style without tracked alias
+				if id, ok := fun.X.(*ast.Ident); ok && (id.Name == "flag" || id.Name == "flags") {
+					ev.CLIFlagParse = true
+				}
+			case "AddCommand", "Execute":
+				ev.CLIFlagParse = true
+				ev.CLISubcommand = true
+			case "delay", "apply_async", "Enqueue", "Submit":
+				ev.JobEnqueueExport = true
+			}
+		}
+		return true
+	})
+}
+
+func countStringSwitchCases(body *ast.BlockStmt) int {
+	count := 0
+	ast.Inspect(body, func(n ast.Node) bool {
+		sw, ok := n.(*ast.SwitchStmt)
+		if !ok {
+			return true
+		}
+		for _, stmt := range sw.Body.List {
+			cc, ok := stmt.(*ast.CaseClause)
+			if !ok {
+				continue
+			}
+			for _, expr := range cc.List {
+				if _, ok := expr.(*ast.BasicLit); ok {
+					count++
+				}
+			}
+		}
+		return true
+	})
+	return count
 }
 
 func receiverTypeName(fields *ast.FieldList) string {

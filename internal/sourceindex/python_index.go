@@ -213,7 +213,7 @@ func scanPythonPackage(absRepo string, pkg pythonPkg) (PackageEvidence, error) {
 		ev.DeliveryHint = DeliveryCLI
 	} else if ev.ImportsNetHTTP && ev.HTTPSurfaceIdent {
 		ev.DeliveryHint = DeliveryServerHTTP
-	} else if ev.JSONTags && len(ev.ExportedFuncs) == 0 && len(ev.ExportedMethods) == 0 {
+	} else if looksLikeShapePackage(ev) {
 		ev.DeliveryHint = DeliveryDTO
 	}
 	return ev, nil
@@ -254,6 +254,7 @@ func walkPythonStmts(
 			if isPublicPythonName(n.Name) {
 				exportedFuncs[n.Name] = struct{}{}
 				*exportedBodies = append(*exportedBodies, SymbolBody{Name: n.Name, Kind: "func", Source: snippetAround(src, n.P)})
+				collectPythonRoleFuncName(n.Name, ev)
 			}
 			inspectDecorators(n.DecoratorList, ev)
 			walkPythonStmts(n.Body, src, ev, exportedDecls, exportedFuncs, exportedMethods, exportedBodies)
@@ -261,6 +262,7 @@ func walkPythonStmts(
 			if isPublicPythonName(n.Name) {
 				exportedFuncs[n.Name] = struct{}{}
 				*exportedBodies = append(*exportedBodies, SymbolBody{Name: n.Name, Kind: "func", Source: snippetAround(src, n.P)})
+				collectPythonRoleFuncName(n.Name, ev)
 			}
 			inspectDecorators(n.DecoratorList, ev)
 			walkPythonStmts(n.Body, src, ev, exportedDecls, exportedFuncs, exportedMethods, exportedBodies)
@@ -280,13 +282,25 @@ func walkPythonStmts(
 					ev.JSONTags = true
 				}
 			}
+			methods := map[string]bool{}
 			for _, bodyStmt := range n.Body {
 				if fn, ok := bodyStmt.(*parser2.FunctionDef); ok && isPublicPythonName(fn.Name) {
 					exportedMethods[n.Name+"."+fn.Name] = struct{}{}
+					methods[fn.Name] = true
+					collectPythonRoleFuncName(fn.Name, ev)
 				}
 				if fn, ok := bodyStmt.(*parser2.AsyncFunctionDef); ok && isPublicPythonName(fn.Name) {
 					exportedMethods[n.Name+"."+fn.Name] = struct{}{}
+					methods[fn.Name] = true
+					collectPythonRoleFuncName(fn.Name, ev)
 				}
+			}
+			if methods["Kind"] && methods["Validate"] && methods["Run"] {
+				ev.JobHandlerImpl = true
+			}
+			// Python often uses snake_case for the same trio.
+			if methods["kind"] && methods["validate"] && methods["run"] {
+				ev.JobHandlerImpl = true
 			}
 			walkPythonStmts(n.Body, src, ev, exportedDecls, exportedFuncs, exportedMethods, exportedBodies)
 		case *parser2.If:
@@ -348,6 +362,13 @@ func markPythonImport(ev *PackageEvidence, mod string) {
 		ev.JSONTags = true
 	case "dataclasses":
 		ev.JSONTags = true
+	case "celery", "rq", "arq":
+		ev.ImportsJobFramework = true
+	case "click", "typer", "argparse":
+		ev.ImportsCLIFramework = true
+		if top == "argparse" {
+			ev.CLIFlagParse = true
+		}
 	case "typing_extensions", "typing":
 		// TypedDict may appear; do not set alone
 	}
@@ -363,6 +384,15 @@ func inspectDecorators(decorators []parser2.Expr, ev *PackageEvidence) {
 		if nameLooksLike(d, "dataclass") {
 			ev.JSONTags = true
 		}
+		if nameLooksLike(d, "task", "app.task", "shared_task", "job") {
+			ev.JobTaskDecorator = true
+			ev.ImportsJobFramework = true
+		}
+		if nameLooksLike(d, "click.command", "click.group", "command", "app.command", "typer.command") {
+			ev.CLIDispatchExport = true
+			ev.CLISubcommand = true
+			ev.ImportsCLIFramework = true
+		}
 	}
 }
 
@@ -373,6 +403,17 @@ func inspectExpr(expr parser2.Expr, ev *PackageEvidence) {
 			ev.ImportsNetHTTP = true
 			ev.HTTPSurfaceIdent = true
 		}
+		if nameLooksLike(n.Func, "delay", "apply_async", "enqueue", "enqueue_job") {
+			ev.JobEnqueueExport = true
+		}
+		if nameLooksLike(n.Func, "ArgumentParser", "add_argument", "parse_args") {
+			ev.CLIFlagParse = true
+			ev.ImportsCLIFramework = true
+		}
+		if nameLooksLike(n.Func, "upsert_documents", "add_documents", "index_documents",
+			"delete_documents", "delete_all_documents", "chunk_files") {
+			ev.IngestIndexOps = true
+		}
 		if nameLooksLike(n.Func, "run", "Popen", "call", "system") {
 			// Only count as exec when subprocess already imported; soft signal via ImportsOsExec already set.
 		}
@@ -381,6 +422,12 @@ func inspectExpr(expr parser2.Expr, ev *PackageEvidence) {
 			inspectExpr(a, ev)
 		}
 	case *parser2.Attribute:
+		if n.Attr == "delay" || n.Attr == "apply_async" {
+			ev.JobEnqueueExport = true
+		}
+		if n.Attr == "command" || n.Attr == "add_command" {
+			ev.CLISubcommand = true
+		}
 		inspectExpr(n.Value, ev)
 	case *parser2.Name:
 		if n.Id == "TypedDict" {
@@ -411,6 +458,23 @@ func isDunderMainGuard(test parser2.Expr) bool {
 	}
 	s, ok := right.Value.(string)
 	return ok && s == "__main__"
+}
+
+func collectPythonRoleFuncName(name string, ev *PackageEvidence) {
+	switch name {
+	case "enqueue", "submit", "delay":
+		ev.JobEnqueueExport = true
+	case "register":
+		ev.JobRegisterExport = true
+	case "run", "run_loop", "worker_main":
+		ev.JobRunLoop = true
+	case "run_cli", "main", "cli":
+		ev.CLIDispatchExport = true
+	case "sync":
+		ev.IngestSyncExport = true
+	case "watch", "watch_pii":
+		ev.IngestWatch = true
+	}
 }
 
 func nameLooksLike(expr parser2.Expr, names ...string) bool {

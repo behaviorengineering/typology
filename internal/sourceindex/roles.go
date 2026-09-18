@@ -14,15 +14,19 @@ import (
 
 // Observed package roles from code evidence (never from folder names).
 const (
-	RoleEntrypoint     = "entrypoint"
-	RoleHTTPSurface    = "server"
-	RoleDTO            = "dto"
-	RoleExecRunner     = "exec_runner"
-	RoleAggregator     = "aggregator"
-	RoleAdapter        = "adapter"
-	RoleConfig         = "config"
-	RoleObservability  = "observability"
-	RoleUnknown        = "unknown"
+	RoleEntrypoint    = "entrypoint"
+	RoleHTTPSurface   = "server"
+	RoleDTO           = "dto"
+	RoleExecRunner    = "exec_runner"
+	RoleAggregator    = "aggregator"
+	RoleAdapter       = "adapter"
+	RoleConfig        = "config"
+	RoleObservability = "observability"
+	RoleWorker        = "worker"
+	RoleQueue         = "queue"
+	RoleCLI           = "cli"
+	RoleIngest        = "ingest"
+	RoleUnknown       = "unknown"
 )
 
 // Edge kinds after role revisit.
@@ -201,6 +205,24 @@ func classifyPackage(ev PackageEvidence, internalOut int) RoleNode {
 			Evidence: evidence, InspectedStage: 1,
 		}
 	}
+	if looksLikeWorker(ev) {
+		return RoleNode{
+			Path: path, Role: RoleWorker, Confidence: confidenceStage1,
+			Evidence: workerEvidence(ev), InspectedStage: 1,
+		}
+	}
+	if looksLikeJobQueue(ev) {
+		return RoleNode{
+			Path: path, Role: RoleQueue, Confidence: confidenceStage1,
+			Evidence: queueEvidence(ev), InspectedStage: 1,
+		}
+	}
+	if looksLikeIngest(ev) {
+		return RoleNode{
+			Path: path, Role: RoleIngest, Confidence: confidenceStage1,
+			Evidence: ingestEvidence(ev), InspectedStage: 1,
+		}
+	}
 	if looksLikeShapePackage(ev) {
 		evidence := []string{"json_tags"}
 		exports := len(ev.ExportedFuncs) + len(ev.ExportedMethods)
@@ -215,7 +237,13 @@ func classifyPackage(ev PackageEvidence, internalOut int) RoleNode {
 		}
 	}
 
-	candidates := make([]roleCandidate, 0, 4)
+	candidates := make([]roleCandidate, 0, 5)
+	if looksLikeCLI(ev) {
+		candidates = append(candidates, roleCandidate{
+			Role: RoleCLI, Stage: 2, Confidence: confidenceStage2,
+			Evidence: cliEvidence(ev),
+		})
+	}
 	if ev.ImportsOsExec && exportsRunnerSurface(ev) {
 		candidates = append(candidates, roleCandidate{
 			Role: RoleExecRunner, Stage: 2, Confidence: confidenceStage2,
@@ -228,7 +256,7 @@ func classifyPackage(ev PackageEvidence, internalOut int) RoleNode {
 			Evidence: []string{"orchestration_export", "internal_imports_ge_2"},
 		})
 	}
-	if looksLikeConfig(ev) && internalOut <= 1 {
+	if looksLikeConfig(ev) && !looksLikeJobQueue(ev) && internalOut <= 1 {
 		candidates = append(candidates, roleCandidate{
 			Role: RoleConfig, Stage: 2, Confidence: confidenceStage2,
 			Evidence: []string{"load_save_exports"},
@@ -389,6 +417,107 @@ func looksLikeConfig(ev PackageEvidence) bool {
 		}
 	}
 	return hasLoad && (hasSave || ev.JSONTags)
+}
+
+// looksLikeWorker reports job-handler implementations (Kind/Validate/Run trio or task decorators).
+func looksLikeWorker(ev PackageEvidence) bool {
+	if ev.JobHandlerImpl {
+		return true
+	}
+	if ev.JobTaskDecorator {
+		return true
+	}
+	return false
+}
+
+// looksLikeJobQueue reports a registry + enqueue + run surface (beats Load/Save config).
+func looksLikeJobQueue(ev PackageEvidence) bool {
+	if ev.ImportsJobFramework && ev.JobEnqueueExport {
+		return true
+	}
+	hasRegister := ev.JobRegisterExport || ev.JobRegisterCall
+	return hasRegister && ev.JobEnqueueExport && ev.JobRunLoop
+}
+
+// looksLikeIngest reports sync pipelines that upsert/delete/chunk into an index.
+func looksLikeIngest(ev PackageEvidence) bool {
+	if !ev.IngestSyncExport {
+		return false
+	}
+	return ev.IngestIndexOps || ev.IngestWatch
+}
+
+// looksLikeCLI reports a dispatch package (args + writers) with flag or subcommand evidence.
+func looksLikeCLI(ev PackageEvidence) bool {
+	if ev.ImportsCLIFramework && (ev.CLIDispatchExport || ev.CLISubcommand || ev.CLIFlagParse) {
+		return true
+	}
+	if !ev.CLIDispatchExport {
+		return false
+	}
+	return ev.CLIFlagParse || ev.CLISubcommand
+}
+
+func workerEvidence(ev PackageEvidence) []string {
+	out := []string{}
+	if ev.JobHandlerImpl {
+		out = append(out, "job_handler_impl")
+	}
+	if ev.JobTaskDecorator {
+		out = append(out, "job_task_decorator")
+	}
+	if ev.JobRegisterCall {
+		out = append(out, "job_register_call")
+	}
+	return out
+}
+
+func queueEvidence(ev PackageEvidence) []string {
+	out := []string{}
+	if ev.JobRegisterExport {
+		out = append(out, "job_register_export")
+	}
+	if ev.JobRegisterCall {
+		out = append(out, "job_register_call")
+	}
+	if ev.JobEnqueueExport {
+		out = append(out, "job_enqueue_export")
+	}
+	if ev.JobRunLoop {
+		out = append(out, "job_run_loop")
+	}
+	if ev.ImportsJobFramework {
+		out = append(out, "imports_job_framework")
+	}
+	return out
+}
+
+func ingestEvidence(ev PackageEvidence) []string {
+	out := []string{"ingest_sync_export"}
+	if ev.IngestIndexOps {
+		out = append(out, "ingest_index_ops")
+	}
+	if ev.IngestWatch {
+		out = append(out, "ingest_watch")
+	}
+	return out
+}
+
+func cliEvidence(ev PackageEvidence) []string {
+	out := []string{}
+	if ev.CLIDispatchExport {
+		out = append(out, "cli_dispatch_export")
+	}
+	if ev.CLIFlagParse {
+		out = append(out, "cli_flag_parse")
+	}
+	if ev.CLISubcommand {
+		out = append(out, "cli_subcommand")
+	}
+	if ev.ImportsCLIFramework {
+		out = append(out, "imports_cli_framework")
+	}
+	return out
 }
 
 func exportsClientSurface(ev PackageEvidence) bool {
