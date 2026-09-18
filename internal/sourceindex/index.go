@@ -87,7 +87,15 @@ type PackageEvidence struct {
 	IngestSyncExport   bool `json:"ingestSyncExport,omitempty"`   // Sync(ctx, ...)
 	IngestIndexOps     bool `json:"ingestIndexOps,omitempty"`     // upsert / delete / chunk index ops
 	IngestWatch        bool `json:"ingestWatch,omitempty"`        // Watch / poll loop
-	DeliveryHint       string `json:"deliveryHint,omitempty"`
+	// Adapter / pipeline / view (language-neutral).
+	ClientConstructor      bool `json:"clientConstructor,omitempty"`      // New returns *Client
+	ImportsExternalDriver  bool `json:"importsExternalDriver,omitempty"`  // neo4j / meili / redis / …
+	PipelineRegistryParam  bool `json:"pipelineRegistryParam,omitempty"`  // *ModuleRegistry param
+	PipelineRegisterExport bool `json:"pipelineRegisterExport,omitempty"` // Register* modules
+	PipelineModuleMap      bool `json:"pipelineModuleMap,omitempty"`      // map[string]Module result
+	PipelineRunnerType     bool `json:"pipelineRunnerType,omitempty"`     // JobRunner / NewJobRunner
+	ViewBuildExport        bool `json:"viewBuildExport,omitempty"`        // Build/Render -> local Page
+	DeliveryHint           string `json:"deliveryHint,omitempty"`
 }
 
 // HasStaticAnchor reports whether the package has at least one exported symbol
@@ -347,6 +355,9 @@ func scanPackage(repoRoot string, pkg listPackage) (PackageEvidence, error) {
 			if isJobFrameworkImport(path) {
 				ev.ImportsJobFramework = true
 			}
+			if isExternalDriverImport(path) {
+				ev.ImportsExternalDriver = true
+			}
 		}
 		for _, decl := range parsed.Decls {
 			switch d := decl.(type) {
@@ -439,6 +450,9 @@ func scanPackage(repoRoot string, pkg listPackage) (PackageEvidence, error) {
 						}
 						if structHasJSONTag(s.Type) {
 							ev.JSONTags = true
+						}
+						if s.Name.Name == "JobRunner" {
+							ev.PipelineRunnerType = true
 						}
 					case *ast.ValueSpec:
 						if hasGoEmbed(s.Doc) || hasGoEmbed(d.Doc) {
@@ -803,6 +817,31 @@ func isJobFrameworkImport(path string) bool {
 	}
 }
 
+func isExternalDriverImport(path string) bool {
+	switch {
+	case strings.Contains(path, "neo4j-go-driver"):
+		return true
+	case strings.Contains(path, "meilisearch"):
+		return true
+	case path == "github.com/redis/go-redis" || strings.HasPrefix(path, "github.com/redis/go-redis/"):
+		return true
+	case path == "github.com/go-redis/redis" || strings.HasPrefix(path, "github.com/go-redis/redis/"):
+		return true
+	case path == "go.mongodb.org/mongo-driver" || strings.HasPrefix(path, "go.mongodb.org/mongo-driver/"):
+		return true
+	case path == "github.com/jackc/pgx" || strings.HasPrefix(path, "github.com/jackc/pgx/"):
+		return true
+	case path == "github.com/lib/pq":
+		return true
+	case path == "database/sql":
+		return true
+	case path == "google.golang.org/grpc":
+		return true
+	default:
+		return false
+	}
+}
+
 func noteHandlerMethod(byRecv map[string]map[string]bool, recv, method string) {
 	switch method {
 	case "Kind", "Validate", "Run":
@@ -849,10 +888,111 @@ func collectRoleFuncExport(d *ast.FuncDecl, ev *PackageEvidence) {
 		if d.Recv == nil && looksLikeCLIDispatchSig(d.Type) {
 			ev.CLIDispatchExport = true
 		}
+	case "NewJobRunner":
+		ev.PipelineRunnerType = true
 	}
 	if name == "Run" && looksLikeCLIDispatchSig(d.Type) {
 		ev.CLIDispatchExport = true
 	}
+	if name == "New" || strings.HasPrefix(name, "New") {
+		if returnsClientType(d.Type) {
+			ev.ClientConstructor = true
+		}
+	}
+	if strings.HasPrefix(name, "Register") {
+		if funcHasRegistryParam(d.Type) {
+			ev.PipelineRegisterExport = true
+			ev.PipelineRegistryParam = true
+		}
+	}
+	if funcHasRegistryParam(d.Type) {
+		ev.PipelineRegistryParam = true
+	}
+	if returnsModuleMap(d.Type) {
+		ev.PipelineModuleMap = true
+	}
+	if name == "Build" || name == "Render" {
+		if returnsLocalPageType(d.Type) {
+			ev.ViewBuildExport = true
+		}
+	}
+}
+
+func returnsClientType(ft *ast.FuncType) bool {
+	if ft == nil || ft.Results == nil {
+		return false
+	}
+	for _, field := range ft.Results.List {
+		name := typeBaseName(field.Type)
+		if name == "Client" || strings.HasSuffix(name, "Client") {
+			return true
+		}
+	}
+	return false
+}
+
+func funcHasRegistryParam(ft *ast.FuncType) bool {
+	if ft == nil || ft.Params == nil {
+		return false
+	}
+	for _, field := range ft.Params.List {
+		name := typeBaseName(field.Type)
+		if name == "ModuleRegistry" || name == "Registry" {
+			return true
+		}
+		if isNamedSelector(field.Type, "registry", "ModuleRegistry") {
+			return true
+		}
+	}
+	return false
+}
+
+func returnsModuleMap(ft *ast.FuncType) bool {
+	if ft == nil || ft.Results == nil {
+		return false
+	}
+	for _, field := range ft.Results.List {
+		m, ok := unwrapExpr(field.Type).(*ast.MapType)
+		if !ok {
+			continue
+		}
+		key, ok := m.Key.(*ast.Ident)
+		if !ok || key.Name != "string" {
+			continue
+		}
+		valName := typeBaseName(m.Value)
+		if valName == "Module" || strings.HasSuffix(valName, "Module") {
+			return true
+		}
+	}
+	return false
+}
+
+func returnsLocalPageType(ft *ast.FuncType) bool {
+	if ft == nil || ft.Results == nil || len(ft.Results.List) == 0 {
+		return false
+	}
+	// First result should be a same-package named type (Page, Document, View, Model).
+	name := typeBaseName(ft.Results.List[0].Type)
+	switch name {
+	case "Page", "Document", "View", "Model", "Screen", "Panel":
+		return true
+	default:
+		return false
+	}
+}
+
+func typeBaseName(expr ast.Expr) string {
+	expr = unwrapExpr(expr)
+	switch t := expr.(type) {
+	case *ast.Ident:
+		return t.Name
+	case *ast.SelectorExpr:
+		if t.Sel != nil {
+			return t.Sel.Name
+		}
+	}
+	return ""
 }
 
 func funcHasContextParam(ft *ast.FuncType) bool {

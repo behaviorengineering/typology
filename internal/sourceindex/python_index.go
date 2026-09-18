@@ -270,6 +270,15 @@ func walkPythonStmts(
 			if isPublicPythonName(n.Name) {
 				exportedDecls[n.Name] = struct{}{}
 				*exportedBodies = append(*exportedBodies, SymbolBody{Name: n.Name, Kind: "type", Source: snippetAround(src, n.P)})
+				if n.Name == "Client" || strings.HasSuffix(n.Name, "Client") {
+					ev.ClientConstructor = true
+				}
+				if n.Name == "JobRunner" {
+					ev.PipelineRunnerType = true
+				}
+				if n.Name == "ModuleRegistry" {
+					ev.PipelineRegistryParam = true
+				}
 			}
 			for _, base := range n.Bases {
 				if nameLooksLike(base, "BaseModel", "TypedDict") {
@@ -369,6 +378,8 @@ func markPythonImport(ev *PackageEvidence, mod string) {
 		if top == "argparse" {
 			ev.CLIFlagParse = true
 		}
+	case "neo4j", "meilisearch", "redis", "pymongo", "motor", "sqlalchemy", "asyncpg", "psycopg2", "psycopg":
+		ev.ImportsExternalDriver = true
 	case "typing_extensions", "typing":
 		// TypedDict may appear; do not set alone
 	}
@@ -413,6 +424,14 @@ func inspectExpr(expr parser2.Expr, ev *PackageEvidence) {
 		if nameLooksLike(n.Func, "upsert_documents", "add_documents", "index_documents",
 			"delete_documents", "delete_all_documents", "chunk_files") {
 			ev.IngestIndexOps = true
+		}
+		if nameLooksLike(n.Func, "register", "register_module", "Register") {
+			ev.PipelineRegisterExport = true
+			ev.JobRegisterCall = true
+		}
+		if nameLooksLike(n.Func, "GraphDatabase", "AsyncGraphDatabase", "Meilisearch", "Redis", "MongoClient") {
+			ev.ImportsExternalDriver = true
+			ev.ClientConstructor = true
 		}
 		if nameLooksLike(n.Func, "run", "Popen", "call", "system") {
 			// Only count as exec when subprocess already imported; soft signal via ImportsOsExec already set.
@@ -474,6 +493,14 @@ func collectPythonRoleFuncName(name string, ev *PackageEvidence) {
 		ev.IngestSyncExport = true
 	case "watch", "watch_pii":
 		ev.IngestWatch = true
+	case "build", "render":
+		ev.ViewBuildExport = true
+	}
+	if strings.HasPrefix(name, "register_") || strings.HasPrefix(name, "Register") {
+		ev.PipelineRegisterExport = true
+	}
+	if name == "new_modules" || strings.HasPrefix(name, "new_") && strings.HasSuffix(name, "_modules") {
+		ev.PipelineModuleMap = true
 	}
 }
 

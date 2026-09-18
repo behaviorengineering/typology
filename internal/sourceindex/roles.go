@@ -26,6 +26,8 @@ const (
 	RoleQueue         = "queue"
 	RoleCLI           = "cli"
 	RoleIngest        = "ingest"
+	RolePipeline      = "pipeline"
+	RoleView          = "view"
 	RoleUnknown       = "unknown"
 )
 
@@ -237,11 +239,23 @@ func classifyPackage(ev PackageEvidence, internalOut int) RoleNode {
 		}
 	}
 
-	candidates := make([]roleCandidate, 0, 5)
+	candidates := make([]roleCandidate, 0, 6)
 	if looksLikeCLI(ev) {
 		candidates = append(candidates, roleCandidate{
 			Role: RoleCLI, Stage: 2, Confidence: confidenceStage2,
 			Evidence: cliEvidence(ev),
+		})
+	}
+	if looksLikePipeline(ev) {
+		candidates = append(candidates, roleCandidate{
+			Role: RolePipeline, Stage: 2, Confidence: confidenceStage2,
+			Evidence: pipelineEvidence(ev),
+		})
+	}
+	if looksLikeView(ev) {
+		candidates = append(candidates, roleCandidate{
+			Role: RoleView, Stage: 2, Confidence: confidenceStage2,
+			Evidence: viewEvidence(ev),
 		})
 	}
 	if ev.ImportsOsExec && exportsRunnerSurface(ev) {
@@ -250,7 +264,7 @@ func classifyPackage(ev PackageEvidence, internalOut int) RoleNode {
 			Evidence: []string{"imports_os_exec", "exports_run_surface"},
 		})
 	}
-	if internalOut >= 2 && exportsOrchestration(ev) {
+	if !looksLikePipeline(ev) && internalOut >= 2 && exportsOrchestration(ev) {
 		candidates = append(candidates, roleCandidate{
 			Role: RoleAggregator, Stage: 2, Confidence: confidenceStage2,
 			Evidence: []string{"orchestration_export", "internal_imports_ge_2"},
@@ -262,10 +276,10 @@ func classifyPackage(ev PackageEvidence, internalOut int) RoleNode {
 			Evidence: []string{"load_save_exports"},
 		})
 	}
-	if !ev.GoEmbed && !looksLikeHTTPServer(ev, false) && ev.ImportsNetHTTP && exportsClientSurface(ev) {
+	if looksLikeAdapter(ev) {
 		candidates = append(candidates, roleCandidate{
 			Role: RoleAdapter, Stage: 2, Confidence: confidenceStage2,
-			Evidence: []string{"imports_net_http", "exports_client_surface", "not_server"},
+			Evidence: adapterEvidence(ev),
 		})
 	}
 
@@ -388,6 +402,9 @@ func looksLikeShapePackage(ev PackageEvidence) bool {
 	if ev.ImportsNetHTTP {
 		return false
 	}
+	if ev.ViewBuildExport {
+		return false
+	}
 	if exportsOrchestration(ev) {
 		return false
 	}
@@ -458,6 +475,39 @@ func looksLikeCLI(ev PackageEvidence) bool {
 	return ev.CLIFlagParse || ev.CLISubcommand
 }
 
+// looksLikeAdapter reports HTTP or driver-backed external-service clients (never servers).
+func looksLikeAdapter(ev PackageEvidence) bool {
+	if ev.GoEmbed || looksLikeHTTPServer(ev, false) {
+		return false
+	}
+	if !exportsClientSurface(ev) && !ev.ClientConstructor {
+		return false
+	}
+	return ev.ImportsNetHTTP || ev.ImportsExternalDriver
+}
+
+// looksLikePipeline reports DSPy/module wiring (registry register or JobRunner construction).
+func looksLikePipeline(ev PackageEvidence) bool {
+	if ev.PipelineRunnerType && ev.PipelineRegistryParam {
+		return true
+	}
+	if ev.PipelineRegisterExport && ev.PipelineRegistryParam {
+		return true
+	}
+	return ev.PipelineRegisterExport && ev.PipelineModuleMap
+}
+
+// looksLikeView reports presentation builders (Build/Render -> local page + JSON models).
+func looksLikeView(ev PackageEvidence) bool {
+	if looksLikeHTTPServer(ev, false) || ev.GoEmbed {
+		return false
+	}
+	if !ev.ViewBuildExport {
+		return false
+	}
+	return ev.JSONTags
+}
+
 func workerEvidence(ev PackageEvidence) []string {
 	out := []string{}
 	if ev.JobHandlerImpl {
@@ -516,6 +566,48 @@ func cliEvidence(ev PackageEvidence) []string {
 	}
 	if ev.ImportsCLIFramework {
 		out = append(out, "imports_cli_framework")
+	}
+	return out
+}
+
+func adapterEvidence(ev PackageEvidence) []string {
+	out := []string{"not_server"}
+	if ev.ImportsNetHTTP {
+		out = append(out, "imports_net_http")
+	}
+	if ev.ImportsExternalDriver {
+		out = append(out, "imports_external_driver")
+	}
+	if exportsClientSurface(ev) {
+		out = append(out, "exports_client_surface")
+	}
+	if ev.ClientConstructor {
+		out = append(out, "client_constructor")
+	}
+	return out
+}
+
+func pipelineEvidence(ev PackageEvidence) []string {
+	out := []string{}
+	if ev.PipelineRegisterExport {
+		out = append(out, "pipeline_register_export")
+	}
+	if ev.PipelineRegistryParam {
+		out = append(out, "pipeline_registry_param")
+	}
+	if ev.PipelineModuleMap {
+		out = append(out, "pipeline_module_map")
+	}
+	if ev.PipelineRunnerType {
+		out = append(out, "pipeline_runner_type")
+	}
+	return out
+}
+
+func viewEvidence(ev PackageEvidence) []string {
+	out := []string{"view_build_export"}
+	if ev.JSONTags {
+		out = append(out, "json_tags")
 	}
 	return out
 }
