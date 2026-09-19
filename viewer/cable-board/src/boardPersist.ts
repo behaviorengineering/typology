@@ -62,8 +62,12 @@ function normalize(parsed: Partial<BoardNavState>): BoardNavState {
 }
 
 /** Nav keys include the board, so saved views never cross boards. */
-export function navKey(layer: string, selectedId: string | null): string {
-  return `${activeBoardId}::${layer}::${selectedId ?? ''}`
+export function navKey(
+  layer: string,
+  selectedId: string | null,
+  scope = 'inside',
+): string {
+  return `${activeBoardId}::${layer}::${scope}::${selectedId ?? ''}`
 }
 
 export function loadBoardState(): BoardNavState {

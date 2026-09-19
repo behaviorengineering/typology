@@ -14,15 +14,27 @@ import (
 
 // Observed package roles from code evidence (never from folder names).
 const (
-	RoleEntrypoint     = "entrypoint"
-	RoleHTTPSurface    = "server"
-	RoleDTO            = "dto"
-	RoleExecRunner     = "exec_runner"
-	RoleAggregator     = "aggregator"
-	RoleAdapter        = "adapter"
-	RoleConfig         = "config"
-	RoleObservability  = "observability"
-	RoleUnknown        = "unknown"
+	RoleEntrypoint    = "entrypoint"
+	RoleHTTPSurface   = "server"
+	RoleDTO           = "dto"
+	RoleExecRunner    = "exec_runner"
+	RoleAggregator    = "aggregator"
+	RoleAdapter       = "adapter"
+	RoleConfig        = "config"
+	RoleObservability = "observability"
+	RoleWorker        = "worker"
+	RoleQueue         = "queue"
+	RoleCLI           = "cli"
+	RoleIngest        = "ingest"
+	RoleValidation    = "validation"
+	RoleLocator       = "locator"
+	RoleCrypto        = "crypto"
+	RolePrompt        = "prompt"
+	RoleContainer     = "container"
+	RolePipeline      = "pipeline"
+	RoleView          = "view"
+	RoleExport        = "export"
+	RoleUnknown       = "unknown"
 )
 
 // Edge kinds after role revisit.
@@ -48,6 +60,7 @@ type RoleNode struct {
 	Role             string   `yaml:"role" json:"role"`
 	Confidence       float64  `yaml:"confidence" json:"confidence"`
 	Evidence         []string `yaml:"evidence,omitempty" json:"evidence,omitempty"`
+	Modifiers        []string `yaml:"modifiers,omitempty" json:"modifiers,omitempty"`
 	InspectedStage   int      `yaml:"inspected_stage" json:"inspected_stage"`
 	Language         string   `yaml:"language,omitempty" json:"language,omitempty"` // go|python
 	CandidateRole    string   `yaml:"candidate_role,omitempty" json:"candidate_role,omitempty"`
@@ -130,6 +143,12 @@ func BuildRoleTopology(idx Index, importGraph map[string][]string) RoleTopology 
 }
 
 func classifyPackage(ev PackageEvidence, internalOut int) RoleNode {
+	node := classifyPackageBase(ev, internalOut)
+	node.Modifiers = collectModifiers(ev, node.Role)
+	return node
+}
+
+func classifyPackageBase(ev PackageEvidence, internalOut int) RoleNode {
 	path := normalizePath(ev.Path)
 
 	// Stage 1: unique delivery hints take priority and do not compete.
@@ -139,7 +158,7 @@ func classifyPackage(ev PackageEvidence, internalOut int) RoleNode {
 			Evidence: []string{"has_main"}, InspectedStage: 1,
 		}
 	}
-	if ev.GoEmbed || (ev.ImportsNetHTTP && ev.HTTPSurfaceIdent) {
+	if ev.GoEmbed || looksLikeHTTPServer(ev, false) {
 		evidence := []string{"delivery:http"}
 		if ev.GoEmbed {
 			evidence = append(evidence, "go_embed")
@@ -152,6 +171,27 @@ func classifyPackage(ev PackageEvidence, internalOut int) RoleNode {
 		}
 		if ev.HTTPSurfaceIdent {
 			evidence = append(evidence, "http_surface_ident")
+		}
+		if ev.HTTPMuxParam {
+			evidence = append(evidence, "http_mux_param")
+		}
+		if ev.HTTPRouteRegister {
+			evidence = append(evidence, "http_route_register")
+		}
+		if ev.HTTPListenServe {
+			evidence = append(evidence, "http_listen_serve")
+		}
+		if ev.HTTPHandlerResult {
+			evidence = append(evidence, "http_handler_result")
+		}
+		if ev.HTTPFileServer {
+			evidence = append(evidence, "http_file_server")
+		}
+		if ev.HTTPHandlerSignature && ev.HTTPResponseHelper {
+			evidence = append(evidence, "http_handler_signature", "http_response_helper")
+		}
+		if ev.ImportsHTTPFramework && ev.HTTPFrameworkRoute {
+			evidence = append(evidence, "http_framework_import", "http_framework_route")
 		}
 		return RoleNode{
 			Path: path, Role: RoleHTTPSurface, Confidence: confidenceStage1,
@@ -180,37 +220,115 @@ func classifyPackage(ev PackageEvidence, internalOut int) RoleNode {
 			Evidence: evidence, InspectedStage: 1,
 		}
 	}
-	if ev.JSONTags && len(ev.ExportedFuncs) == 0 && len(ev.ExportedMethods) == 0 {
+	if looksLikeWorker(ev) {
+		return RoleNode{
+			Path: path, Role: RoleWorker, Confidence: confidenceStage1,
+			Evidence: workerEvidence(ev), InspectedStage: 1,
+		}
+	}
+	if looksLikeJobQueue(ev) {
+		return RoleNode{
+			Path: path, Role: RoleQueue, Confidence: confidenceStage1,
+			Evidence: queueEvidence(ev), InspectedStage: 1,
+		}
+	}
+	if looksLikeValidation(ev) {
+		return RoleNode{
+			Path: path, Role: RoleValidation, Confidence: confidenceStage1,
+			Evidence: validationEvidence(ev), InspectedStage: 1,
+		}
+	}
+	if looksLikeIngest(ev) {
+		return RoleNode{
+			Path: path, Role: RoleIngest, Confidence: confidenceStage1,
+			Evidence: ingestEvidence(ev), InspectedStage: 1,
+		}
+	}
+	if looksLikeContainer(ev, internalOut) {
+		return RoleNode{
+			Path: path, Role: RoleContainer, Confidence: confidenceStage1,
+			Evidence: containerEvidence(ev), InspectedStage: 1,
+		}
+	}
+	if looksLikeConfig(ev) && !looksLikeJobQueue(ev) && (internalOut <= 1 || hasConfigType(ev)) {
+		return RoleNode{
+			Path: path, Role: RoleConfig, Confidence: confidenceStage1,
+			Evidence: configEvidence(ev), InspectedStage: 1,
+		}
+	}
+	if looksLikeLocator(ev) {
+		return RoleNode{
+			Path: path, Role: RoleLocator, Confidence: confidenceStage1,
+			Evidence: locatorEvidence(ev), InspectedStage: 1,
+		}
+	}
+	if looksLikeCrypto(ev) {
+		return RoleNode{
+			Path: path, Role: RoleCrypto, Confidence: confidenceStage1,
+			Evidence: cryptoEvidence(ev), InspectedStage: 1,
+		}
+	}
+	if looksLikePrompt(ev) {
+		return RoleNode{
+			Path: path, Role: RolePrompt, Confidence: confidenceStage1,
+			Evidence: promptEvidence(ev), InspectedStage: 1,
+		}
+	}
+	if looksLikeShapePackage(ev) {
+		evidence := []string{"json_tags"}
+		exports := len(ev.ExportedFuncs) + len(ev.ExportedMethods)
+		if exports == 0 {
+			evidence = append(evidence, "no_exported_funcs", "no_exported_methods")
+		} else {
+			evidence = append(evidence, "decl_heavy_export_surface")
+		}
 		return RoleNode{
 			Path: path, Role: RoleDTO, Confidence: confidenceStage1,
-			Evidence: []string{"json_tags", "no_exported_funcs", "no_exported_methods"},
-			InspectedStage: 1,
+			Evidence: evidence, InspectedStage: 1,
 		}
 	}
 
-	candidates := make([]roleCandidate, 0, 4)
+	candidates := make([]roleCandidate, 0, 6)
+	if looksLikeCLI(ev) {
+		candidates = append(candidates, roleCandidate{
+			Role: RoleCLI, Stage: 2, Confidence: confidenceStage2,
+			Evidence: cliEvidence(ev),
+		})
+	}
+	if looksLikePipeline(ev) {
+		candidates = append(candidates, roleCandidate{
+			Role: RolePipeline, Stage: 2, Confidence: confidenceStage2,
+			Evidence: pipelineEvidence(ev),
+		})
+	}
+	if looksLikeView(ev) {
+		candidates = append(candidates, roleCandidate{
+			Role: RoleView, Stage: 2, Confidence: confidenceStage2,
+			Evidence: viewEvidence(ev),
+		})
+	}
+	if looksLikeExport(ev) {
+		candidates = append(candidates, roleCandidate{
+			Role: RoleExport, Stage: 2, Confidence: confidenceStage2,
+			Evidence: exportEvidence(ev),
+		})
+	}
 	if ev.ImportsOsExec && exportsRunnerSurface(ev) {
 		candidates = append(candidates, roleCandidate{
 			Role: RoleExecRunner, Stage: 2, Confidence: confidenceStage2,
 			Evidence: []string{"imports_os_exec", "exports_run_surface"},
 		})
 	}
-	if internalOut >= 2 && exportsOrchestration(ev) {
+	if !looksLikePipeline(ev) && internalOut >= 2 && exportsOrchestration(ev) {
 		candidates = append(candidates, roleCandidate{
 			Role: RoleAggregator, Stage: 2, Confidence: confidenceStage2,
 			Evidence: []string{"orchestration_export", "internal_imports_ge_2"},
 		})
 	}
-	if looksLikeConfig(ev) && internalOut <= 1 {
-		candidates = append(candidates, roleCandidate{
-			Role: RoleConfig, Stage: 2, Confidence: confidenceStage2,
-			Evidence: []string{"load_save_exports"},
-		})
-	}
-	if !ev.GoEmbed && !ev.HTTPSurfaceIdent && ev.ImportsNetHTTP && exportsClientSurface(ev) {
+	if looksLikeAdapter(ev) {
 		candidates = append(candidates, roleCandidate{
 			Role: RoleAdapter, Stage: 2, Confidence: confidenceStage2,
-			Evidence: []string{"imports_net_http", "exports_client_surface", "not_server"},
+			Evidence: adapterEvidence(ev),
 		})
 	}
 
@@ -262,6 +380,113 @@ func publishNode(path string, candidates []roleCandidate) RoleNode {
 		Evidence:       best.Evidence,
 		InspectedStage: best.Stage,
 	}
+}
+
+func collectModifiers(ev PackageEvidence, winnerRole string) []string {
+	var mods []string
+	add := func(role string, matches bool) {
+		if matches && role != winnerRole {
+			mods = append(mods, role)
+		}
+	}
+
+	add(RoleCrypto, hasCryptoSignal(ev))
+	add(RoleValidation, hasValidationSignal(ev))
+	add(RoleConfig, hasConfigSignal(ev))
+	add(RoleLocator, hasLocatorSignal(ev))
+	add(RolePrompt, hasPromptSignal(ev))
+	add(RoleContainer, hasContainerSignal(ev))
+	add(RoleExport, hasExportSignal(ev))
+	add(RolePipeline, hasPipelineSignal(ev))
+	add(RoleAdapter, hasAdapterSignal(ev))
+	add(RoleView, hasViewSignal(ev))
+	add(RoleWorker, hasWorkerSignal(ev))
+	add(RoleQueue, hasQueueSignal(ev))
+	add(RoleCLI, hasCLISignal(ev))
+	add(RoleIngest, hasIngestSignal(ev))
+	add(RoleHTTPSurface, hasServerSignal(ev))
+	add(RoleObservability, hasObservabilitySignal(ev))
+	add(RoleExecRunner, hasExecRunnerSignal(ev))
+
+	if len(mods) == 0 {
+		return nil
+	}
+	sort.Strings(mods)
+	return mods
+}
+
+func hasCryptoSignal(ev PackageEvidence) bool {
+	return hasCryptoPair(ev)
+}
+
+func hasValidationSignal(ev PackageEvidence) bool {
+	return hasValidationExport(ev) && hasValidationType(ev)
+}
+
+func hasConfigSignal(ev PackageEvidence) bool {
+	return looksLikeConfig(ev)
+}
+
+func hasLocatorSignal(ev PackageEvidence) bool {
+	return ev.LocatorSurface || locatorSignalCount(ev) >= 2
+}
+
+func hasPromptSignal(ev PackageEvidence) bool {
+	return promptInstructionCount(ev) >= 3
+}
+
+func hasContainerSignal(ev PackageEvidence) bool {
+	return hasContainerType(ev) && hasContainerLifecycle(ev)
+}
+
+func hasExportSignal(ev PackageEvidence) bool {
+	return ev.ExportSurface && ev.ExportFileWrite
+}
+
+func hasPipelineSignal(ev PackageEvidence) bool {
+	if ev.PipelineRunnerType && ev.PipelineRegistryParam {
+		return true
+	}
+	if ev.PipelineRegisterExport && ev.PipelineRegistryParam {
+		return true
+	}
+	return ev.PipelineRegisterExport && ev.PipelineModuleMap
+}
+
+func hasAdapterSignal(ev PackageEvidence) bool {
+	return (exportsClientSurface(ev) || ev.ClientConstructor) && (ev.ImportsNetHTTP || ev.ImportsExternalDriver)
+}
+
+func hasServerSignal(ev PackageEvidence) bool {
+	return looksLikeHTTPServer(ev, false) || (ev.ImportsGRPC && ev.GRPCServerIdent)
+}
+
+func hasViewSignal(ev PackageEvidence) bool {
+	return ev.ViewBuildExport && ev.JSONTags
+}
+
+func hasWorkerSignal(ev PackageEvidence) bool {
+	return looksLikeWorker(ev)
+}
+
+func hasQueueSignal(ev PackageEvidence) bool {
+	return looksLikeJobQueue(ev)
+}
+
+func hasCLISignal(ev PackageEvidence) bool {
+	return looksLikeCLI(ev)
+}
+
+func hasIngestSignal(ev PackageEvidence) bool {
+	return looksLikeIngest(ev)
+}
+
+func hasObservabilitySignal(ev PackageEvidence) bool {
+	return ev.ImportsOTel || ev.ImportsPrometheus
+}
+
+func hasExecRunnerSignal(ev PackageEvidence) bool {
+	return ev.ImportsOsExec && exportsRunnerSurface(ev)
 }
 
 func mergeEvidence(cands []roleCandidate) []string {
@@ -316,20 +541,509 @@ func exportsOrchestration(ev PackageEvidence) bool {
 	return false
 }
 
+// maxShapeHelperExports caps helpers allowed on a dto / shape package.
+// Larger surfaces stay unknown or win a later stage-2 role (aggregator, adapter).
+const maxShapeHelperExports = 6
+
+// looksLikeShapePackage reports JSON/type carriers that may export a few helpers.
+// Pure dto (json tags, no exports) still matches. HTTP packages never match:
+// net/http importers are delivery or adapters, not shape wiring targets.
+func looksLikeShapePackage(ev PackageEvidence) bool {
+	if !ev.JSONTags {
+		return false
+	}
+	if ev.HasMain || ev.GoEmbed || looksLikeHTTPServer(ev, false) || (ev.ImportsGRPC && ev.GRPCServerIdent) {
+		return false
+	}
+	if ev.ImportsNetHTTP {
+		return false
+	}
+	if ev.ViewBuildExport {
+		return false
+	}
+	if exportsOrchestration(ev) {
+		return false
+	}
+	decls := len(ev.ExportedDecls)
+	exports := len(ev.ExportedFuncs) + len(ev.ExportedMethods)
+	if exports == 0 {
+		// Type-only package (classic dto). ExportedDecls may still name the structs.
+		return true
+	}
+	if decls == 0 || exports > maxShapeHelperExports || decls < exports {
+		return false
+	}
+	return true
+}
+
 func looksLikeConfig(ev PackageEvidence) bool {
 	if ev.ImportsOTel || ev.ImportsPrometheus {
 		return false
 	}
-	hasLoad, hasSave := false, false
+	hasLoad, hasSave := ev.ConfigSurface, false
 	for _, name := range ev.ExportedFuncs {
 		switch name {
-		case "Load", "Init":
+		case "Load", "LoadWithOwnership", "LoadStackEnv", "Init":
 			hasLoad = true
 		case "Save":
 			hasSave = true
 		}
 	}
-	return hasLoad && (hasSave || ev.JSONTags)
+	return hasLoad && (hasSave || ev.JSONTags || hasConfigType(ev))
+}
+
+func hasConfigType(ev PackageEvidence) bool {
+	for _, name := range ev.ExportedDecls {
+		switch name {
+		case "Config", "Options", "Sections":
+			return true
+		}
+		if strings.HasSuffix(name, "Config") || strings.HasSuffix(name, "Options") {
+			return true
+		}
+	}
+	return false
+}
+
+// looksLikeWorker reports job-handler implementations (Kind/Validate/Run trio or task decorators).
+func looksLikeWorker(ev PackageEvidence) bool {
+	if ev.JobHandlerImpl {
+		return true
+	}
+	if ev.JobTaskDecorator {
+		return true
+	}
+	return false
+}
+
+// looksLikeJobQueue reports a registry + enqueue + run surface (beats Load/Save config).
+func looksLikeJobQueue(ev PackageEvidence) bool {
+	if ev.ImportsJobFramework && ev.JobEnqueueExport {
+		return true
+	}
+	hasRegister := ev.JobRegisterExport || ev.JobRegisterCall
+	return hasRegister && ev.JobEnqueueExport && ev.JobRunLoop
+}
+
+// looksLikeIngest reports sync pipelines that upsert/delete/chunk into an index.
+func looksLikeIngest(ev PackageEvidence) bool {
+	if !ev.IngestSyncExport {
+		return false
+	}
+	return ev.IngestIndexOps || ev.IngestWatch
+}
+
+// looksLikeValidation reports validator packages with Validate* exports and issue/report types.
+func looksLikeValidation(ev PackageEvidence) bool {
+	if ev.HasMain || ev.GoEmbed || looksLikeHTTPServer(ev, false) || looksLikeWorker(ev) || looksLikeJobQueue(ev) {
+		return false
+	}
+	if !hasValidationExport(ev) || !hasValidationType(ev) {
+		return false
+	}
+	return true
+}
+
+// looksLikeCLI reports a dispatch package (args + writers) with flag or subcommand evidence.
+func looksLikeCLI(ev PackageEvidence) bool {
+	if ev.ImportsCLIFramework && (ev.CLIDispatchExport || ev.CLISubcommand || ev.CLIFlagParse) {
+		return true
+	}
+	if !ev.CLIDispatchExport {
+		return false
+	}
+	return ev.CLIFlagParse || ev.CLISubcommand
+}
+
+// looksLikeAdapter reports HTTP or driver-backed external-service clients (never servers).
+func looksLikeAdapter(ev PackageEvidence) bool {
+	if ev.GoEmbed || looksLikeHTTPServer(ev, false) {
+		return false
+	}
+	if !exportsClientSurface(ev) && !ev.ClientConstructor {
+		return false
+	}
+	return ev.ImportsNetHTTP || ev.ImportsExternalDriver
+}
+
+// looksLikePipeline reports DSPy/module wiring (registry register or JobRunner construction).
+func looksLikePipeline(ev PackageEvidence) bool {
+	if ev.PipelineRunnerType && ev.PipelineRegistryParam {
+		return true
+	}
+	if ev.PipelineRegisterExport && ev.PipelineRegistryParam {
+		return true
+	}
+	return ev.PipelineRegisterExport && ev.PipelineModuleMap
+}
+
+// looksLikeView reports presentation builders (Build/Render -> local page + JSON models).
+func looksLikeView(ev PackageEvidence) bool {
+	if looksLikeHTTPServer(ev, false) || ev.GoEmbed {
+		return false
+	}
+	if !ev.ViewBuildExport {
+		return false
+	}
+	return ev.JSONTags
+}
+
+func hasValidationExport(ev PackageEvidence) bool {
+	if ev.ValidationSurface {
+		return true
+	}
+	for _, name := range ev.ExportedFuncs {
+		if strings.HasPrefix(name, "Validate") {
+			return true
+		}
+	}
+	for _, name := range ev.ExportedMethods {
+		if strings.HasSuffix(methodBase(name), "Validate") || strings.HasPrefix(methodBase(name), "Validate") {
+			return true
+		}
+	}
+	return false
+}
+
+func hasValidationType(ev PackageEvidence) bool {
+	for _, name := range ev.ExportedDecls {
+		switch name {
+		case "Issue", "Report", "Result", "Validation", "ValidationResult", "RefValidation":
+			return true
+		}
+	}
+	return false
+}
+
+func validationEvidence(ev PackageEvidence) []string {
+	out := []string{}
+	if ev.ValidationSurface {
+		out = append(out, "validation_surface")
+	}
+	for _, name := range ev.ExportedFuncs {
+		if strings.HasPrefix(name, "Validate") {
+			out = append(out, "validate_export")
+			break
+		}
+	}
+	for _, name := range ev.ExportedDecls {
+		switch name {
+		case "Issue", "Report", "Result", "Validation", "ValidationResult", "RefValidation":
+			out = append(out, "validation_"+strings.ToLower(name))
+		}
+	}
+	return out
+}
+
+func configEvidence(ev PackageEvidence) []string {
+	out := []string{}
+	if ev.ConfigSurface {
+		out = append(out, "config_surface")
+	}
+	for _, name := range ev.ExportedFuncs {
+		switch name {
+		case "Load", "LoadWithOwnership", "LoadStackEnv", "Init":
+			out = append(out, "load_export")
+		case "Save":
+			out = append(out, "save_export")
+		}
+	}
+	if ev.JSONTags {
+		out = append(out, "json_tags")
+	}
+	for _, name := range ev.ExportedDecls {
+		switch name {
+		case "Config", "Options", "Sections":
+			out = append(out, "config_"+strings.ToLower(name))
+		}
+		if strings.HasSuffix(name, "Config") || strings.HasSuffix(name, "Options") {
+			out = append(out, "config_type")
+		}
+	}
+	return out
+}
+
+// looksLikeLocator reports path-helper packages (root finders, pii/enc mappers, matchers).
+func looksLikeLocator(ev PackageEvidence) bool {
+	if ev.HasMain || ev.GoEmbed || looksLikeHTTPServer(ev, false) || looksLikeWorker(ev) || looksLikeJobQueue(ev) {
+		return false
+	}
+	if ev.LocatorSurface {
+		return true
+	}
+	return locatorSignalCount(ev) >= 2
+}
+
+func locatorSignalCount(ev PackageEvidence) int {
+	hits := map[string]struct{}{}
+	for _, name := range ev.ExportedFuncs {
+		switch name {
+		case "Find", "FindProduct", "FindRoot", "MustFind", "Resolve", "ResolveFrom", "InstanceDir", "IsProductRoot", "Split",
+			"Root", "ContentRoot", "StaticDir", "InstanceRoot", "ViewerPaths", "SlugFromInstance",
+			"PiiToEnc", "EncToPii", "IsUnderPii", "IsEncAge", "PIIAbs", "ResolvePIIAbs", "NormalizePIIRel", "IsProcessExtract", "ClassifyDraftRel",
+			"PrefixMatch", "Excluded", "HasSuffixAny", "SkipTimelineArchiveDir":
+			hits[name] = struct{}{}
+		}
+	}
+	for _, name := range ev.ExportedMethods {
+		base := methodBase(name)
+		switch base {
+		case "Find", "FindProduct", "FindRoot", "Resolve", "Split", "Root", "PiiToEnc", "EncToPii":
+			hits[base] = struct{}{}
+		}
+	}
+	return len(hits)
+}
+
+func locatorEvidence(ev PackageEvidence) []string {
+	out := []string{}
+	if ev.LocatorSurface {
+		out = append(out, "locator_surface")
+	}
+	for _, name := range ev.ExportedFuncs {
+		switch name {
+		case "Find", "FindProduct", "FindRoot", "MustFind", "Resolve", "ResolveFrom", "InstanceDir", "IsProductRoot", "Split",
+			"Root", "ContentRoot", "StaticDir", "InstanceRoot", "ViewerPaths", "SlugFromInstance",
+			"PiiToEnc", "EncToPii", "IsUnderPii", "IsEncAge", "PIIAbs", "ResolvePIIAbs", "NormalizePIIRel", "IsProcessExtract", "ClassifyDraftRel",
+			"PrefixMatch", "Excluded", "HasSuffixAny", "SkipTimelineArchiveDir":
+			out = append(out, "locator_"+strings.ToLower(name))
+		}
+	}
+	return out
+}
+
+// looksLikeCrypto reports encryption packages with an Encrypt+Decrypt pair.
+func looksLikeCrypto(ev PackageEvidence) bool {
+	if ev.HasMain || ev.GoEmbed || looksLikeHTTPServer(ev, false) || looksLikeWorker(ev) || looksLikeJobQueue(ev) {
+		return false
+	}
+	return hasCryptoPair(ev)
+}
+
+func hasCryptoPair(ev PackageEvidence) bool {
+	hasEnc, hasDec := false, false
+	for _, name := range ev.ExportedFuncs {
+		switch name {
+		case "Encrypt", "encrypt":
+			hasEnc = true
+		case "Decrypt", "decrypt":
+			hasDec = true
+		}
+	}
+	for _, name := range ev.ExportedMethods {
+		switch methodBase(name) {
+		case "Encrypt", "encrypt":
+			hasEnc = true
+		case "Decrypt", "decrypt":
+			hasDec = true
+		}
+	}
+	return hasEnc && hasDec
+}
+
+func cryptoEvidence(ev PackageEvidence) []string {
+	return []string{"encrypt_export", "decrypt_export"}
+}
+
+// looksLikePrompt reports instruction-builder packages (many *Instruction exports).
+func looksLikePrompt(ev PackageEvidence) bool {
+	if ev.HasMain || ev.GoEmbed || looksLikeHTTPServer(ev, false) || looksLikeWorker(ev) || looksLikeJobQueue(ev) {
+		return false
+	}
+	return promptInstructionCount(ev) >= 3
+}
+
+func promptInstructionCount(ev PackageEvidence) int {
+	n := 0
+	for _, name := range ev.ExportedFuncs {
+		if strings.HasSuffix(name, "Instruction") || strings.HasSuffix(name, "_instruction") {
+			n++
+		}
+	}
+	for _, name := range ev.ExportedMethods {
+		base := methodBase(name)
+		if strings.HasSuffix(base, "Instruction") || strings.HasSuffix(base, "_instruction") {
+			n++
+		}
+	}
+	return n
+}
+
+func promptEvidence(ev PackageEvidence) []string {
+	return []string{"prompt_instruction_exports"}
+}
+
+// looksLikeContainer reports runtime DI hubs, lifecycle bootstrap, and service registries.
+func looksLikeContainer(ev PackageEvidence, internalOut int) bool {
+	if ev.HasMain || ev.GoEmbed || looksLikeHTTPServer(ev, false) || (ev.ImportsGRPC && ev.GRPCServerIdent) {
+		return false
+	}
+	return internalOut >= 2 && hasContainerType(ev) && hasContainerLifecycle(ev)
+}
+
+func hasContainerType(ev PackageEvidence) bool {
+	for _, name := range ev.ExportedDecls {
+		switch name {
+		case "Runtime", "Container", "App", "Registry", "Environment", "DIContainer":
+			return true
+		}
+		if strings.HasSuffix(name, "Runtime") || strings.HasSuffix(name, "Container") {
+			return true
+		}
+	}
+	return false
+}
+
+func hasContainerLifecycle(ev PackageEvidence) bool {
+	check := func(name string) bool {
+		switch name {
+		case "Init", "New", "Default", "SetDefault", "Shutdown", "Start", "Boot", "Bootstrap",
+			"init", "new", "default", "set_default", "shutdown", "start", "boot", "bootstrap":
+			return true
+		}
+		return false
+	}
+	for _, name := range ev.ExportedFuncs {
+		if check(name) {
+			return true
+		}
+	}
+	for _, name := range ev.ExportedMethods {
+		if check(methodBase(name)) {
+			return true
+		}
+	}
+	return false
+}
+
+func containerEvidence(ev PackageEvidence) []string {
+	evidence := []string{"container_hub"}
+	if hasContainerType(ev) {
+		evidence = append(evidence, "container_type")
+	}
+	if hasContainerLifecycle(ev) {
+		evidence = append(evidence, "container_lifecycle")
+	}
+	return evidence
+}
+
+func workerEvidence(ev PackageEvidence) []string {
+	out := []string{}
+	if ev.JobHandlerImpl {
+		out = append(out, "job_handler_impl")
+	}
+	if ev.JobTaskDecorator {
+		out = append(out, "job_task_decorator")
+	}
+	if ev.JobRegisterCall {
+		out = append(out, "job_register_call")
+	}
+	return out
+}
+
+func queueEvidence(ev PackageEvidence) []string {
+	out := []string{}
+	if ev.JobRegisterExport {
+		out = append(out, "job_register_export")
+	}
+	if ev.JobRegisterCall {
+		out = append(out, "job_register_call")
+	}
+	if ev.JobEnqueueExport {
+		out = append(out, "job_enqueue_export")
+	}
+	if ev.JobRunLoop {
+		out = append(out, "job_run_loop")
+	}
+	if ev.ImportsJobFramework {
+		out = append(out, "imports_job_framework")
+	}
+	return out
+}
+
+func ingestEvidence(ev PackageEvidence) []string {
+	out := []string{"ingest_sync_export"}
+	if ev.IngestIndexOps {
+		out = append(out, "ingest_index_ops")
+	}
+	if ev.IngestWatch {
+		out = append(out, "ingest_watch")
+	}
+	return out
+}
+
+func cliEvidence(ev PackageEvidence) []string {
+	out := []string{}
+	if ev.CLIDispatchExport {
+		out = append(out, "cli_dispatch_export")
+	}
+	if ev.CLIFlagParse {
+		out = append(out, "cli_flag_parse")
+	}
+	if ev.CLISubcommand {
+		out = append(out, "cli_subcommand")
+	}
+	if ev.ImportsCLIFramework {
+		out = append(out, "imports_cli_framework")
+	}
+	return out
+}
+
+func adapterEvidence(ev PackageEvidence) []string {
+	out := []string{"not_server"}
+	if ev.ImportsNetHTTP {
+		out = append(out, "imports_net_http")
+	}
+	if ev.ImportsExternalDriver {
+		out = append(out, "imports_external_driver")
+	}
+	if exportsClientSurface(ev) {
+		out = append(out, "exports_client_surface")
+	}
+	if ev.ClientConstructor {
+		out = append(out, "client_constructor")
+	}
+	return out
+}
+
+func pipelineEvidence(ev PackageEvidence) []string {
+	out := []string{}
+	if ev.PipelineRegisterExport {
+		out = append(out, "pipeline_register_export")
+	}
+	if ev.PipelineRegistryParam {
+		out = append(out, "pipeline_registry_param")
+	}
+	if ev.PipelineModuleMap {
+		out = append(out, "pipeline_module_map")
+	}
+	if ev.PipelineRunnerType {
+		out = append(out, "pipeline_runner_type")
+	}
+	return out
+}
+
+func viewEvidence(ev PackageEvidence) []string {
+	out := []string{"view_build_export"}
+	if ev.JSONTags {
+		out = append(out, "json_tags")
+	}
+	return out
+}
+
+// looksLikeExport reports file-export surfaces (Export/Marshal exports plus file writes).
+func looksLikeExport(ev PackageEvidence) bool {
+	if looksLikeHTTPServer(ev, false) || ev.GoEmbed {
+		return false
+	}
+	if !ev.ExportSurface {
+		return false
+	}
+	return ev.ExportFileWrite
+}
+
+func exportEvidence(ev PackageEvidence) []string {
+	return []string{"export_surface", "export_file_write"}
 }
 
 func exportsClientSurface(ev PackageEvidence) bool {
@@ -456,6 +1170,9 @@ func FormatRoleTopologyMarkdown(topo RoleTopology) string {
 			fmt.Fprintf(&b, "- candidate_role: %s\n", n.CandidateRole)
 		}
 		fmt.Fprintf(&b, "- inspected_stage: %d\n", n.InspectedStage)
+		if len(n.Modifiers) > 0 {
+			fmt.Fprintf(&b, "- modifiers: %s\n", strings.Join(n.Modifiers, ", "))
+		}
 		if len(n.Evidence) > 0 {
 			fmt.Fprintf(&b, "- evidence: %s\n", strings.Join(n.Evidence, ", "))
 		}

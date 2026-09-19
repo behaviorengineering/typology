@@ -1,4 +1,4 @@
-.PHONY: help build test vet smoke cable-board-sample cable-board-slices cable-board-dist
+.PHONY: help build test vet smoke cable-board-sample cable-board-slices cable-board-dist cable-board-dev
 
 .DEFAULT_GOAL := help
 
@@ -18,6 +18,7 @@ help:
 	@echo "  make vet                 go vet ./..."
 	@echo "  make smoke               Build + read-only CLI checks on $(SMOKE_REPO)"
 	@echo "  make cable-board-dist    Build Vite SPA into $(VIEWER_DIST) for embed"
+	@echo "  make cable-board-dev     Build + boards serve --dev (Vite HMR + XDG boards)"
 	@echo "  make cable-board-sample  Harvest $(SMOKE_REPO) into named tiny-module board"
 	@echo "  make cable-board-slices  Project every catalog slice into named boards"
 
@@ -42,6 +43,11 @@ cable-board-dist:
 	@test -f $(VIEWER_DIST)/index.html
 	@test -d $(VIEWER_DIST)/assets
 	@echo "cable-board-dist: wrote $(VIEWER_DIST)"
+
+# Vite HMR against XDG (or --viewer) registered boards. Requires Node/npm.
+# Builds the CLI first so --dev always runs the current binary.
+cable-board-dev: build
+	./$(BINARY) boards serve --dev --viewer-src $(CURDIR)/$(VIEWER)
 
 smoke: build
 	@tmp=$$(mktemp -d) && \

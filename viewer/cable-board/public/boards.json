@@ -1,10 +1,351 @@
 {
+  "defaultBoard": "cr-case-intake-platform",
   "boards": [
     {
-      "id": "tiny-module",
-      "label": "Tiny module sample",
-      "graph": "/boards/tiny-module/assembly-graph.json"
+      "id": "platform",
+      "label": "platform",
+      "graph": "/boards/platform/assembly-graph.json"
+    },
+    {
+      "id": "consilium-platform",
+      "label": "Consilium · Platform",
+      "graph": "/boards/consilium-platform/assembly-graph.json",
+      "repo": "consilium"
+    },
+    {
+      "id": "consilium-chronology",
+      "label": "Consilium · Chronology",
+      "graph": "/boards/consilium-chronology/assembly-graph.json",
+      "repo": "consilium"
+    },
+    {
+      "id": "consilium-calendar",
+      "label": "Consilium · Calendar",
+      "graph": "/boards/consilium-calendar/assembly-graph.json",
+      "repo": "consilium"
+    },
+    {
+      "id": "consilium-strategy",
+      "label": "Consilium · Strategy",
+      "graph": "/boards/consilium-strategy/assembly-graph.json",
+      "repo": "consilium"
+    },
+    {
+      "id": "consilium-wip",
+      "label": "Consilium · Wip",
+      "graph": "/boards/consilium-wip/assembly-graph.json",
+      "repo": "consilium"
+    },
+    {
+      "id": "consilium-drafts",
+      "label": "Consilium · Drafts",
+      "graph": "/boards/consilium-drafts/assembly-graph.json",
+      "repo": "consilium"
+    },
+    {
+      "id": "consilium-intake",
+      "label": "Consilium · Intake",
+      "graph": "/boards/consilium-intake/assembly-graph.json",
+      "repo": "consilium"
+    },
+    {
+      "id": "consilium-actors",
+      "label": "Consilium · Actors",
+      "graph": "/boards/consilium-actors/assembly-graph.json",
+      "repo": "consilium"
+    },
+    {
+      "id": "consilium-ontology",
+      "label": "Consilium · Ontology",
+      "graph": "/boards/consilium-ontology/assembly-graph.json",
+      "repo": "consilium"
+    },
+    {
+      "id": "consilium-docs",
+      "label": "Consilium · Docs",
+      "graph": "/boards/consilium-docs/assembly-graph.json",
+      "repo": "consilium"
+    },
+    {
+      "id": "consilium-home",
+      "label": "Consilium · Home",
+      "graph": "/boards/consilium-home/assembly-graph.json",
+      "repo": "consilium"
+    },
+    {
+      "id": "consilium-timeline",
+      "label": "Consilium · Timeline",
+      "graph": "/boards/consilium-timeline/assembly-graph.json",
+      "repo": "consilium"
+    },
+    {
+      "id": "consilium-review",
+      "label": "Consilium · Review",
+      "graph": "/boards/consilium-review/assembly-graph.json",
+      "repo": "consilium"
+    },
+    {
+      "id": "consilium-evidence-workspace",
+      "label": "Consilium · Evidence Workspace",
+      "graph": "/boards/consilium-evidence-workspace/assembly-graph.json",
+      "repo": "consilium"
+    },
+    {
+      "id": "consilium-storylines",
+      "label": "Consilium · Storylines",
+      "graph": "/boards/consilium-storylines/assembly-graph.json",
+      "repo": "consilium"
+    },
+    {
+      "id": "consilium-tasks",
+      "label": "Consilium · Tasks",
+      "graph": "/boards/consilium-tasks/assembly-graph.json",
+      "repo": "consilium"
+    },
+    {
+      "id": "consilium-accounting",
+      "label": "Consilium · Accounting",
+      "graph": "/boards/consilium-accounting/assembly-graph.json",
+      "repo": "consilium"
+    },
+    {
+      "id": "consilium-discuss",
+      "label": "Consilium · Discuss",
+      "graph": "/boards/consilium-discuss/assembly-graph.json",
+      "repo": "consilium"
+    },
+    {
+      "id": "consilium-lex",
+      "label": "Consilium · Lex",
+      "graph": "/boards/consilium-lex/assembly-graph.json",
+      "repo": "consilium"
+    },
+    {
+      "id": "consilium-workspace",
+      "label": "Consilium · Workspace",
+      "graph": "/boards/consilium-workspace/assembly-graph.json",
+      "repo": "consilium"
+    },
+    {
+      "id": "gitboard",
+      "label": "Gitboard",
+      "graph": "/boards/gitboard/assembly-graph.json",
+      "repo": "gitboard"
+    },
+    {
+      "id": "cr-case-intake-platform",
+      "label": "Cr Case Intake · Platform",
+      "graph": "/boards/cr-case-intake-platform/assembly-graph.json",
+      "repo": "cr-case-intake"
+    },
+    {
+      "id": "cr-case-intake-chronology",
+      "label": "Cr Case Intake · Chronology",
+      "graph": "/boards/cr-case-intake-chronology/assembly-graph.json",
+      "repo": "cr-case-intake"
+    },
+    {
+      "id": "cr-case-intake-calendar",
+      "label": "Cr Case Intake · Calendar",
+      "graph": "/boards/cr-case-intake-calendar/assembly-graph.json",
+      "repo": "cr-case-intake"
+    },
+    {
+      "id": "cr-case-intake-strategy",
+      "label": "Cr Case Intake · Strategy",
+      "graph": "/boards/cr-case-intake-strategy/assembly-graph.json",
+      "repo": "cr-case-intake"
+    },
+    {
+      "id": "cr-case-intake-wip",
+      "label": "Cr Case Intake · Wip",
+      "graph": "/boards/cr-case-intake-wip/assembly-graph.json",
+      "repo": "cr-case-intake"
+    },
+    {
+      "id": "cr-case-intake-drafts",
+      "label": "Cr Case Intake · Drafts",
+      "graph": "/boards/cr-case-intake-drafts/assembly-graph.json",
+      "repo": "cr-case-intake"
+    },
+    {
+      "id": "cr-case-intake-intake",
+      "label": "Cr Case Intake · Intake",
+      "graph": "/boards/cr-case-intake-intake/assembly-graph.json",
+      "repo": "cr-case-intake"
+    },
+    {
+      "id": "cr-case-intake-actors",
+      "label": "Cr Case Intake · Actors",
+      "graph": "/boards/cr-case-intake-actors/assembly-graph.json",
+      "repo": "cr-case-intake"
+    },
+    {
+      "id": "cr-case-intake-ontology",
+      "label": "Cr Case Intake · Ontology",
+      "graph": "/boards/cr-case-intake-ontology/assembly-graph.json",
+      "repo": "cr-case-intake"
+    },
+    {
+      "id": "cr-case-intake-docs",
+      "label": "Cr Case Intake · Docs",
+      "graph": "/boards/cr-case-intake-docs/assembly-graph.json",
+      "repo": "cr-case-intake"
+    },
+    {
+      "id": "cr-case-intake-home",
+      "label": "Cr Case Intake · Home",
+      "graph": "/boards/cr-case-intake-home/assembly-graph.json",
+      "repo": "cr-case-intake"
+    },
+    {
+      "id": "cr-case-intake-timeline",
+      "label": "Cr Case Intake · Timeline",
+      "graph": "/boards/cr-case-intake-timeline/assembly-graph.json",
+      "repo": "cr-case-intake"
+    },
+    {
+      "id": "cr-case-intake-review",
+      "label": "Cr Case Intake · Review",
+      "graph": "/boards/cr-case-intake-review/assembly-graph.json",
+      "repo": "cr-case-intake"
+    },
+    {
+      "id": "cr-case-intake-evidence-workspace",
+      "label": "Cr Case Intake · Evidence Workspace",
+      "graph": "/boards/cr-case-intake-evidence-workspace/assembly-graph.json",
+      "repo": "cr-case-intake"
+    },
+    {
+      "id": "cr-case-intake-storylines",
+      "label": "Cr Case Intake · Storylines",
+      "graph": "/boards/cr-case-intake-storylines/assembly-graph.json",
+      "repo": "cr-case-intake"
+    },
+    {
+      "id": "cr-case-intake-tasks",
+      "label": "Cr Case Intake · Tasks",
+      "graph": "/boards/cr-case-intake-tasks/assembly-graph.json",
+      "repo": "cr-case-intake"
+    },
+    {
+      "id": "cr-case-intake-accounting",
+      "label": "Cr Case Intake · Accounting",
+      "graph": "/boards/cr-case-intake-accounting/assembly-graph.json",
+      "repo": "cr-case-intake"
+    },
+    {
+      "id": "cr-case-intake-discuss",
+      "label": "Cr Case Intake · Discuss",
+      "graph": "/boards/cr-case-intake-discuss/assembly-graph.json",
+      "repo": "cr-case-intake"
+    },
+    {
+      "id": "cr-case-intake-lex",
+      "label": "Cr Case Intake · Lex",
+      "graph": "/boards/cr-case-intake-lex/assembly-graph.json",
+      "repo": "cr-case-intake"
+    },
+    {
+      "id": "cr-case-intake-workspace",
+      "label": "Cr Case Intake · Workspace",
+      "graph": "/boards/cr-case-intake-workspace/assembly-graph.json",
+      "repo": "cr-case-intake"
+    },
+    {
+      "id": "chronology",
+      "label": "chronology",
+      "graph": "/boards/chronology/assembly-graph.json"
+    },
+    {
+      "id": "calendar",
+      "label": "calendar",
+      "graph": "/boards/calendar/assembly-graph.json"
+    },
+    {
+      "id": "strategy",
+      "label": "strategy",
+      "graph": "/boards/strategy/assembly-graph.json"
+    },
+    {
+      "id": "wip",
+      "label": "wip",
+      "graph": "/boards/wip/assembly-graph.json"
+    },
+    {
+      "id": "drafts",
+      "label": "drafts",
+      "graph": "/boards/drafts/assembly-graph.json"
+    },
+    {
+      "id": "intake",
+      "label": "intake",
+      "graph": "/boards/intake/assembly-graph.json"
+    },
+    {
+      "id": "actors",
+      "label": "actors",
+      "graph": "/boards/actors/assembly-graph.json"
+    },
+    {
+      "id": "ontology",
+      "label": "ontology",
+      "graph": "/boards/ontology/assembly-graph.json"
+    },
+    {
+      "id": "docs",
+      "label": "docs",
+      "graph": "/boards/docs/assembly-graph.json"
+    },
+    {
+      "id": "home",
+      "label": "home",
+      "graph": "/boards/home/assembly-graph.json"
+    },
+    {
+      "id": "timeline",
+      "label": "timeline",
+      "graph": "/boards/timeline/assembly-graph.json"
+    },
+    {
+      "id": "review",
+      "label": "review",
+      "graph": "/boards/review/assembly-graph.json"
+    },
+    {
+      "id": "evidence-workspace",
+      "label": "evidence-workspace",
+      "graph": "/boards/evidence-workspace/assembly-graph.json"
+    },
+    {
+      "id": "storylines",
+      "label": "storylines",
+      "graph": "/boards/storylines/assembly-graph.json"
+    },
+    {
+      "id": "tasks",
+      "label": "tasks",
+      "graph": "/boards/tasks/assembly-graph.json"
+    },
+    {
+      "id": "accounting",
+      "label": "accounting",
+      "graph": "/boards/accounting/assembly-graph.json"
+    },
+    {
+      "id": "discuss",
+      "label": "discuss",
+      "graph": "/boards/discuss/assembly-graph.json"
+    },
+    {
+      "id": "lex",
+      "label": "lex",
+      "graph": "/boards/lex/assembly-graph.json"
+    },
+    {
+      "id": "workspace",
+      "label": "workspace",
+      "graph": "/boards/workspace/assembly-graph.json"
     }
-  ],
-  "defaultBoard": "tiny-module"
+  ]
 }

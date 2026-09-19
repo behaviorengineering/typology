@@ -2,6 +2,8 @@ import ELK, { type ElkNode } from 'elkjs/lib/elk.bundled.js'
 import type { Edge } from '@xyflow/react'
 import type { PackageFlowNode } from './PackageNode'
 import { analyzeRisks, type GraphRisks } from './risks'
+import type { CompositionScope } from './scope'
+import { filterGraphByScope, stubDirectionFor } from './scope'
 import type { PackageGraph } from './types'
 import { shortLabel } from './types'
 
@@ -11,10 +13,19 @@ type LayerFilter = {
   kinds: string[] | null
   showRisks: boolean
   risks?: GraphRisks | null
+  scope?: CompositionScope
 }
 
-function nodeSize(inDegree: number, outDegree: number, inboundCount: number, outboundCount: number) {
-  const height = 78 + Math.max(inboundCount, outboundCount, 1) * 10
+function nodeSize(
+  inDegree: number,
+  outDegree: number,
+  inboundCount: number,
+  outboundCount: number,
+  modifierCount = 0,
+) {
+  const modifierRows = modifierCount > 0 ? Math.max(1, Math.ceil(modifierCount / 3)) : 0
+  const extraHeight = modifierRows > 0 ? 16 + (modifierRows - 1) * 10 : 0
+  const height = 78 + Math.max(inboundCount, outboundCount, 1) * 10 + extraHeight
   const width = 160 + Math.min(inDegree + outDegree, 12) * 6
   return { width, height }
 }
@@ -79,10 +90,11 @@ export async function layoutGraph(
   selectedId: string | null,
   layer?: LayerFilter,
 ): Promise<{ nodes: PackageFlowNode[]; edges: Edge[] }> {
+  const scoped = filterGraphByScope(graph, layer?.scope ?? 'inside')
   const activeEdges =
-    layer?.kinds === null
-      ? graph.edges
-      : graph.edges.filter((e) => e.roleKind !== undefined && layer?.kinds?.includes(e.roleKind))
+    layer?.kinds === null || layer?.kinds === undefined
+      ? scoped.edges
+      : scoped.edges.filter((e) => e.roleKind !== undefined && layer.kinds?.includes(e.roleKind))
 
   const risk = layer?.showRisks ? layer.risks ?? analyzeRisks(graph) : emptyRisks()
   const focusIds = selectedId !== null ? focusNeighborIdsFromEdges(activeEdges, selectedId) : null
@@ -95,10 +107,10 @@ export async function layoutGraph(
 
   const layoutNodes =
     focusIds !== null
-      ? graph.nodes.filter((n) => focusIds.has(n.id))
+      ? scoped.nodes.filter((n) => focusIds.has(n.id))
       : activeNodeIds.size > 0
-        ? graph.nodes.filter((n) => activeNodeIds.has(n.id))
-        : graph.nodes
+        ? scoped.nodes.filter((n) => activeNodeIds.has(n.id))
+        : scoped.nodes
 
   const flowNodes: PackageFlowNode[] = layoutNodes.map((n) => {
     const kindInto = new Map<string, string>()
@@ -125,6 +137,7 @@ export async function layoutGraph(
     const layerInDegree = inbound.length
     const layerOutDegree = outbound.length
     const layerDegree = layerInDegree + layerOutDegree
+    const stubDirection = stubDirectionFor(n.id, graph)
     return {
       id: n.id,
       type: 'package',
@@ -135,7 +148,6 @@ export async function layoutGraph(
         inDegree: layerInDegree,
         outDegree: layerOutDegree,
         isHub: layerDegree >= 4,
-        isLeaf: layerOutDegree === 0,
         inbound,
         outbound,
         highlighted: selectedId !== null && n.id === selectedId,
@@ -144,9 +156,17 @@ export async function layoutGraph(
         inMesh: risk.meshNodeIds.has(n.id),
         wrongWay: risk.wrongWayNodeIds.has(n.id),
         role: n.role ?? '',
+        roleConfidence: n.roleConfidence,
+        modifiers: n.modifiers ?? [],
+        layer: n.layer,
+        doc: n.doc,
+        evidence: n.evidence,
+        exportedDecls: n.exportedDecls,
+        exportedFuncs: n.exportedFuncs,
         isBoundary: Boolean(n.isBoundary),
         boundaryKind: n.boundaryKind,
         ownerId: n.ownerId,
+        stubDirection: stubDirection ?? undefined,
       },
     }
   })
@@ -242,6 +262,8 @@ export async function layoutGraph(
       'elk.layered.spacing.edgeEdgeBetweenLayers': denseOverview ? '24' : '14',
       'elk.spacing.portPort': focusIds ? '18' : '14',
       'elk.padding': focusIds ? '[24,24,24,24]' : '[16,16,16,16]',
+      'elk.separateConnectedComponents': 'true',
+      'elk.spacing.componentComponent': focusIds ? '96' : denseOverview ? '72' : '56',
       'elk.edgeRouting': 'SPLINES',
       'elk.portConstraints': 'FIXED_SIDE',
       'elk.layered.nodePlacement.strategy': 'NETWORK_SIMPLEX',
@@ -256,6 +278,7 @@ export async function layoutGraph(
         n.data.outDegree,
         n.data.inbound.length,
         n.data.outbound.length,
+        n.data.modifiers.length,
       )
       sizes.set(n.id, size)
       return {
@@ -323,7 +346,13 @@ export async function layoutGraph(
     children: flowNodes.map((n) => {
       const size =
         sizes.get(n.id) ??
-        nodeSize(n.data.inDegree, n.data.outDegree, n.data.inbound.length, n.data.outbound.length)
+        nodeSize(
+          n.data.inDegree,
+          n.data.outDegree,
+          n.data.inbound.length,
+          n.data.outbound.length,
+          n.data.modifiers.length,
+        )
       return {
         id: n.id,
         width: size.width,
@@ -353,17 +382,86 @@ export async function layoutGraph(
   reorderPortsForPositions(flowNodes, pos2, sizes)
 
   // Only nudge a sink when a skip cable would tunnel through another package box.
-  const finalPos = clearSkipCableOverlaps(flowNodes, pos2, sizes, layoutEdges)
+  const afterSkip = clearSkipCableOverlaps(flowNodes, pos2, sizes, layoutEdges)
+
+  // Fail-closed: package boxes must not overlap after ELK + skip nudges.
+  const separated = separateOverlappingNodes(
+    flowNodes.map((n) => ({
+      ...n,
+      position: afterSkip.get(n.id) ?? pos2.get(n.id) ?? pos.get(n.id) ?? n.position,
+    })),
+  )
+  const finalPos = new Map(separated.map((n) => [n.id, { x: n.position.x, y: n.position.y }]))
   reorderPortsForPositions(flowNodes, finalPos, sizes)
-
-  const nodes: PackageFlowNode[] = flowNodes.map((n) => ({
-    ...n,
-    position: finalPos.get(n.id) ?? pos2.get(n.id) ?? pos.get(n.id) ?? n.position,
-  }))
-
   annotateBowEdges(flowEdges, flowNodes, finalPos, sizes)
 
-  return { nodes, edges: flowEdges }
+  return {
+    nodes: flowNodes.map((n) => ({
+      ...n,
+      position: finalPos.get(n.id) ?? n.position,
+    })),
+    edges: flowEdges,
+  }
+}
+
+/**
+ * Push overlapping package boxes apart until none intersect.
+ * Prefer a small right shift; if that is larger than a down shift, move down instead.
+ */
+export function separateOverlappingNodes(
+  nodes: PackageFlowNode[],
+  gap = 28,
+): PackageFlowNode[] {
+  if (nodes.length < 2) return nodes
+
+  const pos = new Map(nodes.map((n) => [n.id, { x: n.position.x, y: n.position.y }]))
+  const sizes = new Map(
+    nodes.map((n) => [
+      n.id,
+      nodeSize(n.data.inDegree, n.data.outDegree, n.data.inbound.length, n.data.outbound.length),
+    ]),
+  )
+  const ids = [...pos.keys()].sort((a, b) => {
+    const pa = pos.get(a)!
+    const pb = pos.get(b)!
+    return pa.y - pb.y || pa.x - pb.x || a.localeCompare(b)
+  })
+
+  for (let round = 0; round < 24; round++) {
+    let moved = false
+    for (let i = 0; i < ids.length; i++) {
+      for (let j = i + 1; j < ids.length; j++) {
+        const a = ids[i]
+        const b = ids[j]
+        const ap = pos.get(a)!
+        const bp = pos.get(b)!
+        const as = sizes.get(a)!
+        const bs = sizes.get(b)!
+        const aRight = ap.x + as.width + gap
+        const aBottom = ap.y + as.height + gap
+        const overlapX = ap.x < bp.x + bs.width + gap && aRight > bp.x
+        const overlapY = ap.y < bp.y + bs.height + gap && aBottom > bp.y
+        if (!overlapX || !overlapY) continue
+
+        const pushRight = aRight - bp.x
+        const pushDown = aBottom - bp.y
+        if (pushRight > 0 && (pushRight <= pushDown || pushDown <= 0)) {
+          pos.set(b, { x: bp.x + pushRight, y: bp.y })
+        } else if (pushDown > 0) {
+          pos.set(b, { x: bp.x, y: bp.y + pushDown })
+        } else {
+          pos.set(b, { x: bp.x + Math.max(pushRight, gap), y: bp.y })
+        }
+        moved = true
+      }
+    }
+    if (!moved) break
+  }
+
+  return nodes.map((n) => ({
+    ...n,
+    position: pos.get(n.id) ?? n.position,
+  }))
 }
 
 /**

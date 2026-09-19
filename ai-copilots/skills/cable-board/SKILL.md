@@ -44,6 +44,7 @@ MUST NOT use this skill as a substitute for [catalog/SKILL.md](../catalog/SKILL.
 | Slice board | Cable board projected through one catalog slice: owned packages plus boundary stubs |
 | Boundary stub | Lightweight node for a package outside the selected slice (`isBoundary`, `boundaryKind`, `ownerId`) |
 | Missing binding | Boundary cable with no matching `sliceBindings` / allowed `componentBindings` (`bindingStatus: missing`) |
+| Scope | On slice boards only: **Internal** (owned packages), **External dependents** (outside packages that import this slice), **Depends on others** (outside packages this slice imports). Second toolbar row under the wiring layers. |
 
 ## Commands
 
@@ -61,9 +62,12 @@ Interactive viewer (human surface for the same JSON):
 # After boards register (any consumer repo; no local npm):
 typology boards serve [--addr HOST:PORT] [--viewer PUBLIC_DIR]
 
-# React source only (Typology checkout, iterating on the SPA):
-make cable-board-dist   # refresh go:embed for boards serve / releases
-cd viewer/cable-board && npm install && npm run dev
+# React source HMR (Typology checkout; same XDG boards.json):
+make cable-board-dev
+# or: typology boards serve --dev [--viewer-src DIR]
+
+# Production embed refresh only (releases / go install):
+make cable-board-dist
 ```
 
 One server serves many named boards. Register a board without touching the

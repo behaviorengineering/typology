@@ -544,6 +544,8 @@ var boardsListenAndServe = func(addr string, handler http.Handler) error {
 func runBoardsServe(args []string, stdout, stderr io.Writer) int {
 	addr := "127.0.0.1:5173"
 	viewerPublic := ""
+	viewerSrc := ""
+	dev := false
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
 		case "--addr":
@@ -560,10 +562,21 @@ func runBoardsServe(args []string, stdout, stderr io.Writer) int {
 			}
 			viewerPublic = args[i+1]
 			i++
+		case "--viewer-src":
+			if i+1 >= len(args) {
+				_, _ = fmt.Fprintln(stderr, "boards serve: --viewer-src requires cable-board dir path")
+				return 2
+			}
+			viewerSrc = args[i+1]
+			i++
+		case "--dev":
+			dev = true
 		case "-h", "--help":
-			_, _ = fmt.Fprintln(stdout, "usage: typology boards serve [--addr HOST:PORT] [--viewer PUBLIC_DIR]")
-			_, _ = fmt.Fprintln(stdout, "  Serves the embedded cable-board UI. Board JSON comes from PUBLIC_DIR")
-			_, _ = fmt.Fprintln(stdout, "  (default: XDG data typology/viewer/public). Run boards register/sync first.")
+			_, _ = fmt.Fprintln(stdout, "usage: typology boards serve [--addr HOST:PORT] [--viewer PUBLIC_DIR] [--dev] [--viewer-src DIR]")
+			_, _ = fmt.Fprintln(stdout, "  Default (no --dev): embedded SPA in the foreground; blocks until Ctrl+C; never daemonizes.")
+			_, _ = fmt.Fprintln(stdout, "  Board JSON comes from PUBLIC_DIR (default: XDG data typology/viewer/public).")
+			_, _ = fmt.Fprintln(stdout, "  Run boards register/sync first.")
+			_, _ = fmt.Fprintln(stdout, "  --dev starts Vite HMR against that public dir (needs Typology viewer/cable-board sources).")
 			return 0
 		default:
 			_, _ = fmt.Fprintf(stderr, "boards serve: unknown flag %q\n", args[i])
@@ -572,6 +585,10 @@ func runBoardsServe(args []string, stdout, stderr io.Writer) int {
 	}
 	if strings.TrimSpace(addr) == "" {
 		_, _ = fmt.Fprintln(stderr, "boards serve: --addr is empty")
+		return 2
+	}
+	if viewerSrc != "" && !dev {
+		_, _ = fmt.Fprintln(stderr, "boards serve: --viewer-src requires --dev")
 		return 2
 	}
 
@@ -605,6 +622,10 @@ func runBoardsServe(args []string, stdout, stderr io.Writer) int {
 			return 1
 		}
 		_, _ = fmt.Fprintf(stdout, "boards serve: materialized %d board(s) into %s\n", len(reg.Boards), viewerPublic)
+	}
+
+	if dev {
+		return runBoardsServeDev(addr, viewerPublic, viewerSrc, stdout, stderr)
 	}
 
 	if !boardsviewer.EmbeddedOK() {

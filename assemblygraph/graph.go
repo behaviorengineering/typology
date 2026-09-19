@@ -57,7 +57,12 @@ type Node struct {
 	IsLeaf         bool     `json:"isLeaf"`
 	Role           string   `json:"role,omitempty"`
 	RoleConfidence float64  `json:"roleConfidence,omitempty"`
+	Modifiers      []string `json:"modifiers,omitempty"`
 	Layer          int      `json:"layer"`
+	Doc            string   `json:"doc,omitempty"`
+	Evidence       []string `json:"evidence,omitempty"`
+	ExportedDecls  []string `json:"exportedDecls,omitempty"`
+	ExportedFuncs  []string `json:"exportedFuncs,omitempty"`
 	// IsBoundary marks a lightweight stub for a package outside the selected slice.
 	IsBoundary bool `json:"isBoundary,omitempty"`
 	// BoundaryKind is slice, library, or unowned when IsBoundary is true.
@@ -114,7 +119,7 @@ func Build(opts BuildOptions) (Graph, error) {
 
 // FromHarvest builds a Graph from an existing evidence harvest (no I/O).
 func FromHarvest(h evidence.Result) Graph {
-	return fromSummary(discover.BuildGraphSummary(h.Graph), h.Topo)
+	return fromSummary(discover.BuildGraphSummary(h.Graph), h.Topo, h.Index)
 }
 
 // WriteJSON writes g as indented JSON (with trailing newline) to path.
@@ -144,10 +149,14 @@ func DefaultPath(repoRoot string) string {
 	return filepath.Join(repoRoot, filepath.FromSlash(DefaultRel))
 }
 
-func fromSummary(summary discover.GraphSummary, topo sourceindex.RoleTopology) Graph {
+func fromSummary(summary discover.GraphSummary, topo sourceindex.RoleTopology, idx sourceindex.Index) Graph {
 	roleByPath := map[string]sourceindex.RoleNode{}
 	for _, n := range topo.Packages {
 		roleByPath[normPath(n.Path)] = n
+	}
+	evByPath := map[string]sourceindex.PackageEvidence{}
+	for p, ev := range idx.Packages {
+		evByPath[normPath(p)] = ev
 	}
 	kindByPair := map[string]string{}
 	for _, e := range topo.Edges {
@@ -168,6 +177,7 @@ func fromSummary(summary discover.GraphSummary, topo sourceindex.RoleTopology) G
 		id := NormalizeID(p)
 		path := normPath(p)
 		role := roleByPath[path]
+		ev := evByPath[path]
 		roleName := strings.TrimSpace(role.Role)
 		if roleName == "" {
 			roleName = sourceindex.RoleUnknown
@@ -186,7 +196,12 @@ func fromSummary(summary discover.GraphSummary, topo sourceindex.RoleTopology) G
 			IsLeaf:         n.IsLeaf,
 			Role:           roleName,
 			RoleConfidence: role.Confidence,
+			Modifiers:      role.Modifiers,
 			Layer:          layer,
+			Doc:            ev.PackageDoc,
+			Evidence:       role.Evidence,
+			ExportedDecls:  truncateList(ev.ExportedDecls, 8),
+			ExportedFuncs:  truncateList(ev.ExportedFuncs, 8),
 		})
 	}
 
@@ -215,7 +230,7 @@ func roleLayer(role string) int {
 	switch role {
 	case sourceindex.RoleEntrypoint:
 		return 0
-	case sourceindex.RoleHTTPSurface:
+	case sourceindex.RoleHTTPSurface, sourceindex.RoleContainer:
 		return 1
 	case sourceindex.RoleAggregator, sourceindex.RoleAdapter, sourceindex.RoleExecRunner, sourceindex.RoleUnknown:
 		return 2
@@ -236,7 +251,7 @@ func wrongWay(srcRole string, srcLayer int, tgtRole string, tgtLayer int) (bool,
 		return true, fmt.Sprintf("%s (layer %d) imports outer %s (layer %d)", srcRole, srcLayer, tgtRole, tgtLayer)
 	}
 	if (srcRole == sourceindex.RoleDTO || srcRole == sourceindex.RoleConfig || srcRole == sourceindex.RoleObservability) &&
-		(tgtRole == sourceindex.RoleHTTPSurface || tgtRole == sourceindex.RoleEntrypoint || tgtRole == sourceindex.RoleAggregator) {
+		(tgtRole == sourceindex.RoleHTTPSurface || tgtRole == sourceindex.RoleEntrypoint || tgtRole == sourceindex.RoleAggregator || tgtRole == sourceindex.RoleContainer) {
 		return true, fmt.Sprintf("%s must not import %s", srcRole, tgtRole)
 	}
 	return false, ""
@@ -267,3 +282,18 @@ func normalizeList(paths []string) []string {
 	sort.Strings(out)
 	return out
 }
+
+func truncateList(items []string, limit int) []string {
+	if len(items) == 0 {
+		return nil
+	}
+	if len(items) <= limit {
+		res := make([]string, len(items))
+		copy(res, items)
+		return res
+	}
+	res := make([]string, limit)
+	copy(res, items[:limit])
+	return res
+}
+

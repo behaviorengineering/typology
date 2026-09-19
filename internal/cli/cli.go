@@ -105,11 +105,11 @@ func printUsage(w io.Writer) {
 	_, _ = fmt.Fprintln(w, "  typology boards register REPO --all-slices [--prefix PREFIX] [--viewer PUBLIC_DIR] [...]")
 	_, _ = fmt.Fprintln(w, "  typology boards register   # interactive wizard (TTY)")
 	_, _ = fmt.Fprintln(w, "  typology boards sync --viewer PUBLIC_DIR")
-	_, _ = fmt.Fprintln(w, "  typology boards serve [--addr HOST:PORT] [--viewer PUBLIC_DIR]")
+	_, _ = fmt.Fprintln(w, "  typology boards serve [--addr HOST:PORT] [--viewer PUBLIC_DIR] [--dev] [--viewer-src DIR]")
 	_, _ = fmt.Fprintln(w, "  typology boards path [--yaml|--config|--data]")
 	_, _ = fmt.Fprintln(w, "  typology validate REPO [--module PATH] [--catalog PATH] [SLICE]")
 	_, _ = fmt.Fprintln(w, "  typology show [SLICE|graph] [--module PATH] [--json] [--catalog PATH]")
-	_, _ = fmt.Fprintln(w, "  typology remediate REPO SLICE [--module PATH] [--catalog PATH]")
+	_, _ = fmt.Fprintln(w, "  typology remediate REPO SLICE [--module PATH] [--catalog PATH] [--write]")
 	_, _ = fmt.Fprintln(w, "  typology version")
 }
 

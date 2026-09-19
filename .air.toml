@@ -1,0 +1,25 @@
+# Air: rebuild typology when Go sources change, then restart boards serve --dev.
+# Install: go install github.com/air-verse/air@latest
+# Run from the Typology module root: air
+#
+# For React-only edits, prefer `make cable-board-dev` (Vite HMR) without Air.
+# Air restarts the whole process (including Vite) on every Go change.
+
+root = "."
+tmp_dir = "tmp"
+
+[build]
+  cmd = "go build -o ./tmp/typology ./cmd/typology"
+  bin = "./tmp/typology"
+  full_bin = "./tmp/typology boards serve --dev --viewer-src ./viewer/cable-board"
+  include_ext = ["go", "tpl", "tmpl", "html"]
+  exclude_dir = ["viewer", "tmp", "bin", "testdata", "internal/boardsviewer/dist", "node_modules"]
+  exclude_regex = ["_test\\.go"]
+  delay = 500
+  stop_on_error = true
+
+[log]
+  time = false
+
+[misc]
+  clean_on_exit = true
