@@ -79,6 +79,9 @@ type PackageEvidence struct {
 	JobEnqueueExport   bool `json:"jobEnqueueExport,omitempty"`   // Enqueue / Submit / Delay / apply_async
 	JobRunLoop         bool `json:"jobRunLoop,omitempty"`         // Run / RunLoop with context
 	JobTaskDecorator   bool `json:"jobTaskDecorator,omitempty"`   // @task / @app.task (Python)
+	ValidationSurface  bool `json:"validationSurface,omitempty"`  // validate / validate_*
+	ConfigSurface      bool `json:"configSurface,omitempty"`      // load / load_config / load_with_ownership
+	LocatorSurface     bool `json:"locatorSurface,omitempty"`     // find_root / pii_to_enc / prefix_match (Python)
 	ImportsJobFramework bool `json:"importsJobFramework,omitempty"` // celery / rq / arq
 	CLIDispatchExport  bool `json:"cliDispatchExport,omitempty"`  // RunCLI / Execute / Run(args, writers)
 	CLIFlagParse       bool `json:"cliFlagParse,omitempty"`       // flag.Parse / cobra / argparse

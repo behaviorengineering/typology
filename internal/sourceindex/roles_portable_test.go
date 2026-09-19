@@ -252,6 +252,27 @@ def main(verbose: bool) -> None:
 			},
 			wantRole: sourceindex.RoleCLI,
 		},
+		{
+			name: "load_config_python",
+			files: map[string]string{
+				"src/cfg/__init__.py": "",
+				"src/cfg/settings.py": `from dataclasses import dataclass
+
+@dataclass
+class Config:
+    workspace: str
+
+@dataclass
+class Options:
+    retries: int
+
+
+def load_config(path: str) -> Config:
+    return Config(workspace=path)
+`,
+			},
+			wantRole: sourceindex.RoleConfig,
+		},
 	}
 
 	for _, tc := range cases {
@@ -300,6 +321,29 @@ def main(verbose: bool) -> None:
 				t.Fatalf("no package classified as %q; got %v", tc.wantRole, packageRoles(topo))
 			}
 		})
+	}
+}
+
+func TestPythonPackageDoc(t *testing.T) {
+	t.Parallel()
+	repo := t.TempDir()
+	mustWrite(t, filepath.Join(repo, "pyproject.toml"), "[project]\nname = \"docpy\"\nversion = \"0.0.1\"\n")
+	mustWrite(t, filepath.Join(repo, "src", "mypkg", "__init__.py"), `"""Package mypkg provides core orchestration utilities."""
+
+def helper():
+    pass
+`)
+	idx, _, err := sourceindex.BuildPython(repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ev, ok := idx.Packages["src/mypkg"]
+	if !ok {
+		t.Fatalf("expected src/mypkg in packages, got: %v", idx.Packages)
+	}
+	wantDoc := "Package mypkg provides core orchestration utilities."
+	if ev.PackageDoc != wantDoc {
+		t.Fatalf("PackageDoc = %q, want %q", ev.PackageDoc, wantDoc)
 	}
 }
 

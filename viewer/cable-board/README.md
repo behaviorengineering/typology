@@ -15,21 +15,24 @@ typology boards serve
 # open http://127.0.0.1:5173/?board=<id>
 ```
 
-The Go binary embeds the production SPA. Board JSON is read from
+The Go binary embeds the production SPA and always serves it in the
+**foreground** (your terminal stays attached until Ctrl+C). Board JSON is read from
 `~/.local/share/typology/viewer/public` (or `--viewer PUBLIC_DIR`).
 
-**Developers editing this React app** (from the Typology module root):
+**Developers editing this React app** (HMR + live XDG boards):
 
 ```bash
-make build
-make cable-board-sample
-cd viewer/cable-board
-npm install
-npm run dev
+# from Typology module root (or a host that vendors it under providers/typology)
+typology boards serve --dev
+# or: make cable-board-dev
 ```
 
-Open the printed URL (default http://localhost:5173). The page loads the
-default board from `public/boards.json`.
+`--dev` starts Vite against the same XDG `boards.json` operators use. Pass
+`--viewer-src` / `TYPOLOGY_VIEWER_SRC` if the cable-board sources are not found
+from the current directory.
+
+Slice boards also expose **Scope** controls: Internal, External dependents, and
+Depends on others.
 
 Release builds run `make cable-board-dist` so `internal/boardsviewer/dist` is
 embedded for `go install` / GitHub Releases.

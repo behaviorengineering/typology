@@ -1,6 +1,7 @@
 import { memo } from 'react'
 import { Handle, Position, type NodeProps, type Node } from '@xyflow/react'
 import { InboundSocket } from './PlugGlyph'
+import { stubMetaLabel } from './scope'
 
 export type PortRef = {
   id: string
@@ -14,7 +15,6 @@ export type PackageNodeData = {
   inDegree: number
   outDegree: number
   isHub: boolean
-  isLeaf: boolean
   inbound: PortRef[]
   outbound: PortRef[]
   highlighted: boolean
@@ -23,9 +23,12 @@ export type PackageNodeData = {
   inMesh: boolean
   wrongWay: boolean
   role: string
+  modifiers: string[]
   isBoundary?: boolean
   boundaryKind?: string
   ownerId?: string
+  /** in = they depend on slice; out = slice depends on them */
+  stubDirection?: 'in' | 'out' | 'both'
 }
 
 export type PackageFlowNode = Node<PackageNodeData, 'package'>
@@ -42,10 +45,12 @@ function PackageNodeView({ data }: NodeProps<PackageFlowNode>) {
     'pkg-node',
     data.inbound.length > 0 ? 'pkg-node--has-ins' : '',
     data.isBoundary ? 'pkg-node--boundary' : '',
+    data.isBoundary && data.stubDirection === 'in' ? 'pkg-node--stub-in' : '',
+    data.isBoundary && data.stubDirection === 'out' ? 'pkg-node--stub-out' : '',
+    data.isBoundary && data.stubDirection === 'both' ? 'pkg-node--stub-both' : '',
     data.isBoundary && data.boundaryKind === 'library' ? 'pkg-node--boundary-library' : '',
     data.isBoundary && data.boundaryKind === 'unowned' ? 'pkg-node--boundary-unowned' : '',
     !data.isBoundary && data.isHub ? 'pkg-node--hub' : '',
-    !data.isBoundary && data.isLeaf ? 'pkg-node--leaf' : '',
     data.highlighted ? 'pkg-node--hot' : '',
     data.dimmed ? 'pkg-node--dim' : '',
     data.inCycle ? 'pkg-node--cycle' : '',
@@ -82,11 +87,24 @@ function PackageNodeView({ data }: NodeProps<PackageFlowNode>) {
       <div className="pkg-node__title">{data.label}</div>
       <div className="pkg-node__meta">
         {data.isBoundary
-          ? 'boundary stub'
+          ? stubMetaLabel(data.stubDirection ?? null)
           : `${data.role ? `${data.role} · ` : ''}in ${data.inDegree} · out ${data.outDegree}${
               marks.length > 0 ? ` · ${marks.join(' · ')}` : ''
             }`}
       </div>
+      {data.modifiers.length > 0 ? (
+        <div className="pkg-node__modifiers" aria-label="Secondary role modifiers">
+          {data.modifiers.map((modifier) => (
+            <span
+              key={modifier}
+              className="pkg-node__modifier-pill"
+              title={`Secondary modifier: ${modifier}`}
+            >
+              +{modifier}
+            </span>
+          ))}
+        </div>
+      ) : null}
       <div className="pkg-node__path">{data.path}</div>
       {data.outbound.map((port, i) => (
         <Handle

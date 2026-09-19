@@ -203,6 +203,11 @@ func scanPythonPackage(absRepo string, pkg pythonPkg) (PackageEvidence, error) {
 			// Fail-closed on parse: skip file but keep inventory (syntax errors should not invent roles).
 			continue
 		}
+		if doc := extractPythonDocstring(mod); doc != "" {
+			if file == "__init__.py" || ev.PackageDoc == "" {
+				ev.PackageDoc = doc
+			}
+		}
 		scanPythonModule(mod, src, &ev, exportedDecls, exportedFuncs, exportedMethods, &exportedBodies)
 	}
 	ev.ExportedDecls = sortedKeys(exportedDecls)
@@ -498,11 +503,26 @@ func collectPythonRoleFuncName(name string, ev *PackageEvidence) {
 		ev.IngestWatch = true
 	case "build", "render":
 		ev.ViewBuildExport = true
+	case "find", "find_root", "find_product", "resolve", "root", "content_root", "static_dir", "instance_root", "pii_to_enc", "enc_to_pii", "prefix_match", "normalize_rel":
+		ev.LocatorSurface = true
+	case "load", "load_config", "load_with_ownership":
+		ev.ConfigSurface = true
+	case "validate", "validate_all", "validate_refs", "validate_file", "validate_product":
+		ev.ValidationSurface = true
 	case "write_payload":
 		ev.ExportSurface = true
 	}
 	if strings.HasPrefix(name, "export_") || strings.HasPrefix(name, "marshal_") {
 		ev.ExportSurface = true
+	}
+	if strings.HasPrefix(name, "load_") {
+		ev.ConfigSurface = true
+	}
+	if strings.HasPrefix(name, "find_") || strings.HasPrefix(name, "pii_") || strings.HasPrefix(name, "enc_") || strings.HasPrefix(name, "normalize_") || strings.HasPrefix(name, "prefix_") || name == "is_process_extract" || name == "is_under_pii" {
+		ev.LocatorSurface = true
+	}
+	if strings.HasPrefix(name, "validate_") {
+		ev.ValidationSurface = true
 	}
 	if strings.HasPrefix(name, "register_") || strings.HasPrefix(name, "Register") {
 		ev.PipelineRegisterExport = true
@@ -624,3 +644,23 @@ func collectPythonImportGraph(absRepo string, index Index, nameToPath map[string
 	}
 	return graph
 }
+
+func extractPythonDocstring(mod *parser2.Module) string {
+	if mod == nil || len(mod.Body) == 0 {
+		return ""
+	}
+	exprStmt, ok := mod.Body[0].(*parser2.ExprStmt)
+	if !ok {
+		return ""
+	}
+	constExpr, ok := exprStmt.Value.(*parser2.Constant)
+	if !ok {
+		return ""
+	}
+	str, ok := constExpr.Value.(string)
+	if !ok {
+		return ""
+	}
+	return compactPackageDoc(str)
+}
+

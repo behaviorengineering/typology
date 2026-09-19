@@ -9,6 +9,7 @@ export type GraphNode = {
   isLeaf: boolean
   role?: string
   roleConfidence?: number
+  modifiers?: string[]
   layer?: number
   isBoundary?: boolean
   boundaryKind?: 'slice' | 'library' | 'unowned' | string

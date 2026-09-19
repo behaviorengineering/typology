@@ -58,6 +58,7 @@ Prefer a concrete `vX.Y.Z` tag in CI and published modules once you settle on a 
 | `typology boards register` | Interactive TTY wizard, or `REPO BOARD_ID` / `--all-slices` for CI |
 | `typology boards sync` | Rematerialize Vite `public/` from the XDG registry |
 | `typology boards serve` | Serve the embedded cable-board UI against XDG (or `--viewer`) `boards.json` |
+| `typology boards serve --dev` | Vite HMR against the same board JSON (needs `viewer/cable-board` sources) |
 | `typology boards path` | Print YAML, config, or data directory path |
 | `typology validate REPO` | Fail-closed path, import, and DocPage checks |
 | `typology show` | Slice or import-graph summary |
@@ -74,7 +75,7 @@ typology boards register REPO BOARD_ID [--prefix PREFIX] [--slice ID] [--viewer 
 typology boards register REPO --all-slices [--prefix PREFIX] [--viewer PUBLIC_DIR] [...]
 typology boards register   # interactive wizard (TTY)
 typology boards sync --viewer PUBLIC_DIR
-typology boards serve [--addr HOST:PORT] [--viewer PUBLIC_DIR]
+typology boards serve [--addr HOST:PORT] [--viewer PUBLIC_DIR] [--dev] [--viewer-src DIR]
 typology boards path [--yaml|--config|--data]
 typology validate REPO [--module PATH] [--catalog PATH] [SLICE]
 typology show [SLICE|graph] [--module PATH] [--json] [--catalog PATH]
@@ -120,7 +121,7 @@ First map in a new repo: load [ai-copilots/skills/journey/SKILL.md](ai-copilots/
 4. `typology architecture` writes a deterministic Markdown projection under `docs/architecture/typology.md`. It combines the intended catalog with observed package topology within `scope.modules` and names findings for human review. It does not make narrative design decisions.
 5. Cable board:
    - Machine checks: `typology assembly-graph REPO` writes JSON (`tmp/typology/assembly-graph.json` by default). With `--slice` or `--all-slices`, each board is one bounded context plus boundary stubs.
-   - Human viewer: from inside the consumer repo run `typology boards register` (TTY wizard), or for CI `typology boards register REPO BOARD_ID --viewer PUBLIC_DIR` / `--all-slices --prefix PREFIX`. That harvests into XDG, upserts `boards.yaml`, and materializes board JSON. Then `typology boards serve` opens the embedded SPA (no local npm). Multi-repo boards MUST use `--prefix` so ids and localStorage keys stay unique.
+   - Human viewer: from inside the consumer repo run `typology boards register` (TTY wizard), or for CI `typology boards register REPO BOARD_ID --viewer PUBLIC_DIR` / `--all-slices --prefix PREFIX`. That harvests into XDG, upserts `boards.yaml`, and materializes board JSON. Then `typology boards serve` opens the embedded SPA (no local npm). While editing the React app, use `typology boards serve --dev` or `make cable-board-dev` for Vite HMR against the same XDG boards. Multi-repo boards MUST use `--prefix` so ids and localStorage keys stay unique.
    - Agents load [ai-copilots/skills/cable-board/SKILL.md](ai-copilots/skills/cable-board/SKILL.md).
 6. An agent or architect fixes each finding or records the boundary debt in the journey file.
 7. `typology validate` fails closed on missing paths, bindings, DocPages, or program leaves.
