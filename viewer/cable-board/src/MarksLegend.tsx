@@ -54,6 +54,39 @@ function WiringSample({ kind }: { kind: string }) {
   )
 }
 
+const architecturalLayers = [
+  {
+    id: 'layer-0',
+    tag: '0',
+    title: 'Entrypoint',
+    read: 'CLI commands and main bootstraps that start the application.',
+  },
+  {
+    id: 'layer-1',
+    tag: '1',
+    title: 'Boot & Delivery',
+    read: 'Servers, containers, and request delivery surfaces.',
+  },
+  {
+    id: 'layer-2',
+    tag: '2',
+    title: 'Domain & Adapters',
+    read: 'Domain logic, workers, queues, pipelines, and external adapters.',
+  },
+  {
+    id: 'layer-3',
+    tag: '3',
+    title: 'Data Transfer',
+    read: 'DTOs, contracts, and request or response payload shapes.',
+  },
+  {
+    id: 'layer-4',
+    tag: '4',
+    title: 'Infrastructure & Config',
+    read: 'Config, observability, path roots, and other support packages.',
+  },
+] as const
+
 /** Visual + cold-read entries for the Legend panel. */
 export const legendMarks: MarkEntry[] = [
   {
@@ -150,6 +183,24 @@ export const legendMarks: MarkEntry[] = [
 export function MarksLegend() {
   return (
     <div className="marks-legend" aria-label="Board marks">
+      <div className="marks-legend__section">
+        <h3 className="marks-legend__heading">Architectural layers</h3>
+        <ul className="marks-legend__layer-list">
+          {architecturalLayers.map((layer) => (
+            <li key={layer.id} className="marks-legend__layer-row">
+              <span className="marks-legend__layer-pill">{layer.tag}</span>
+              <span className="marks-legend__copy">
+                <span className="marks-legend__title">{layer.title}</span>
+                <span className="marks-legend__read">{layer.read}</span>
+              </span>
+            </li>
+          ))}
+        </ul>
+        <p className="marks-legend__note">
+          Outer layers may depend inward. If an inner layer imports outward, Typology marks a
+          wrong-way cable.
+        </p>
+      </div>
       <h3 className="marks-legend__heading">Marks</h3>
       <ul className="marks-legend__list">
         {legendMarks.map((mark) => (

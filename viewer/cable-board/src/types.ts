@@ -47,5 +47,8 @@ export function shortLabel(path: string): string {
   const s = path.replace(/^\.\//, '')
   if (s.startsWith('cmd/')) return s
   if (s.startsWith('internal/')) return s.slice('internal/'.length)
-  return s
+  const internalIndex = s.lastIndexOf('/internal/')
+  if (internalIndex >= 0) return s.slice(internalIndex + '/internal/'.length)
+  const parts = s.split('/')
+  return parts[parts.length - 1] || s
 }

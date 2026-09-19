@@ -1,4 +1,4 @@
-import { memo, useState } from 'react'
+import { memo, useLayoutEffect, useRef, useState, type Ref } from 'react'
 import { Handle, Position, type NodeProps, type Node } from '@xyflow/react'
 import { InboundSocket } from './PlugGlyph'
 import { stubMetaLabel } from './scope'
@@ -97,14 +97,24 @@ function layerLabel(layer?: number): string {
   }
 }
 
-function PackageRolloverPanel({ data }: { data: PackageNodeData }) {
+function PackageRolloverPanel({
+  data,
+  panelRef,
+  placement,
+}: {
+  data: PackageNodeData
+  panelRef?: Ref<HTMLDivElement>
+  placement: 'top' | 'bottom'
+}) {
   const roleDesc = ROLE_DESCRIPTIONS[data.role] || ROLE_DESCRIPTIONS.unknown
   const confidencePercent =
     typeof data.roleConfidence === 'number' ? Math.round(data.roleConfidence * 100) : null
+  const showPath = data.path !== data.label
 
   return (
     <div
-      className="pkg-rollover"
+      ref={panelRef}
+      className={`pkg-rollover ${placement === 'bottom' ? 'pkg-rollover--bottom' : ''}`}
       role="tooltip"
       aria-label={`Details for ${data.label}`}
       onClick={(e) => e.stopPropagation()}
@@ -120,7 +130,7 @@ function PackageRolloverPanel({ data }: { data: PackageNodeData }) {
             ) : null}
           </div>
         </div>
-        <div className="pkg-rollover__path">{data.path}</div>
+        {showPath ? <div className="pkg-rollover__path">{data.path}</div> : null}
       </div>
 
       <div className="pkg-rollover__section">
@@ -227,8 +237,36 @@ function boundaryBadge(kind?: string, ownerId?: string): string {
 
 function PackageNodeView({ data }: NodeProps<PackageFlowNode>) {
   const [hovered, setHovered] = useState(false)
+  const [panelPlacement, setPanelPlacement] = useState<'top' | 'bottom'>('top')
+  const nodeRef = useRef<HTMLDivElement | null>(null)
+  const panelRef = useRef<HTMLDivElement | null>(null)
   const showPanel = (hovered || data.highlighted) && !data.dimmed
+  const showPath = data.path !== data.label
   const width = 168 + Math.min(data.outDegree + data.inDegree, 12) * 6
+  useLayoutEffect(() => {
+    if (!showPanel) {
+      setPanelPlacement('top')
+      return
+    }
+    const nodeEl = nodeRef.current
+    const panelEl = panelRef.current
+    if (!nodeEl || !panelEl) return
+    const updatePlacement = () => {
+      const rect = nodeEl.getBoundingClientRect()
+      const panelHeight = panelEl.offsetHeight
+      const spaceAbove = rect.top - 10
+      const spaceBelow = window.innerHeight - rect.bottom - 10
+      const shouldPlaceBelow = spaceAbove < panelHeight && spaceBelow > spaceAbove
+      setPanelPlacement(shouldPlaceBelow ? 'bottom' : 'top')
+    }
+    updatePlacement()
+    window.addEventListener('resize', updatePlacement)
+    window.addEventListener('scroll', updatePlacement, true)
+    return () => {
+      window.removeEventListener('resize', updatePlacement)
+      window.removeEventListener('scroll', updatePlacement, true)
+    }
+  }, [showPanel, data.label, data.path])
   const className = [
     'pkg-node',
     showPanel ? 'pkg-node--active-popover' : '',
@@ -257,12 +295,15 @@ function PackageNodeView({ data }: NodeProps<PackageFlowNode>) {
 
   return (
     <div
+      ref={nodeRef}
       className={className}
       style={{ minWidth: width, zIndex: showPanel ? 60 : undefined }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
-      {showPanel ? <PackageRolloverPanel data={data} /> : null}
+      {showPanel ? (
+        <PackageRolloverPanel data={data} panelRef={panelRef} placement={panelPlacement} />
+      ) : null}
       {data.inbound.map((port, i) => (
         <Handle
           key={`in-${port.id}`}
@@ -282,7 +323,7 @@ function PackageNodeView({ data }: NodeProps<PackageFlowNode>) {
       <div className="pkg-node__title">{data.label}</div>
       <div className="pkg-node__meta">
         {data.isBoundary
-          ? stubMetaLabel(data.stubDirection ?? null)
+          ? `${stubMetaLabel(data.stubDirection ?? null)} · in ${data.inDegree} · out ${data.outDegree}`
           : `${data.role ? `${data.role} · ` : ''}in ${data.inDegree} · out ${data.outDegree}${
               marks.length > 0 ? ` · ${marks.join(' · ')}` : ''
             }`}
@@ -300,7 +341,7 @@ function PackageNodeView({ data }: NodeProps<PackageFlowNode>) {
           ))}
         </div>
       ) : null}
-      <div className="pkg-node__path">{data.path}</div>
+      {showPath ? <div className="pkg-node__path">{data.path}</div> : null}
       {data.outbound.map((port, i) => (
         <Handle
           key={`out-${port.id}`}

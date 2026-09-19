@@ -496,14 +496,16 @@ function BoardInner() {
   )
 
   const onNodeDragStop: OnNodeDrag<PackageFlowNode> = useCallback(
-    (_event, _node, nextNodes) => {
+    () => {
       const key = navKey(selectedLayer, selectedId, compositionScope)
-      const separated = separateOverlappingNodes(nextNodes as PackageFlowNode[])
-      setNodes(separated)
-      saveNodePositionsForKey(
-        key,
-        separated.map((n) => ({ id: n.id, position: n.position })),
-      )
+      setNodes((currentNodes) => {
+        const separated = separateOverlappingNodes(currentNodes)
+        saveNodePositionsForKey(
+          key,
+          separated.map((n) => ({ id: n.id, position: n.position })),
+        )
+        return separated
+      })
     },
     [selectedLayer, selectedId, compositionScope, setNodes],
   )
@@ -790,7 +792,7 @@ function BoardInner() {
                 role="dialog"
                 aria-label="Wiring legend"
               >
-                <h3 className="marks-legend__heading">Layers</h3>
+                <h3 className="marks-legend__heading">Wiring views</h3>
                 <div className="layer-legend">
                   {wiringLayers.map((layer) => (
                     <button
