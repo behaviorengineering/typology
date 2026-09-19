@@ -11,6 +11,10 @@ export type GraphNode = {
   roleConfidence?: number
   modifiers?: string[]
   layer?: number
+  doc?: string
+  evidence?: string[]
+  exportedDecls?: string[]
+  exportedFuncs?: string[]
   isBoundary?: boolean
   boundaryKind?: 'slice' | 'library' | 'unowned' | string
   ownerId?: string

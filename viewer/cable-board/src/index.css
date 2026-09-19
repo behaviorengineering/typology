@@ -875,3 +875,229 @@ body,
   cursor: pointer;
   max-width: 14rem;
 }
+
+/* Rollover info panel */
+.pkg-node--active-popover {
+  z-index: 60 !important;
+}
+
+.pkg-rollover {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: 320px;
+  max-width: 90vw;
+  max-height: 420px;
+  overflow-y: auto;
+  padding: 12px 14px;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.98);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 12px 30px -4px rgba(15, 23, 42, 0.16), 0 4px 12px -2px rgba(15, 23, 42, 0.08);
+  z-index: 100;
+  text-align: left;
+  pointer-events: auto;
+  cursor: default;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  animation: pkg-rollover-fade 0.15s ease-out;
+}
+
+@keyframes pkg-rollover-fade {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 6px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+.pkg-rollover__header {
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 8px;
+}
+
+.pkg-rollover__eyebrow {
+  color: #64748b;
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.pkg-rollover__title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.pkg-rollover__name {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.pkg-rollover__role-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #1d4ed8;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.pkg-rollover__conf {
+  color: #3b82f6;
+  font-size: 0.65rem;
+  font-weight: 500;
+}
+
+.pkg-rollover__path {
+  margin-top: 4px;
+  color: #64748b;
+  font-size: 0.68rem;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  word-break: break-all;
+}
+
+.pkg-rollover__section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pkg-rollover__subhead {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.pkg-rollover__doc {
+  color: #334155;
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+.pkg-rollover__fallback {
+  color: #64748b;
+  font-style: italic;
+}
+
+.pkg-rollover__modifiers-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.pkg-rollover__modifier-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pkg-rollover__modifier-desc {
+  font-size: 0.72rem;
+  color: #475569;
+}
+
+.pkg-rollover__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.pkg-rollover__chip {
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  color: #334155;
+  font-size: 0.66rem;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+}
+
+.pkg-rollover__code-chip {
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  color: #0f172a;
+  font-size: 0.66rem;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+}
+
+.pkg-rollover__surface-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.pkg-rollover__surface-label {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: #64748b;
+  flex-shrink: 0;
+}
+
+.pkg-rollover__footer {
+  border-top: 1px solid #e2e8f0;
+  padding-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pkg-rollover__stats {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #64748b;
+  font-size: 0.72rem;
+}
+
+.pkg-rollover__dot {
+  color: #cbd5e1;
+}
+
+.pkg-rollover__alert {
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.pkg-rollover__alert--wrong {
+  background: #fdf4ff;
+  border: 1px solid #f0abfc;
+  color: #a21caf;
+}
+
+.pkg-rollover__alert--cycle {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+}
+
+.pkg-rollover__alert--mesh {
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  color: #b45309;
+}
+

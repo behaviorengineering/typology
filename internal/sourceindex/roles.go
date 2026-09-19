@@ -244,6 +244,12 @@ func classifyPackageBase(ev PackageEvidence, internalOut int) RoleNode {
 			Evidence: ingestEvidence(ev), InspectedStage: 1,
 		}
 	}
+	if looksLikeContainer(ev, internalOut) {
+		return RoleNode{
+			Path: path, Role: RoleContainer, Confidence: confidenceStage1,
+			Evidence: containerEvidence(ev), InspectedStage: 1,
+		}
+	}
 	if looksLikeConfig(ev) && !looksLikeJobQueue(ev) && (internalOut <= 1 || hasConfigType(ev)) {
 		return RoleNode{
 			Path: path, Role: RoleConfig, Confidence: confidenceStage1,
@@ -266,12 +272,6 @@ func classifyPackageBase(ev PackageEvidence, internalOut int) RoleNode {
 		return RoleNode{
 			Path: path, Role: RolePrompt, Confidence: confidenceStage1,
 			Evidence: promptEvidence(ev), InspectedStage: 1,
-		}
-	}
-	if looksLikeContainer(ev, internalOut) {
-		return RoleNode{
-			Path: path, Role: RoleContainer, Confidence: confidenceStage1,
-			Evidence: containerEvidence(ev), InspectedStage: 1,
 		}
 	}
 	if looksLikeShapePackage(ev) {

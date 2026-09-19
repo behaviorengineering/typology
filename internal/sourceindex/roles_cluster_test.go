@@ -4,6 +4,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/behaviorengineering/typology/internal/evidence"
 	"github.com/behaviorengineering/typology/internal/sourceindex"
 )
 
@@ -305,39 +306,6 @@ func Summarize(text string) string { return text }
 `,
 			},
 			wantRole: sourceindex.RoleUnknown,
-		},
-		{
-			name: "container_runtime_hub",
-			files: map[string]string{
-				"svc1/svc1.go": `package svc1
-type Service1 struct{}
-`,
-				"svc2/svc2.go": `package svc2
-type Service2 struct{}
-`,
-				"container/runtime.go": `package container
-
-import (
-	"context"
-	"example.com/clusters/svc1"
-	"example.com/clusters/svc2"
-)
-
-type Runtime struct {
-	S1 *svc1.Service1
-	S2 *svc2.Service2
-}
-
-func Init(ctx context.Context, root string) (*Runtime, error) {
-	return &Runtime{S1: &svc1.Service1{}, S2: &svc2.Service2{}}, nil
-}
-
-func (r *Runtime) Shutdown(ctx context.Context) error {
-	return nil
-}
-`,
-			},
-			wantRole: sourceindex.RoleContainer,
 		},
 		{
 			name: "validate_results_and_issues",
@@ -663,8 +631,8 @@ def timeline_list_title_instruction() -> str:
     pass
 `,
 				"src/container/__init__.py": "",
-				"src/container/runtime.py": `from src.svc1.svc import Service1
-from src.svc2.svc import Service2
+				"src/container/runtime.py": `from svc1.svc import Service1
+from svc2.svc import Service2
 
 class Runtime:
     def __init__(self):
@@ -1019,6 +987,131 @@ def validate_report(root: str) -> Report:
 			for i := range got.Modifiers {
 				if got.Modifiers[i] != tc.wantModifiers[i] {
 					t.Fatalf("modifiers=%v want %v", got.Modifiers, tc.wantModifiers)
+				}
+			}
+		})
+	}
+}
+
+func TestContainerRole_go(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name          string
+		files         map[string]string
+		containerPkg  string
+		wantRole      string
+		wantModifiers []string
+	}{
+		{
+			name: "pure_runtime_hub",
+			files: map[string]string{
+				"svc1/svc1.go": `package svc1
+type Service1 struct{}
+`,
+				"svc2/svc2.go": `package svc2
+type Service2 struct{}
+`,
+				"container/runtime.go": `package container
+
+import (
+	"context"
+	"example.com/testcont/svc1"
+	"example.com/testcont/svc2"
+)
+
+type Runtime struct {
+	S1 *svc1.Service1
+	S2 *svc2.Service2
+}
+
+func Init(ctx context.Context, root string) (*Runtime, error) {
+	return &Runtime{S1: &svc1.Service1{}, S2: &svc2.Service2{}}, nil
+}
+
+func (r *Runtime) Shutdown(ctx context.Context) error {
+	return nil
+}
+`,
+			},
+			containerPkg:  "container",
+			wantRole:      sourceindex.RoleContainer,
+			wantModifiers: nil,
+		},
+		{
+			name: "blended_container_config",
+			files: map[string]string{
+				"svc1/svc1.go": `package svc1
+type Service1 struct{}
+`,
+				"svc2/svc2.go": `package svc2
+type Service2 struct{}
+`,
+				"appcontainer/container.go": `package appcontainer
+
+import (
+	"context"
+	"example.com/testcont/svc1"
+	"example.com/testcont/svc2"
+)
+
+type Config struct {
+	Port int
+}
+
+func Load(path string) (*Config, error) {
+	return &Config{}, nil
+}
+
+type Container struct {
+	S1 *svc1.Service1
+	S2 *svc2.Service2
+}
+
+func New(ctx context.Context) (*Container, error) {
+	return &Container{}, nil
+}
+`,
+			},
+			containerPkg:  "appcontainer",
+			wantRole:      sourceindex.RoleContainer,
+			wantModifiers: []string{sourceindex.RoleConfig},
+		},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			repo := t.TempDir()
+			mustWrite(t, filepath.Join(repo, "go.mod"), "module example.com/testcont\n\ngo 1.26.5\n")
+			for rel, body := range tc.files {
+				mustWrite(t, filepath.Join(repo, rel), body)
+			}
+			h, err := evidence.Harvest(evidence.HarvestOptions{RepoRoot: repo})
+			if err != nil {
+				t.Fatal(err)
+			}
+			topo := h.Topo
+			var node *sourceindex.RoleNode
+			for i := range topo.Packages {
+				if topo.Packages[i].Path == tc.containerPkg {
+					node = &topo.Packages[i]
+					break
+				}
+			}
+			if node == nil {
+				t.Fatalf("missing package %q in topo %+v", tc.containerPkg, topo.Packages)
+			}
+			if node.Role != tc.wantRole {
+				t.Fatalf("role=%q want %q (node=%+v)", node.Role, tc.wantRole, node)
+			}
+			if len(node.Modifiers) != len(tc.wantModifiers) {
+				t.Fatalf("modifiers=%v want %v", node.Modifiers, tc.wantModifiers)
+			}
+			for i := range node.Modifiers {
+				if node.Modifiers[i] != tc.wantModifiers[i] {
+					t.Fatalf("modifiers=%v want %v", node.Modifiers, tc.wantModifiers)
 				}
 			}
 		})

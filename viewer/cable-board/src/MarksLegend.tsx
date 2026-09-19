@@ -134,6 +134,17 @@ export const legendMarks: MarkEntry[] = [
       </span>
     ),
   },
+  {
+    id: 'modifier',
+    title: 'Role modifier',
+    read: 'Secondary capability detected alongside primary role (e.g. +config, +server, +container). Shown as pill badges.',
+    sample: (
+      <span className="mark-sample__wiring" aria-hidden style={{ gap: '4px' }}>
+        <span className="pkg-node__modifier-pill">+config</span>
+        <span className="pkg-node__modifier-pill">+locator</span>
+      </span>
+    ),
+  },
 ]
 
 export function MarksLegend() {

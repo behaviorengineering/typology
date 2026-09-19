@@ -369,26 +369,30 @@ function BoardInner() {
   }, [])
 
   const displayNodes = useMemo(() => {
-    if (selectedId || !hoverId) return nodes
+    const activeId = hoverId || selectedId
+    if (!activeId) return nodes
     return nodes.map((node) => {
+      const isSelf = node.id === activeId
       const hot =
-        node.id === hoverId ||
+        isSelf ||
         edges.some(
           (e) =>
-            (e.source === hoverId && e.target === node.id) ||
-            (e.target === hoverId && e.source === node.id),
+            (e.source === activeId && e.target === node.id) ||
+            (e.target === activeId && e.source === node.id),
         )
       return {
         ...node,
+        zIndex: isSelf ? 40 : hot ? 9 : 0,
         data: { ...node.data, dimmed: !hot },
       }
     })
   }, [nodes, edges, hoverId, selectedId])
 
   const displayEdges = useMemo((): Edge[] => {
-    if (selectedId || !hoverId) return edges
+    const activeId = hoverId || selectedId
+    if (!activeId) return edges
     return edges.map((edge) => {
-      const hot = edge.source === hoverId || edge.target === hoverId
+      const hot = edge.source === activeId || edge.target === activeId
       const prevStroke =
         edge.style && typeof edge.style.stroke === 'string' ? edge.style.stroke : '#64748b'
       return {
