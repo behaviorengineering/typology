@@ -576,7 +576,7 @@ func runBoardsServe(args []string, stdout, stderr io.Writer) int {
 			_, _ = fmt.Fprintln(stdout, "  Default (no --dev): embedded SPA in the foreground; blocks until Ctrl+C; never daemonizes.")
 			_, _ = fmt.Fprintln(stdout, "  Board JSON comes from PUBLIC_DIR (default: XDG data typology/viewer/public).")
 			_, _ = fmt.Fprintln(stdout, "  Run boards register/sync first.")
-			_, _ = fmt.Fprintln(stdout, "  --dev starts Vite HMR against that public dir (needs Typology viewer/cable-board sources).")
+			_, _ = fmt.Fprintln(stdout, "  --dev starts Vite HMR against that public dir (needs Typology pkg/viewer/cable-board sources).")
 			return 0
 		default:
 			_, _ = fmt.Fprintf(stderr, "boards serve: unknown flag %q\n", args[i])

@@ -12,7 +12,7 @@ import (
 	"syscall"
 )
 
-// findCableBoardSrc locates viewer/cable-board for boards serve --dev.
+// findCableBoardSrc locates pkg/viewer/cable-board for boards serve --dev.
 // Order: explicit flag, TYPOLOGY_VIEWER_SRC, walk from cwd (incl. providers/typology/...).
 func findCableBoardSrc(explicit string) (string, error) {
 	if s := strings.TrimSpace(explicit); s != "" {
@@ -26,14 +26,14 @@ func findCableBoardSrc(explicit string) (string, error) {
 		return "", fmt.Errorf("boards serve --dev: cwd: %w", err)
 	}
 	candidates := []string{
-		filepath.Join(cwd, "viewer", "cable-board"),
-		filepath.Join(cwd, "providers", "typology", "viewer", "cable-board"),
+		filepath.Join(cwd, "pkg", "viewer", "cable-board"),
+		filepath.Join(cwd, "providers", "typology", "pkg", "viewer", "cable-board"),
 	}
 	dir := cwd
 	for i := 0; i < 8; i++ {
 		candidates = append(candidates,
-			filepath.Join(dir, "viewer", "cable-board"),
-			filepath.Join(dir, "providers", "typology", "viewer", "cable-board"),
+			filepath.Join(dir, "pkg", "viewer", "cable-board"),
+			filepath.Join(dir, "providers", "typology", "pkg", "viewer", "cable-board"),
 		)
 		parent := filepath.Dir(dir)
 		if parent == dir {
@@ -55,7 +55,7 @@ func findCableBoardSrc(explicit string) (string, error) {
 			return abs, nil
 		}
 	}
-	return "", fmt.Errorf("boards serve --dev: cannot find viewer/cable-board (pass --viewer-src or set TYPOLOGY_VIEWER_SRC); need a Typology checkout with npm sources")
+	return "", fmt.Errorf("boards serve --dev: cannot find pkg/viewer/cable-board (pass --viewer-src or set TYPOLOGY_VIEWER_SRC); need a Typology checkout with npm sources")
 }
 
 func validateCableBoardSrc(dir string) (string, error) {

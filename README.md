@@ -58,7 +58,7 @@ Prefer a concrete `vX.Y.Z` tag in CI and published modules once you settle on a 
 | `typology boards register` | Interactive TTY wizard, or `REPO BOARD_ID` / `--all-slices` for CI |
 | `typology boards sync` | Rematerialize Vite `public/` from the XDG registry |
 | `typology boards serve` | Serve the embedded cable-board UI against XDG (or `--viewer`) `boards.json` |
-| `typology boards serve --dev` | Vite HMR against the same board JSON (needs `viewer/cable-board` sources) |
+| `typology boards serve --dev` | Vite HMR against the same board JSON (needs `pkg/viewer/cable-board` sources) |
 | `typology boards path` | Print YAML, config, or data directory path |
 | `typology validate REPO` | Fail-closed path, import, and DocPage checks |
 | `typology show` | Slice or import-graph summary |
