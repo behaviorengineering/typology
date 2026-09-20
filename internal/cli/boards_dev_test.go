@@ -9,7 +9,7 @@ import (
 func TestFindCableBoardSrcExplicit(t *testing.T) {
 	t.Parallel()
 	root := t.TempDir()
-	src := filepath.Join(root, "viewer", "cable-board")
+	src := filepath.Join(root, "pkg", "viewer", "cable-board")
 	if err := os.MkdirAll(src, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -29,7 +29,7 @@ func TestFindCableBoardSrcExplicit(t *testing.T) {
 func TestFindCableBoardSrcFromProvidersLayout(t *testing.T) {
 	t.Parallel()
 	root := t.TempDir()
-	src := filepath.Join(root, "providers", "typology", "viewer", "cable-board")
+	src := filepath.Join(root, "providers", "typology", "pkg", "viewer", "cable-board")
 	if err := os.MkdirAll(src, 0o755); err != nil {
 		t.Fatal(err)
 	}

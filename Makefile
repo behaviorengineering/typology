@@ -7,7 +7,7 @@ VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 LDFLAGS := -X github.com/behaviorengineering/typology/internal/cli.version=$(VERSION)
 SMOKE_REPO := testdata/tiny-module
 SMOKE_CATALOG := $(SMOKE_REPO)/.typology/typology.yaml
-VIEWER := viewer/cable-board
+VIEWER := pkg/viewer/cable-board
 VIEWER_DIST := internal/boardsviewer/dist
 
 help:

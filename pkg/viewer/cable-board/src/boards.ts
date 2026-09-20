@@ -1,4 +1,4 @@
-/** Materialized cable board manifest (viewer/cable-board/public/boards.json).
+/** Materialized cable board manifest (pkg/viewer/cable-board/public/boards.json).
  * Durable source of truth is ~/.config/typology/boards.yaml. */
 
 export type BoardEntry = {

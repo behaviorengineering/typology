@@ -2,7 +2,7 @@
 # Smoke: XDG YAML registry + prefixed boards + materialize + collision guard.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-VIEWER="$ROOT/viewer/cable-board"
+VIEWER="$ROOT/pkg/viewer/cable-board"
 SMOKE_REPO="$ROOT/testdata/tiny-module"
 SMOKE_CATALOG="$SMOKE_REPO/.typology/typology.yaml"
 PUBLIC="$VIEWER/public"

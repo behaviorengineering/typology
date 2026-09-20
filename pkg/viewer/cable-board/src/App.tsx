@@ -229,7 +229,7 @@ function BoardInner() {
       .then(async (res) => {
         if (!res.ok) {
           throw new Error(
-            `failed to load cable board JSON from ${graphSrc} (${res.status}). Run typology boards register REPO BOARD_ID --viewer viewer/cable-board/public`,
+            `failed to load cable board JSON from ${graphSrc} (${res.status}). Run typology boards register REPO BOARD_ID --viewer pkg/viewer/cable-board/public`,
           )
         }
         return res.json() as Promise<PackageGraph>

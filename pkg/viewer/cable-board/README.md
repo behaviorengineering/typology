@@ -59,10 +59,10 @@ typology boards register
 # Non-interactive (CI): harvest, upsert YAML, materialize
 typology boards register /path/to/consumer-repo engine \
   --module engine --label "Engine module" \
-  --viewer /path/to/typology/viewer/cable-board/public
+  --viewer /path/to/typology/pkg/viewer/cable-board/public
 
 # Rematerialize from the existing YAML registry (no harvest)
-typology boards sync --viewer /path/to/typology/viewer/cable-board/public
+typology boards sync --viewer /path/to/typology/pkg/viewer/cable-board/public
 
 typology boards path --yaml
 ```
@@ -85,19 +85,19 @@ slice name in two repos becomes two boards in `boards.yaml`:
 typology boards register /path/to/product-a --all-slices \
   --prefix product-a --module engine \
   --catalog /path/to/product-a/.typology/typology.yaml \
-  --viewer /path/to/typology/viewer/cable-board/public
+  --viewer /path/to/typology/pkg/viewer/cable-board/public
 
 # Product B with the same slice names -> product-b-billing, …
 typology boards register /path/to/product-b --all-slices \
   --prefix product-b \
   --catalog /path/to/product-b/.typology/typology.yaml \
-  --viewer /path/to/typology/viewer/cable-board/public
+  --viewer /path/to/typology/pkg/viewer/cable-board/public
 
 # One slice with prefix (idempotent if BOARD_ID already starts with prefix-):
 typology boards register /path/to/product-a chronology \
   --slice chronology --prefix product-a --module engine \
   --catalog /path/to/product-a/.typology/typology.yaml \
-  --viewer /path/to/typology/viewer/cable-board/public
+  --viewer /path/to/typology/pkg/viewer/cable-board/public
 ```
 
 Open `http://localhost:5173/?board=product-a-chronology` or filter with
@@ -122,12 +122,12 @@ typology boards register /path/to/consumer-repo chronology \
   --module engine --slice chronology \
   --catalog /path/to/consumer-repo/.typology/typology.yaml \
   --label "Chronology" \
-  --viewer /path/to/typology/viewer/cable-board/public
+  --viewer /path/to/typology/pkg/viewer/cable-board/public
 
 # Every confirmed catalog slice:
 typology boards register /path/to/consumer-repo --all-slices \
   --module engine --catalog /path/to/consumer-repo/.typology/typology.yaml \
-  --viewer /path/to/typology/viewer/cable-board/public
+  --viewer /path/to/typology/pkg/viewer/cable-board/public
 
 # Or from the Typology module against the tiny fixture:
 make cable-board-slices
