@@ -9,7 +9,7 @@ import (
 	"sort"
 	"strings"
 
-	terrors "github.com/behaviorengineering/typology/errors"
+	terrors "github.com/behaviorengineering/typology/pkg/errors"
 )
 
 // Module describes one go.mod under a repo or workspace root.

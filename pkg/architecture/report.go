@@ -10,11 +10,11 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/behaviorengineering/typology/catalog"
-	terrors "github.com/behaviorengineering/typology/errors"
+	"github.com/behaviorengineering/typology/pkg/catalog"
+	terrors "github.com/behaviorengineering/typology/pkg/errors"
 	"github.com/behaviorengineering/typology/internal/discover"
 	"github.com/behaviorengineering/typology/internal/gorepo"
-	"github.com/behaviorengineering/typology/validate"
+	"github.com/behaviorengineering/typology/pkg/validate"
 )
 
 // DefaultReportRel is the default human-readable architecture brief path.

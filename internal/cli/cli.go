@@ -10,10 +10,10 @@ import (
 	"runtime/debug"
 	"strings"
 
-	"github.com/behaviorengineering/typology/architecture"
-	"github.com/behaviorengineering/typology/assemblygraph"
-	"github.com/behaviorengineering/typology/catalog"
-	terrors "github.com/behaviorengineering/typology/errors"
+	"github.com/behaviorengineering/typology/pkg/architecture"
+	"github.com/behaviorengineering/typology/pkg/assemblygraph"
+	"github.com/behaviorengineering/typology/pkg/catalog"
+	terrors "github.com/behaviorengineering/typology/pkg/errors"
 	"github.com/behaviorengineering/typology/internal/bootstrap"
 	"github.com/behaviorengineering/typology/internal/discover"
 	"github.com/behaviorengineering/typology/internal/emit"
@@ -21,7 +21,7 @@ import (
 	"github.com/behaviorengineering/typology/internal/gorepo"
 	"github.com/behaviorengineering/typology/internal/remediate"
 	"github.com/behaviorengineering/typology/internal/sourceindex"
-	"github.com/behaviorengineering/typology/validate"
+	"github.com/behaviorengineering/typology/pkg/validate"
 )
 
 // version is injected by GoReleaser / make build via -ldflags -X.

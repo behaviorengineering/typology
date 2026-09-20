@@ -12,7 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	terrors "github.com/behaviorengineering/typology/errors"
+	terrors "github.com/behaviorengineering/typology/pkg/errors"
 )
 
 //go:embed all:dist

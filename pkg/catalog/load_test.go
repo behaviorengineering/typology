@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/behaviorengineering/typology/catalog"
-	terrors "github.com/behaviorengineering/typology/errors"
+	"github.com/behaviorengineering/typology/pkg/catalog"
+	terrors "github.com/behaviorengineering/typology/pkg/errors"
 )
 
 func TestSaveLoadYAML_roundTrip(t *testing.T) {

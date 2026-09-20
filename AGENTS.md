@@ -15,7 +15,7 @@ One repository owns one Typology catalog and its architecture documentation. In 
 5. [ai-copilots/skills/cli/SKILL.md](ai-copilots/skills/cli/SKILL.md) (discover, emit, boards, validate, remediate)
 6. [ai-copilots/skills/cable-board/SKILL.md](ai-copilots/skills/cable-board/SKILL.md) (cable board: `assembly-graph` / `boards register`, viewer, wrong-way cables)
 
-Worked catalog: [testdata/tiny-module/.typology/typology.yaml](testdata/tiny-module/.typology/typology.yaml). Types: [catalog/types.go](catalog/types.go).
+Worked catalog: [testdata/tiny-module/.typology/typology.yaml](testdata/tiny-module/.typology/typology.yaml). Types: [pkg/catalog/types.go](pkg/catalog/types.go).
 
 ## Consumer repos (other libraries)
 
@@ -32,6 +32,13 @@ Before running Typology commands in a consumer, register the CLI as a Go tool:
 go run github.com/behaviorengineering/typology/cmd/typology@latest init .
 go tool typology version
 ```
+
+## Package layout
+
+- Public API lives under `pkg/<domain>` (catalog, validate, architecture, assemblygraph, boardregistry, errors, roles, viewer).
+- CLI stays in `cmd/typology` + `internal/cli`.
+- MUST NOT scatter new public packages at the module root.
+
 
 `init` updates the selected consumer module's `go.mod` and `go.sum`. It does not add the CLI to application imports or binaries. If `go.work` covers more than one module, pass the module path with `--module`; the command fails rather than choosing one.
 

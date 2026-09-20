@@ -132,12 +132,14 @@ First map in a new repo: load [ai-copilots/skills/journey/SKILL.md](ai-copilots/
 ```text
 AGENTS.md             Pointer for coding agents
 ai-copilots/          Portable agent pack (BOOTSTRAP + skills: journey, docs, catalog, CLI, cable-board)
-catalog/              Typology model + YAML I/O
-architecture/         Human-readable catalog and topology reports
-assemblygraph/        Cable board JSON (portable package wiring)
-boardregistry/        Durable XDG YAML registry + share-dir graphs + viewer materialize
-viewer/cable-board/   Interactive cable board UI (materialized public/ projection)
-validate/             Path + import + DocPage checks
+pkg/catalog/          Typology model + YAML I/O
+pkg/architecture/     Human-readable catalog and topology reports
+pkg/assemblygraph/    Cable board JSON (portable package wiring)
+pkg/boardregistry/    Durable XDG YAML registry + share-dir graphs + viewer materialize
+pkg/viewer/cable-board/ Interactive cable board UI (materialized public/ projection)
+pkg/validate/         Path + import + DocPage checks
+pkg/roles/            Role helpers for RLM context
+pkg/errors/           Typed domain errors
 cmd/typology/         CLI entry
 internal/discover/    Go import graph → draft catalog
 internal/emit/        YAML + DocPage markdown

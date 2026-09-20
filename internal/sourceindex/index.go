@@ -15,7 +15,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	terrors "github.com/behaviorengineering/typology/errors"
+	terrors "github.com/behaviorengineering/typology/pkg/errors"
 	"github.com/behaviorengineering/typology/internal/gorepo"
 )
 

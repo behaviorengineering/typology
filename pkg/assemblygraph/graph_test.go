@@ -7,14 +7,14 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/behaviorengineering/typology/assemblygraph"
+	"github.com/behaviorengineering/typology/pkg/assemblygraph"
 	"github.com/behaviorengineering/typology/internal/evidence"
 	"github.com/behaviorengineering/typology/internal/sourceindex"
 )
 
 func TestBuild_tinyModule(t *testing.T) {
 	t.Parallel()
-	repo, err := filepath.Abs(filepath.Join("..", "testdata", "tiny-module"))
+	repo, err := filepath.Abs(filepath.Join("..", "..", "testdata", "tiny-module"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -61,7 +61,7 @@ func TestBuild_tinyModule(t *testing.T) {
 
 func TestWriteJSON_roundTrip(t *testing.T) {
 	t.Parallel()
-	repo, err := filepath.Abs(filepath.Join("..", "testdata", "tiny-module"))
+	repo, err := filepath.Abs(filepath.Join("..", "..", "testdata", "tiny-module"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -147,7 +147,7 @@ func TestFromHarvest_wrongWayAndUnknownLayer(t *testing.T) {
 
 func TestBuild_jsonFieldContract(t *testing.T) {
 	t.Parallel()
-	repo, err := filepath.Abs(filepath.Join("..", "testdata", "tiny-module"))
+	repo, err := filepath.Abs(filepath.Join("..", "..", "testdata", "tiny-module"))
 	if err != nil {
 		t.Fatal(err)
 	}

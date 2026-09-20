@@ -10,4 +10,4 @@ Portable instructions for any coding agent that builds with this library. Canoni
 | [cli/SKILL.md](cli/SKILL.md) | Running `typology discover`, `emit`, `architecture`, `assembly-graph`, `boards`, `validate`, `show`, or `remediate` |
 | [cable-board/SKILL.md](cable-board/SKILL.md) | Cable board: `assembly-graph` / `boards register` (wizard or flags), XDG registry, interactive viewer, wrong-way cables |
 
-Wire discovery: [../BOOTSTRAP.md](../BOOTSTRAP.md). Entry: [../../AGENTS.md](../../AGENTS.md). Human pitch: [../../README.md](../../README.md) (§ Consumer setup). Types: [../../catalog/types.go](../../catalog/types.go).
+Wire discovery: [../BOOTSTRAP.md](../BOOTSTRAP.md). Entry: [../../AGENTS.md](../../AGENTS.md). Human pitch: [../../README.md](../../README.md) (§ Consumer setup). Types: [../../catalog/types.go](../../pkg/catalog/types.go).

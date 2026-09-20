@@ -6,13 +6,13 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/behaviorengineering/typology/catalog"
-	"github.com/behaviorengineering/typology/validate"
+	"github.com/behaviorengineering/typology/pkg/catalog"
+	"github.com/behaviorengineering/typology/pkg/validate"
 )
 
 func TestValidate_tinyModule_ok(t *testing.T) {
 	t.Parallel()
-	repo := filepath.Join("..", "testdata", "tiny-module")
+	repo := filepath.Join("..", "..", "testdata", "tiny-module")
 	catalogPath := filepath.Join(repo, ".typology", "typology.yaml")
 	typ, err := catalog.LoadYAML(catalogPath)
 	if err != nil {
@@ -26,7 +26,7 @@ func TestValidate_tinyModule_ok(t *testing.T) {
 
 func TestValidate_tinyModule_missingDoc(t *testing.T) {
 	t.Parallel()
-	repo := filepath.Join("..", "testdata", "tiny-module")
+	repo := filepath.Join("..", "..", "testdata", "tiny-module")
 	catalogPath := filepath.Join(repo, ".typology", "typology.yaml")
 	typ, err := catalog.LoadYAML(catalogPath)
 	if err != nil {
@@ -89,7 +89,7 @@ func TestValidate_tinyModule_missingSubprogramPage(t *testing.T) {
 }
 func TestValidate_tinyModule_unmappedPackage(t *testing.T) {
 	t.Parallel()
-	repo := filepath.Join("..", "testdata", "tiny-module")
+	repo := filepath.Join("..", "..", "testdata", "tiny-module")
 	catalogPath := filepath.Join(repo, ".typology", "typology.yaml")
 	typ, err := catalog.LoadYAML(catalogPath)
 	if err != nil {
@@ -153,7 +153,7 @@ func TestValidate_surfaceMissingStaticAnchor(t *testing.T) {
 
 func TestValidate_surfaceStaticAnchor_ok(t *testing.T) {
 	t.Parallel()
-	repo := filepath.Join("..", "testdata", "tiny-module")
+	repo := filepath.Join("..", "..", "testdata", "tiny-module")
 	catalogPath := filepath.Join(repo, ".typology", "typology.yaml")
 	typ, err := catalog.LoadYAML(catalogPath)
 	if err != nil {
@@ -167,7 +167,7 @@ func TestValidate_surfaceStaticAnchor_ok(t *testing.T) {
 
 func TestValidate_libraryClaimsPackage(t *testing.T) {
 	t.Parallel()
-	repo := filepath.Join("..", "testdata", "tiny-module")
+	repo := filepath.Join("..", "..", "testdata", "tiny-module")
 	catalogPath := filepath.Join(repo, ".typology", "typology.yaml")
 	typ, err := catalog.LoadYAML(catalogPath)
 	if err != nil {
@@ -181,7 +181,7 @@ func TestValidate_libraryClaimsPackage(t *testing.T) {
 
 func TestValidate_missingSliceToLibraryBinding(t *testing.T) {
 	t.Parallel()
-	repo := filepath.Join("..", "testdata", "tiny-module")
+	repo := filepath.Join("..", "..", "testdata", "tiny-module")
 	catalogPath := filepath.Join(repo, ".typology", "typology.yaml")
 	typ, err := catalog.LoadYAML(catalogPath)
 	if err != nil {

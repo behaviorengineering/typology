@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/behaviorengineering/typology/roles"
+	"github.com/behaviorengineering/typology/pkg/roles"
 )
 
 func TestBuildGroupingFromYAML(t *testing.T) {
@@ -81,7 +81,7 @@ func TestParseYAML_invalid(t *testing.T) {
 
 func TestFormatPackageRLMContextForPath_board(t *testing.T) {
 	t.Parallel()
-	repo, err := filepath.Abs(filepath.Join("..", "testdata", "tiny-module"))
+	repo, err := filepath.Abs(filepath.Join("..", "..", "testdata", "tiny-module"))
 	if err != nil {
 		t.Fatal(err)
 	}
