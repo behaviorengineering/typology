@@ -6,13 +6,13 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/behaviorengineering/typology/architecture"
-	"github.com/behaviorengineering/typology/catalog"
+	"github.com/behaviorengineering/typology/pkg/architecture"
+	"github.com/behaviorengineering/typology/pkg/catalog"
 )
 
 func TestBuildAndRenderMarkdown(t *testing.T) {
 	t.Parallel()
-	repo := filepath.Join("..", "testdata", "tiny-module")
+	repo := filepath.Join("..", "..", "testdata", "tiny-module")
 	typ, err := catalog.LoadYAML(filepath.Join(repo, ".typology", "typology.yaml"))
 	if err != nil {
 		t.Fatal(err)
@@ -74,7 +74,7 @@ func TestBuildAndRenderMarkdown(t *testing.T) {
 
 func TestBuildReportsUnmappedPackage(t *testing.T) {
 	t.Parallel()
-	repo := filepath.Join("..", "testdata", "tiny-module")
+	repo := filepath.Join("..", "..", "testdata", "tiny-module")
 	typ, err := catalog.LoadYAML(filepath.Join(repo, ".typology", "typology.yaml"))
 	if err != nil {
 		t.Fatal(err)
@@ -141,7 +141,7 @@ func TestBuildHonorsCatalogScope(t *testing.T) {
 
 func TestBuildReportsForbiddenBinding(t *testing.T) {
 	t.Parallel()
-	repo := filepath.Join("..", "testdata", "tiny-module")
+	repo := filepath.Join("..", "..", "testdata", "tiny-module")
 	typ, err := catalog.LoadYAML(filepath.Join(repo, ".typology", "typology.yaml"))
 	if err != nil {
 		t.Fatal(err)

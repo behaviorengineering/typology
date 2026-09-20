@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/behaviorengineering/typology/assemblygraph"
-	"github.com/behaviorengineering/typology/boardregistry"
-	"github.com/behaviorengineering/typology/catalog"
+	"github.com/behaviorengineering/typology/pkg/assemblygraph"
+	"github.com/behaviorengineering/typology/pkg/boardregistry"
+	"github.com/behaviorengineering/typology/pkg/catalog"
 	"github.com/behaviorengineering/typology/internal/boardsviewer"
 )
 

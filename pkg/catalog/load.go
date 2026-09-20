@@ -4,7 +4,7 @@ import (
 	"os"
 	"path/filepath"
 
-	terrors "github.com/behaviorengineering/typology/errors"
+	terrors "github.com/behaviorengineering/typology/pkg/errors"
 	"gopkg.in/yaml.v3"
 )
 

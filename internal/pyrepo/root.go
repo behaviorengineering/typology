@@ -8,7 +8,7 @@ import (
 	"sort"
 	"strings"
 
-	terrors "github.com/behaviorengineering/typology/errors"
+	terrors "github.com/behaviorengineering/typology/pkg/errors"
 )
 
 // Root is one Python project root under a repository.

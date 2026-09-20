@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	terrors "github.com/behaviorengineering/typology/errors"
+	terrors "github.com/behaviorengineering/typology/pkg/errors"
 )
 
 func TestWrap_unwrapAndCode(t *testing.T) {

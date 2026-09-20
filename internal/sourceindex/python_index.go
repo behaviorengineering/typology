@@ -8,7 +8,7 @@ import (
 	"unicode"
 
 	"github.com/behaviorengineering/typology/internal/pyrepo"
-	terrors "github.com/behaviorengineering/typology/errors"
+	terrors "github.com/behaviorengineering/typology/pkg/errors"
 	"github.com/tamnd/gopapy/v2/parser2"
 )
 

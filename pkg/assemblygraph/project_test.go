@@ -4,8 +4,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/behaviorengineering/typology/assemblygraph"
-	"github.com/behaviorengineering/typology/catalog"
+	"github.com/behaviorengineering/typology/pkg/assemblygraph"
+	"github.com/behaviorengineering/typology/pkg/catalog"
 )
 
 func TestProject_sliceKeepsOwnedAndBoundaryStubs(t *testing.T) {
@@ -175,7 +175,7 @@ func TestProject_noOwnedPathsInGraph(t *testing.T) {
 
 func TestProject_tinyModuleBilling(t *testing.T) {
 	t.Parallel()
-	repo, err := filepath.Abs(filepath.Join("..", "testdata", "tiny-module"))
+	repo, err := filepath.Abs(filepath.Join("..", "..", "testdata", "tiny-module"))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/behaviorengineering/typology/boardregistry"
+	"github.com/behaviorengineering/typology/pkg/boardregistry"
 )
 
 func TestUpsertAndMaterialize(t *testing.T) {

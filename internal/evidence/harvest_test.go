@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	terrors "github.com/behaviorengineering/typology/errors"
+	terrors "github.com/behaviorengineering/typology/pkg/errors"
 	"github.com/behaviorengineering/typology/internal/evidence"
-	"github.com/behaviorengineering/typology/roles"
+	"github.com/behaviorengineering/typology/pkg/roles"
 )
 
 func TestHarvest_tinyModule_goOnly(t *testing.T) {

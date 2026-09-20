@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	terrors "github.com/behaviorengineering/typology/errors"
+	terrors "github.com/behaviorengineering/typology/pkg/errors"
 	"github.com/behaviorengineering/typology/internal/gorepo"
 	"gopkg.in/yaml.v3"
 )

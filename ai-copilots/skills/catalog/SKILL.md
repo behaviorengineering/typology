@@ -317,7 +317,7 @@ if err := catalog.SaveYAML(".typology/typology.yaml", t); err != nil {
 }
 ```
 
-Repo-path and import checks: `validate.Run` (`github.com/behaviorengineering/typology/validate`). One-slice agent protocol: `remediate.Run`.
+Repo-path and import checks: `validate.Run` (`github.com/behaviorengineering/typology/pkg/validate`). One-slice agent protocol: `remediate.Run`.
 
 `Component.Ops` is unused. MUST NOT set it or branch on it.
 

@@ -5,8 +5,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/behaviorengineering/typology/catalog"
-	terrors "github.com/behaviorengineering/typology/errors"
+	"github.com/behaviorengineering/typology/pkg/catalog"
+	terrors "github.com/behaviorengineering/typology/pkg/errors"
 )
 
 // ProjectOptions configures a slice projection of a raw assembly graph.

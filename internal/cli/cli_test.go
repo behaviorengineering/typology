@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/behaviorengineering/typology/catalog"
+	"github.com/behaviorengineering/typology/pkg/catalog"
 	"github.com/behaviorengineering/typology/internal/cli"
 )
 

@@ -12,8 +12,8 @@ import (
 	"github.com/charmbracelet/huh"
 	"golang.org/x/term"
 
-	"github.com/behaviorengineering/typology/boardregistry"
-	"github.com/behaviorengineering/typology/catalog"
+	"github.com/behaviorengineering/typology/pkg/boardregistry"
+	"github.com/behaviorengineering/typology/pkg/catalog"
 )
 
 var wizardIDSanitize = regexp.MustCompile(`[^a-z0-9]+`)

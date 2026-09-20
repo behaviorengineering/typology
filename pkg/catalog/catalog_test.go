@@ -3,7 +3,7 @@ package catalog_test
 import (
 	"testing"
 
-	"github.com/behaviorengineering/typology/catalog"
+	"github.com/behaviorengineering/typology/pkg/catalog"
 )
 
 func billingFixtureSlice() catalog.Slice {
