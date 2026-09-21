@@ -1,8 +1,8 @@
 # Typology ai-copilots
 
-Portable agent pack for Typology: journey, catalog, CLI, docs, and cable-board skills (`assembly-graph` / `boards register`).
+Portable agent pack for Typology: journey, catalog, CLI, docs, and cable-board skills (`assembly-graph` / `boards register`), plus Cursor rules under `rules/` (slice domain language).
 
-Canonical source lives here. Wiring is done by the AI copilot when you ask it to execute [BOOTSTRAP.md](BOOTSTRAP.md).
+Canonical source lives here. Wiring is done by the AI copilot when you ask it to execute [BOOTSTRAP.md](BOOTSTRAP.md). MUST NOT move these bodies into cursor-packs; hosts link here.
 
 **Minimal prompt:**
 

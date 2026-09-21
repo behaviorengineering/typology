@@ -58,13 +58,15 @@ Manual symlink recipe (same paths BOOTSTRAP uses):
 
 ```bash
 MOD="$(go list -m -f '{{.Dir}}' github.com/behaviorengineering/typology)"
+mkdir -p "$HOST_SKILLS" "$HOST_RULES"
 ln -snf "$MOD/ai-copilots/skills/catalog" "$HOST_SKILLS/typology-catalog"
 ln -snf "$MOD/ai-copilots/skills/cli" "$HOST_SKILLS/typology-cli"
 ln -snf "$MOD/ai-copilots/skills/journey" "$HOST_SKILLS/typology-journey"
 ln -snf "$MOD/ai-copilots/skills/docs" "$HOST_SKILLS/typology-docs"
 ln -snf "$MOD/ai-copilots/skills/cable-board" "$HOST_SKILLS/typology-cable-board"
+ln -snf "$MOD/ai-copilots/rules/slice-domain.mdc" "$HOST_RULES/typology-slice-domain.mdc"
 ```
 
-`$HOST_SKILLS` is whatever that host already uses (for example `.cursor/skills`, `.claude/skills`, `.codex/skills`). MUST keep the link pointing at this module's `ai-copilots/skills/` tree so updates follow the pin. MUST NOT copy the files into the host tree unless the host cannot follow symlinks.
+`$HOST_SKILLS` is whatever that host already uses (for example `.cursor/skills`, `.claude/skills`, `.codex/skills`). `$HOST_RULES` is the host rules folder when the IDE supports it (for example `.cursor/rules`). MUST keep the link pointing at this module's `ai-copilots/` tree so updates follow the pin. MUST NOT copy the files into the host tree unless the host cannot follow symlinks. MUST NOT paste Typology operator content into cursor-packs.
 
 You MAY skip linking and Read the `SKILL.md` files in place from this file.

@@ -1,6 +1,6 @@
 # Typology skills
 
-Portable instructions for any coding agent that builds with this library. Canonical path is this directory under `ai-copilots/skills/`. Hosts MAY symlink `journey/`, `docs/`, `catalog/`, `cli/`, and `cable-board/` into their own skills folder as `typology-*`; they MUST NOT treat a copy as source of truth.
+Portable instructions for any coding agent that builds with this library. Canonical path is this directory under `ai-copilots/skills/`. Hosts MAY symlink `journey/`, `docs/`, `catalog/`, `cli/`, and `cable-board/` into their own skills folder as `typology-*`; they MUST NOT treat a copy as source of truth. Cursor rules live under [`../rules/`](../rules/) (for example slice domain language) and are wired the same way via BOOTSTRAP.
 
 | Skill | Load when |
 |-------|-----------|

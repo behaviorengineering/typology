@@ -1,0 +1,56 @@
+---
+description: >-
+  Typology slice pipeline domain language: grouping → meaning → catalog.
+  Use when editing typology digest stages, task ids, evidence filenames,
+  explain diagrams, or review findings about cluster/refine jargon.
+alwaysApply: false
+---
+
+# Typology slice domain language
+
+**Moral:** Name the work the way a cold reader thinks about teaching slices, not the way the first implementation nicknamed the LLM tasks.
+
+This rule lives in Typology `ai-copilots/`. Hosts link it into `.cursor/rules/` via BOOTSTRAP. MUST NOT copy it into cursor-packs.
+
+## Locked vocabulary
+
+| Stage | Domain name | Task id | Evidence (write) |
+|-------|-------------|---------|------------------|
+| 1 | Slice grouping | `typology_slice_grouping` | `slice_grouping_proposal.yaml` |
+| 1b | Slice grouping audit | `typology_slice_grouping_audit` | `slice_grouping_verdicts.yaml` |
+| 2 | Slice meaning | `typology_slice_meaning` | `slice_meaning_ledger.yaml` |
+| 3 | Slice catalog | `typology_slice_catalog` | refined catalog / snapshot |
+
+Orchestrator: `JudgeTypologySlicePipeline.Assemble` (not a method named Refine).
+
+CLI resume stage: `catalog`.
+
+## Constraints
+
+**CONSTRAINT:** Code, comments, logs, docs, and explain diagrams for these stages MUST use grouping / meaning / catalog (and the task ids above).
+
+- MUST: label loops as subgraphs with in-loop retry edges; place meaning **outside** both loops (runs once between them).
+- MUST NOT: use `typology_cluster`, `typology_refine`, or `typology_objective_grounding` for these stages.
+- MUST NOT: call the whole pipeline "refine" when you mean only catalog assemble.
+- Enforcement: Grep new diffs for those retired task ids or opaque Loop A/B boxes.
+- Violation: STOP, rename to the vocabulary table, then continue.
+
+CORRECT (explain / docs):
+```text
+Slice grouping → slice meaning (once) → slice catalog assemble
+```
+
+PROHIBITED:
+```text
+Loop A cluster → ledger → Loop B refine
+```
+
+CORRECT (task registration):
+```go
+newGenerator(sig, TaskTypologySliceGrouping)
+```
+
+PROHIBITED:
+```go
+newGenerator(sig, "typology_cluster")
+```
