@@ -246,6 +246,43 @@ func TestValidate_libraryMustNotImportSlice(t *testing.T) {
 	}
 }
 
+func TestValidate_libraryToLibraryRequiresBinding(t *testing.T) {
+	t.Parallel()
+	repo := t.TempDir()
+	mustWrite(t, filepath.Join(repo, "go.mod"), "module example.com/lib2lib\n\ngo 1.26.5\n")
+	mustWrite(t, filepath.Join(repo, "internal", "board", "board.go"), "package board\n\nimport \"example.com/lib2lib/internal/config\"\n\nfunc Load() { _ = config.OK }\n")
+	mustWrite(t, filepath.Join(repo, "internal", "config", "config.go"), "package config\n\nvar OK = 1\n")
+
+	typ := catalog.Typology{
+		ID: "lib2lib",
+		Libraries: []catalog.Library{
+			{
+				ID:      "board",
+				Purpose: "Board types",
+				Owns:    []catalog.Component{{ID: "board", Path: "internal/board", Layer: catalog.LayerDomain}},
+			},
+			{
+				ID:      "config",
+				Purpose: "Settings",
+				Owns:    []catalog.Component{{ID: "config", Path: "internal/config", Layer: catalog.LayerDomain}},
+			},
+		},
+	}
+
+	issues := validate.Run(validate.Options{RepoRoot: repo, Catalog: typ})
+	if !hasMessage(issues, "SliceBinding board -> config missing but cross-library import exists") {
+		t.Fatalf("expected missing library binding, got %v", issues)
+	}
+
+	typ.SliceBindings = []catalog.SliceBinding{
+		{From: "board", To: "config", Kind: catalog.SliceReads},
+	}
+	issues = validate.Run(validate.Options{RepoRoot: repo, Catalog: typ})
+	if hasMessage(issues, "cross-library import") {
+		t.Fatalf("binding should allow library-to-library import, got %v", issues)
+	}
+}
+
 func hasMessage(issues []catalog.Issue, want string) bool {
 	for _, issue := range issues {
 		if strings.Contains(issue.Message, want) {

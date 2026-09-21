@@ -283,8 +283,10 @@ func (t Typology) ValidateStructure() []Issue {
 		}
 	}
 	for _, b := range t.SliceBindings {
-		if _, ok := seenSlice[b.From]; !ok {
-			issues = append(issues, Issue{Message: fmt.Sprintf("SliceBinding from unknown slice %q", b.From)})
+		_, fromSlice := seenSlice[b.From]
+		_, fromLibrary := seenLibrary[b.From]
+		if !fromSlice && !fromLibrary {
+			issues = append(issues, Issue{Message: fmt.Sprintf("SliceBinding from unknown slice or library %q", b.From)})
 		}
 		_, toSlice := seenSlice[b.To]
 		_, toLibrary := seenLibrary[b.To]
@@ -307,13 +309,6 @@ func (t Typology) ValidateStructure() []Issue {
 			issues = append(issues, Issue{
 				Slice:   fromOwner.ID,
 				Message: fmt.Sprintf("ComponentBinding %q -> %q: libraries must not bind to slice packages", b.From, b.To),
-			})
-			continue
-		}
-		if fromOwner.Kind == OwnerLibrary && toOwner.Kind == OwnerLibrary && fromOwner.ID != toOwner.ID {
-			issues = append(issues, Issue{
-				Slice:   fromOwner.ID,
-				Message: fmt.Sprintf("ComponentBinding %q -> %q: cross-library bindings are not supported", b.From, b.To),
 			})
 			continue
 		}
