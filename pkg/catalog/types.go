@@ -166,8 +166,9 @@ type Actuator struct {
 	Gate           Gate     `json:"gate,omitempty" yaml:"gate,omitempty"`
 }
 
-// SliceBinding couples a slice to another slice or to a library.
-// From must be a slice id. To may be a slice id or a library id.
+// SliceBinding couples owners across the map.
+// From may be a slice id or a library id. To may be a slice id or a library id.
+// Library → slice remains forbidden at validate time (utilities must not gain domain knowledge).
 type SliceBinding struct {
 	From string           `json:"from" yaml:"from"`
 	To   string           `json:"to" yaml:"to"`

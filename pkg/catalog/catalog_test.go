@@ -326,6 +326,28 @@ func TestValidateStructure_sliceBindingToLibrary(t *testing.T) {
 	if !hasIssue(unknownTo.ValidateStructure(), `SliceBinding to unknown slice or library "missing"`) {
 		t.Fatalf("expected unknown to, got %v", unknownTo.ValidateStructure())
 	}
+
+	libToLib := catalog.Typology{
+		ID: "libs",
+		Libraries: []catalog.Library{
+			{ID: "config", Purpose: "Settings"},
+			{ID: "board", Purpose: "Board types"},
+		},
+		SliceBindings: []catalog.SliceBinding{
+			{From: "board", To: "config", Kind: catalog.SliceReads},
+		},
+	}
+	if issues := libToLib.ValidateStructure(); len(issues) != 0 {
+		t.Fatalf("library-to-library binding: %v", issues)
+	}
+
+	unknownFrom := libToLib
+	unknownFrom.SliceBindings = []catalog.SliceBinding{
+		{From: "missing", To: "config", Kind: catalog.SliceReads},
+	}
+	if !hasIssue(unknownFrom.ValidateStructure(), `SliceBinding from unknown slice or library "missing"`) {
+		t.Fatalf("expected unknown from, got %v", unknownFrom.ValidateStructure())
+	}
 }
 
 func hasIssue(issues []catalog.Issue, want string) bool {

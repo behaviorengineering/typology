@@ -286,13 +286,15 @@ func checkImports(repoRoot string, topo catalog.Typology, modules []gorepo.Modul
 				continue
 			}
 			if fromOwner.Kind == catalog.OwnerLibrary && toOwner.Kind == catalog.OwnerLibrary {
-				issues = append(issues, catalog.Issue{
-					Slice: fromOwner.ID,
-					Message: fmt.Sprintf(
-						"library-to-library import %s -> %s (%s -> %s) is not supported yet",
-						fromOwner.ID, toOwner.ID, fromComp, toComp,
-					),
-				})
+				if !hasSliceBinding(topo, fromOwner.ID, toOwner.ID) {
+					issues = append(issues, catalog.Issue{
+						Slice: fromOwner.ID,
+						Message: fmt.Sprintf(
+							"SliceBinding %s -> %s missing but cross-library import exists (%s -> %s)",
+							fromOwner.ID, toOwner.ID, fromComp, toComp,
+						),
+					})
+				}
 				continue
 			}
 			// Slice -> slice or slice -> library: require SliceBinding from -> to.

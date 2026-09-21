@@ -159,7 +159,7 @@ testdata/tiny-module/ Fixture Go module
 | `OpRun` | One gated operator invocation (CLI, HTTP, human, signal, or schedule). Optional `runs` / `actuates`. |
 | `Subprogram` | Standing program: required `objective`, plus `input`, `output`, optional `store`, `gate` |
 | `Actuator` | Signal-triggered capability that emits an effect, usually past the edge |
-| `SliceBinding` | Coupling between slices |
+| `SliceBinding` | Coupling between slices and/or libraries (library → slice still forbidden) |
 | `ComponentBinding` | Coupling between components |
 | `DocCluster` / `DocPage` | Doc set per slice. Kinds are leaves. Nav is Overview → Owns → Subprograms → Surfaces (CLI, UI, API, Jobs). |
 
