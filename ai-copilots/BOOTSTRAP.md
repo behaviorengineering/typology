@@ -43,6 +43,8 @@ Target tree:
 ai-copilots/
   README.md
   BOOTSTRAP.md
+  rules/
+    slice-domain.mdc
   skills/
     README.md
     journey/SKILL.md
@@ -74,6 +76,12 @@ Canonical skill trees under `$MOD`:
 | `typology-cli` | `ai-copilots/skills/cli/` |
 | `typology-cable-board` | `ai-copilots/skills/cable-board/` |
 
+Cursor rules (optional but recommended when the host uses Cursor):
+
+| Host rule name | Path under `$MOD` |
+|----------------|-------------------|
+| `typology-slice-domain.mdc` | `ai-copilots/rules/slice-domain.mdc` |
+
 Discovery paths:
 
 | IDE | Skills |
@@ -87,30 +95,32 @@ Discovery paths:
 
 ```bash
 MOD="$(go list -m -f '{{.Dir}}' github.com/behaviorengineering/typology)"
-mkdir -p .cursor/skills
+mkdir -p .cursor/skills .cursor/rules
 ln -snf "$MOD/ai-copilots/skills/journey" .cursor/skills/typology-journey
 ln -snf "$MOD/ai-copilots/skills/docs" .cursor/skills/typology-docs
 ln -snf "$MOD/ai-copilots/skills/catalog" .cursor/skills/typology-catalog
 ln -snf "$MOD/ai-copilots/skills/cli" .cursor/skills/typology-cli
 ln -snf "$MOD/ai-copilots/skills/cable-board" .cursor/skills/typology-cable-board
+ln -snf "$MOD/ai-copilots/rules/slice-domain.mdc" .cursor/rules/typology-slice-domain.mdc
 ```
 
 When the workspace root is the Typology module itself, relative links are fine:
 
 ```bash
-mkdir -p .cursor/skills
+mkdir -p .cursor/skills .cursor/rules
 ln -snf ../ai-copilots/skills/journey .cursor/skills/typology-journey
 ln -snf ../ai-copilots/skills/docs .cursor/skills/typology-docs
 ln -snf ../ai-copilots/skills/catalog .cursor/skills/typology-catalog
 ln -snf ../ai-copilots/skills/cli .cursor/skills/typology-cli
 ln -snf ../ai-copilots/skills/cable-board .cursor/skills/typology-cable-board
+ln -snf ../ai-copilots/rules/slice-domain.mdc .cursor/rules/typology-slice-domain.mdc
 ```
 
 **Windows:** prefer junction or developer-mode symlink; copy fallback only with user approval.
 
 **Idempotency:** skip if the link already resolves to the canonical path; ask before overwriting stale copies.
 
-**Parent monorepo:** MUST NOT edit parent skill indexes unless the user asks.
+**Parent monorepo:** MUST NOT edit parent skill indexes unless the user asks. MUST NOT copy Typology rules into cursor-packs; link from this tree only.
 
 ---
 
@@ -119,9 +129,12 @@ ln -snf ../ai-copilots/skills/cable-board .cursor/skills/typology-cable-board
 ```bash
 MOD="$(go list -m -f '{{.Dir}}' github.com/behaviorengineering/typology)"
 ls -la .cursor/skills/typology-journey .cursor/skills/typology-cli .cursor/skills/typology-cable-board
+ls -la .cursor/rules/typology-slice-domain.mdc
 test -f .cursor/skills/typology-journey/SKILL.md
 test -f .cursor/skills/typology-cable-board/SKILL.md
+test -f .cursor/rules/typology-slice-domain.mdc
 test -f "$MOD/ai-copilots/BOOTSTRAP.md"
+test -f "$MOD/ai-copilots/rules/slice-domain.mdc"
 ```
 
 Ask the user before committing host wiring (`.cursor/`, `.github/`, etc.).
