@@ -54,8 +54,8 @@ func Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return 2
 	}
 	if len(args) == 0 {
-		printUsage(stdout)
-		return 2
+		fmt.Fprint(stdout, agentOperatingGuide())
+		return 0
 	}
 	switch args[0] {
 	case "init":
