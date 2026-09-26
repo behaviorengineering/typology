@@ -7,11 +7,12 @@ func agentOperatingGuide() string {
 
 ROLE & BOUNDARIES
   Discovers packages, emits catalogs, validates assembly graphs, and runs boards.
-  Host Consilium uses typology export/validate via consilium-pii typology commands.
+  Host products may wrap export/validate via their own CLI adapters; this binary
+  owns catalog math, emit, and validation.
 
 AGENT OPERATING GUIDE
   Read AGENTS.md and ai-copilots/ in this module before rewriting catalogs.
-  Operator skills: ai-copilots/skills/typology-cli/SKILL.md (host mirror in .cursor/skills)
+  Operator skill: ai-copilots/skills/typology-cli/SKILL.md (wire per BOOTSTRAP.md)
   Flow: discover draft → validate → emit → boards refresh.
 
 COMMANDS BY RISK & LIFECYCLE
