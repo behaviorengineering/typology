@@ -1,4 +1,4 @@
-.PHONY: help build test vet smoke cable-board-sample cable-board-slices cable-board-dist cable-board-dev
+.PHONY: help build test vet smoke cable-board-sample cable-board-slices cable-board-dist cable-board-dev hooks-install
 
 .DEFAULT_GOAL := help
 
@@ -17,6 +17,7 @@ help:
 	@echo "  make test                go test ./..."
 	@echo "  make vet                 go vet ./..."
 	@echo "  make smoke               Build + read-only CLI checks on $(SMOKE_REPO)"
+	@echo "  make hooks-install       Install Lefthook git hooks (once per clone)"
 	@echo "  make cable-board-dist    Build Vite SPA into $(VIEWER_DIST) for embed"
 	@echo "  make cable-board-dev     Build + boards serve --dev (Vite HMR + XDG boards)"
 	@echo "  make cable-board-sample  Harvest $(SMOKE_REPO) into named tiny-module board"
@@ -69,3 +70,10 @@ cable-board-sample: build
 cable-board-slices: build
 	./$(BINARY) boards register $(SMOKE_REPO) --all-slices \
 		--prefix tiny --catalog $(SMOKE_CATALOG) --viewer $(VIEWER)/public
+
+hooks-install:
+	@command -v lefthook >/dev/null 2>&1 || { \
+		if command -v brew >/dev/null 2>&1; then brew install lefthook; \
+		else go install github.com/evilmartians/lefthook@latest; fi; }
+	@command -v lefthook >/dev/null 2>&1 || { echo "lefthook not on PATH; add $$(go env GOPATH)/bin"; exit 1; }
+	lefthook install
